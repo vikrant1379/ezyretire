@@ -1,0 +1,160 @@
+/**
+ * Generates the consumable web theme (src/index.css) and the portable token
+ * object (src/generated/tokens.tsx) from tokens.json.
+ *
+ * tokens.json (DTCG) is the single source of truth. This runs on dev start and
+ * on every tokens.json change (see vite.config.ts) and before build/typecheck
+ * (see package.json). Do not edit the generated files by hand.
+ *
+ * - src/index.css        the design system's theme. The preview app imports it,
+ *                        and consuming apps import this same file (web).
+ * - src/generated/tokens.tsx  hex token object for mobile (Expo) and any other
+ *                             platform, so web + mobile share one source.
+ */
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, "..");
+const tokensPath = join(root, "tokens.json");
+const templatePath = join(here, "theme-template.css");
+const cssOut = join(root, "src", "index.css");
+const tsOutDir = join(root, "src", "generated");
+
+/** Resolve a DTCG node's $value, following {alias} references. */
+function resolveValue(node, tokens) {
+  const raw = node?.$value;
+  if (typeof raw === "string" && raw.startsWith("{") && raw.endsWith("}")) {
+    const path = raw.slice(1, -1).split(".");
+    let cur = tokens;
+    for (const key of path) cur = cur?.[key];
+    return resolveValue(cur, tokens);
+  }
+  return raw;
+}
+
+function hexToHslChannels(hex) {
+  let h = hex.replace("#", "").trim();
+  if (h.length === 3) {
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let s = 0;
+  let hue = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        hue = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        hue = (b - r) / d + 2;
+        break;
+      default:
+        hue = (r - g) / d + 4;
+    }
+    hue /= 6;
+  }
+  const H = Math.round(hue * 360);
+  const S = Math.round(s * 1000) / 10;
+  const L = Math.round(l * 1000) / 10;
+  return `${H} ${S}% ${L}%`;
+}
+
+function toFontStack(value) {
+  return Array.isArray(value) ? value.join(", ") : value;
+}
+
+function colorEntries(scope, tokens) {
+  const out = {};
+  for (const [name, node] of Object.entries(tokens.color[scope])) {
+    if (name.startsWith("$")) continue;
+    out[name] = resolveValue(node, tokens);
+  }
+  return out;
+}
+
+function buildCss(tokens) {
+  let css = readFileSync(templatePath, "utf8");
+  const replacements = {};
+
+  for (const scope of ["light", "dark"]) {
+    for (const [name, hex] of Object.entries(colorEntries(scope, tokens))) {
+      replacements[`__DS_${scope.toUpperCase()}_${name.toUpperCase()}__`] =
+        hexToHslChannels(hex);
+    }
+  }
+
+  replacements.__DS_FONT_SANS__ = toFontStack(
+    resolveValue(tokens.typography.fontFamily.sans, tokens),
+  );
+  replacements.__DS_FONT_SERIF__ = toFontStack(
+    resolveValue(tokens.typography.fontFamily.serif, tokens),
+  );
+  replacements.__DS_FONT_MONO__ = toFontStack(
+    resolveValue(tokens.typography.fontFamily.mono, tokens),
+  );
+  replacements.__DS_RADIUS__ = resolveValue(tokens.radius.base, tokens);
+  replacements.__DS_SPACING__ = resolveValue(tokens.spacing.base, tokens);
+
+  for (const [token, value] of Object.entries(replacements)) {
+    css = css.split(token).join(value);
+  }
+
+  const leftover = css.match(/__DS_[A-Z0-9_]+__/g);
+  if (leftover) {
+    throw new Error(
+      `tokens.json is missing values for: ${[...new Set(leftover)].join(", ")}`,
+    );
+  }
+  return css;
+}
+
+function buildTs(tokens) {
+  const portable = {
+    color: {
+      light: colorEntries("light", tokens),
+      dark: colorEntries("dark", tokens),
+    },
+    fontFamily: {
+      sans: resolveValue(tokens.typography.fontFamily.sans, tokens),
+      serif: resolveValue(tokens.typography.fontFamily.serif, tokens),
+      mono: resolveValue(tokens.typography.fontFamily.mono, tokens),
+    },
+    radius: resolveValue(tokens.radius.base, tokens),
+    spacing: resolveValue(tokens.spacing.base, tokens),
+  };
+  return `/* GENERATED FROM tokens.json -- DO NOT EDIT. Run scripts/build-tokens.mjs. */
+// Portable design tokens (colors as hex). Web consumes the theme via
+// src/index.css; mobile (Expo) and any other platform import this object so the
+// whole product shares one source of truth.
+export const tokens = ${JSON.stringify(portable, null, 2)} as const;
+
+export type Tokens = typeof tokens;
+export default tokens;
+`;
+}
+
+export function buildTokens() {
+  const tokens = JSON.parse(readFileSync(tokensPath, "utf8"));
+  writeFileSync(cssOut, buildCss(tokens));
+  mkdirSync(tsOutDir, { recursive: true });
+  writeFileSync(join(tsOutDir, "tokens.tsx"), buildTs(tokens));
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  buildTokens();
+  process.stdout.write(
+    "Generated src/index.css and src/generated/tokens.tsx\n",
+  );
+}

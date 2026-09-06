@@ -1,0 +1,13 @@
+@import "@workspace/wealthone-design-system/styles.css";
+
+.financial-number {
+  display: inline-block;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-header-motion {
+    transition: none;
+  }
+}

@@ -1,0 +1,691 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: Auth
+    description: Browser authentication endpoints
+  - name: Advice
+    description: Financial advice requests and assigned advisor details
+  - name: Advice Admin
+    description: Admin management of advisors, requests, and manual payment settings
+  - name: Admin Login Activity
+    description: Restricted successful login history
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the current authenticated user
+      responses:
+        "200":
+          description: Authentication state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+  /auth/profile:
+    patch:
+      tags: [Auth]
+      operationId: updateAuthProfile
+      summary: Update the authenticated user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthProfileUpdate"
+      responses:
+        "200":
+          description: Updated authenticated user
+        "400":
+          description: Invalid profile details
+        "401":
+          description: Login required
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start browser login
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to authentication provider
+  /admin/login:
+    get:
+      tags: [Auth]
+      operationId: beginAdminBrowserLogin
+      summary: Start admin-only browser login
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to authentication provider for an administrator session
+  /admin/login-activity:
+    get:
+      tags: [Admin Login Activity]
+      operationId: getAdminLoginActivity
+      summary: Get paginated successful login history
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Paginated login history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginActivityPage"
+        "401":
+          description: Login required
+        "403":
+          description: Admin access required
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete browser login
+      responses:
+        "302":
+          description: Redirect to the app
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Log out
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect after logout
+  /advice:
+    get:
+      tags: [Advice]
+      operationId: getAdviceOverview
+      summary: Get the signed-in user's latest advice request and assigned advisor
+      responses:
+        "200":
+          description: Advice overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdviceOverview"
+        "401":
+          description: Login required
+    post:
+      tags: [Advice]
+      operationId: createAdviceRequest
+      summary: Request financial advice with manual payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdviceRequestInput"
+      responses:
+        "201":
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdviceOverview"
+        "400":
+          description: Invalid request
+        "401":
+          description: Login required
+        "409":
+          description: An active request already exists
+  /support/whatsapp:
+    get:
+      tags: [Advice]
+      operationId: getWhatsAppSupport
+      summary: Get the signed-in customer's WhatsApp support destination
+      responses:
+        "200":
+          description: WhatsApp support availability and click-to-chat destination
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppSupport"
+        "401":
+          description: Login required
+  /advice/payment-reference:
+    post:
+      tags: [Advice]
+      operationId: submitAdvicePaymentReference
+      summary: Submit a manual payment reference for the signed-in user's active request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdvicePaymentReferenceInput"
+      responses:
+        "200":
+          description: Payment reference submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdviceOverview"
+        "400":
+          description: Invalid payment reference or request state
+        "401":
+          description: Login required
+        "404":
+          description: Active request not found
+        "409":
+          description: Payment state changed before the reference was submitted
+  /admin/advice:
+    get:
+      tags: [Advice Admin]
+      operationId: getAdviceAdminDashboard
+      summary: List advisors, requests, and consultation settings
+      responses:
+        "200":
+          description: Admin dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdviceAdminDashboard"
+        "401":
+          description: Login required
+        "403":
+          description: Admin access required
+  /admin/advice/settings:
+    patch:
+      tags: [Advice Admin]
+      operationId: updateAdviceSettings
+      summary: Update manual payment and WhatsApp settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdviceSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdviceSettings"
+        "400":
+          description: Invalid settings
+        "403":
+          description: Admin access required
+  /admin/advisors:
+    post:
+      tags: [Advice Admin]
+      operationId: createAdvisor
+      summary: Create an advisor profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdvisorInput"
+      responses:
+        "201":
+          description: Advisor created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Advisor"
+        "400":
+          description: Invalid advisor
+        "403":
+          description: Admin access required
+  /admin/advisors/{id}:
+    patch:
+      tags: [Advice Admin]
+      operationId: updateAdvisor
+      summary: Update an advisor profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdvisorUpdate"
+      responses:
+        "200":
+          description: Advisor updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Advisor"
+        "400":
+          description: Invalid advisor
+        "404":
+          description: Advisor not found
+  /admin/advice-requests/{id}:
+    patch:
+      tags: [Advice Admin]
+      operationId: updateAdviceRequest
+      summary: Verify manual payment, assign an advisor, or update status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdviceRequestUpdate"
+      responses:
+        "200":
+          description: Request updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdviceRequest"
+        "400":
+          description: Invalid update
+        "404":
+          description: Request not found
+  /admin/whatsapp-events/{id}/retry:
+    post:
+      tags: [Advice Admin]
+      operationId: retryWhatsAppNotification
+      summary: Retry a failed or skipped WhatsApp notification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Retry attempted and final outcome recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, providerMessageId, error]
+                properties:
+                  status:
+                    type: string
+                    enum: [sent, failed, skipped]
+                  providerMessageId:
+                    type: [string, "null"]
+                  error:
+                    type: [string, "null"]
+        "400":
+          description: Invalid notification event ID
+        "401":
+          description: Login required
+        "403":
+          description: Admin access required
+        "404":
+          description: Notification event not found
+        "409":
+          description: Notification event is already pending, sent, or cannot be reconstructed
+components:
+  schemas:
+    LoginActivity:
+      type: object
+      required: [id, userId, userName, userEmail, loggedInAt, authMethod, deviceType, browser, operatingSystem, country, region, city]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: [string, "null"]
+        userEmail:
+          type: [string, "null"]
+        loggedInAt:
+          type: string
+          format: date-time
+        authMethod:
+          type: string
+          enum: [email_otp, oidc]
+        deviceType:
+          type: [string, "null"]
+        browser:
+          type: [string, "null"]
+        operatingSystem:
+          type: [string, "null"]
+        country:
+          type: [string, "null"]
+        region:
+          type: [string, "null"]
+        city:
+          type: [string, "null"]
+    LoginActivityPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoginActivity"
+        page:
+          type: number
+          multipleOf: 1
+        pageSize:
+          type: number
+          multipleOf: 1
+        total:
+          type: number
+          multipleOf: 1
+        totalPages:
+          type: number
+          multipleOf: 1
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AuthUser:
+      type: object
+      required: [id, email, profileImageUrl, fullName, dateOfBirth, gender, phone, onboardingCompleted, isAdmin]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, "null"]
+        profileImageUrl:
+          type: [string, "null"]
+        fullName:
+          type: [string, "null"]
+        dateOfBirth:
+          type: [string, "null"]
+        gender:
+          type: [string, "null"]
+        phone:
+          type: [string, "null"]
+        onboardingCompleted:
+          type: boolean
+        isAdmin:
+          type: boolean
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
+    AuthProfileUpdate:
+      type: object
+      required: [fullName, dateOfBirth, gender, phone, onboardingCompleted]
+      properties:
+        fullName:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+        phone:
+          type: string
+        onboardingCompleted:
+          type: boolean
+    AdviceSettings:
+      type: object
+      required: [consultationFee, currency, businessWhatsapp, upiId]
+      properties:
+        consultationFee:
+          type: number
+        currency:
+          type: string
+        businessWhatsapp:
+          type: string
+        upiId:
+          type: string
+    AdviceSettingsUpdate:
+      type: object
+      properties:
+        consultationFee:
+          type: number
+          minimum: 0
+        businessWhatsapp:
+          type: string
+          description: International-format WhatsApp Business number, or blank to disable support
+        upiId:
+          type: string
+    WhatsAppSupport:
+      type: object
+      required: [available, whatsappUrl]
+      properties:
+        available:
+          type: boolean
+        whatsappUrl:
+          type: [string, "null"]
+    Advisor:
+      type: object
+      required: [id, name, credentials, bio, specialties, languages, availability, whatsapp, phone, bookingUrl, photoUrl, active, createdAt, updatedAt]
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        credentials:
+          type: string
+        bio:
+          type: string
+        specialties:
+          type: array
+          items:
+            type: string
+        languages:
+          type: array
+          items:
+            type: string
+        availability:
+          type: string
+        whatsapp:
+          type: string
+        phone:
+          type: string
+        bookingUrl:
+          type: string
+        photoUrl:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AdvisorInput:
+      type: object
+      required: [name, credentials, bio, specialties, languages, availability, whatsapp]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        credentials:
+          type: string
+        bio:
+          type: string
+        specialties:
+          type: array
+          items:
+            type: string
+        languages:
+          type: array
+          items:
+            type: string
+        availability:
+          type: string
+        whatsapp:
+          type: string
+          minLength: 8
+        phone:
+          type: string
+        bookingUrl:
+          type: string
+        photoUrl:
+          type: string
+        active:
+          type: boolean
+    AdvisorUpdate:
+      allOf:
+        - $ref: "#/components/schemas/AdvisorInput"
+    AdviceRequest:
+      type: object
+      required: [id, userId, userName, userEmail, whatsappNumber, topic, note, consent, feeAmount, paymentStatus, paymentReference, paymentSubmittedAt, status, advisorId, createdAt, updatedAt]
+      properties:
+        id:
+          type: number
+        userId:
+          type: string
+        userName:
+          type: string
+        userEmail:
+          type: string
+        whatsappNumber:
+          type: string
+        topic:
+          type: string
+          enum: [financial, investment, retirement, tax_planning, tax_compliance]
+        note:
+          type: string
+        consent:
+          type: boolean
+        feeAmount:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, submitted, paid, rejected, waived, refunded]
+        paymentReference:
+          type: [string, "null"]
+        paymentSubmittedAt:
+          type: [string, "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [submitted, reviewing, assigned, completed, cancelled]
+        advisorId:
+          type: [number, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AdviceRequestInput:
+      type: object
+      required: [userName, whatsappNumber, topic, consent]
+      properties:
+        userName:
+          type: string
+          minLength: 2
+        whatsappNumber:
+          type: string
+          minLength: 8
+        topic:
+          type: string
+          enum: [financial, investment, retirement, tax_planning, tax_compliance]
+        note:
+          type: string
+          maxLength: 1000
+        consent:
+          type: boolean
+          const: true
+    AdvicePaymentReferenceInput:
+      type: object
+      required: [paymentReference]
+      properties:
+        paymentReference:
+          type: string
+          minLength: 4
+          maxLength: 160
+    AdviceRequestUpdate:
+      type: object
+      properties:
+        paymentStatus:
+          type: string
+          enum: [pending, submitted, paid, rejected, waived, refunded]
+        status:
+          type: string
+          enum: [submitted, reviewing, assigned, completed, cancelled]
+        advisorId:
+          type: [number, "null"]
+    AdviceOverview:
+      type: object
+      required: [request, advisor, settings]
+      properties:
+        request:
+          oneOf:
+            - $ref: "#/components/schemas/AdviceRequest"
+            - type: "null"
+        advisor:
+          oneOf:
+            - $ref: "#/components/schemas/Advisor"
+            - type: "null"
+        settings:
+          $ref: "#/components/schemas/AdviceSettings"
+    AdviceAdminDashboard:
+      type: object
+      required: [requests, advisors, settings]
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdviceRequest"
+        advisors:
+          type: array
+          items:
+            $ref: "#/components/schemas/Advisor"
+        settings:
+          $ref: "#/components/schemas/AdviceSettings"

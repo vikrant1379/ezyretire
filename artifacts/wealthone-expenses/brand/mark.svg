@@ -1,0 +1,14 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>ezyRetire</title>
+  <defs>
+    <linearGradient id="ezyretire-gold" x1="20" y1="26" x2="153" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B8871B"/>
+      <stop offset=".55" stop-color="#E4B940"/>
+      <stop offset="1" stop-color="#F0CD69"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="38" fill="#FFFEFC"/>
+  <path data-brand-mark="r-growth-bars-v1" d="M20 129C20 65 72 18 132 19C145 19 156 21 164 25C147 9 122 3 96 7C47 14 12 56 14 105C14 114 16 122 20 129Z" fill="url(#ezyretire-gold)"/>
+  <path d="M35 118H52V91H35V118ZM59 118H76V71H59V118ZM83 118H100V51H83V118Z" fill="#031B45"/>
+  <path d="M96 42H125C147 42 159 52 159 68C159 82 150 91 136 94L163 129H143L117 95H113V118H96V42ZM113 56V82H124C136 82 142 78 142 69C142 60 136 56 124 56H113Z" fill="#031B45"/>
+</svg>

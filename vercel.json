@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "regions": ["sin1"],
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/wealthone-expenses run build",
+  "outputDirectory": "artifacts/wealthone-expenses/dist/public",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/internal/purge-login-activities",
+      "schedule": "17 8 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api/|sw\\.js$|offline\\.html$|site\\.webmanifest$).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

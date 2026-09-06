@@ -1,0 +1,31 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.26.1",
+  "license": "MIT",
+  "scripts": {
+    "audit:release-ruleset": "node scripts/audit-main-release-ruleset.mjs",
+    "test:release-ruleset-audit": "node --test scripts/audit-main-release-ruleset.test.mjs",
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "check:release": "pnpm test:release-contract && pnpm check:release-records && pnpm check:favicon-visual && pnpm check:pwa && pnpm check:published-favicons",
+    "test:release-contract": "node --test test/release-script.test.cjs scripts/audit-main-release-ruleset.test.mjs",
+    "check:favicon-visual": "node scripts/favicon-release-check.mjs",
+    "check:pwa": "pnpm --filter @workspace/wealthone-expenses run check:pwa",
+    "check:favicon-release-contract": "node --test scripts/favicon-release-artifacts.test.mjs",
+    "check:published-favicons": "if test -z \"$PUBLISHED_URL\"; then echo \"PUBLISHED_URL is required for the post-deploy favicon check.\" >&2; exit 1; fi; pnpm --filter @workspace/wealthone-expenses run check:published-favicons",
+    "check:release-records": "pnpm --filter @workspace/db run check:release-records",
+    "check:production-schema": "pnpm --filter @workspace/db run check:production-schema",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+  },
+  "private": true,
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.4.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+  }
+}

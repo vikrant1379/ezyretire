@@ -1,0 +1,9 @@
+[project]
+name = "ezyretire-font-tools"
+version = "0.1.0"
+description = "Pinned build tools for EzyRetire's self-hosted WOFF2 fonts"
+requires-python = ">=3.13"
+dependencies = [
+    "brotli==1.1.0",
+    "fonttools==4.56.0",
+]

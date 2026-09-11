@@ -1,0 +1,383 @@
+export default function Profile() {
+  const queryClient = useQueryClient();
+  const { data: profile, isLoading } = useProfileInputs();
+  const updateProfile = useUpdateProfileInputs();
+  const { toast } = useToast();
+  const { user, isAuthenticated, logout } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const accountName = user?.fullName || user?.email || "Your ezyRetire account";
+  const displayName = profile?.fullName || accountName;
+  const initial = displayName.charAt(0).toUpperCase();
+
+  const handleSave = async (partialData: Partial<ProfileInputs>) => {
+    if (!profile) return Promise.reject(new Error("Profile not loaded"));
+
+    setIsSubmitting(true);
+
+    // Merge existing profile data with incoming partial updates
+    const mergedData = {
+      ...profile,
+      ...partialData
+    };
+
+    return new Promise<void>((resolve, reject) => {
+      updateProfile.mutate(mergedData, {
+        onSuccess: () => {
+          setIsSubmitting(false);
+          toast({
+            title: "Changes saved",
+            description: "Your profile has been updated successfully.",
+          });
+          resolve();
+        },
+        onError: () => {
+          setIsSubmitting(false);
+          toast({
+            title: "Error",
+            description: "Could not save your profile. Please try again.",
+            variant: "destructive"
+          });
+          reject();
+        }
+      });
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="motion-safe:animate-pulse flex flex-col items-center">
+          <div className="h-10 w-10 bg-primary/20 rounded-full mb-4"></div>
+          <p className="text-muted-foreground font-medium">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 md:space-y-8 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 pb-12 max-w-4xl mx-auto font-sans">
+      <h1 className="text-2xl md:text-3xl font-serif text-primary" data-testid="heading-your-profile">
+        Your Profile
+      </h1>
+
+      {/* Profile Header */}
+      <div
+        className="relative flex flex-col items-start gap-6 overflow-hidden rounded-2xl border border-primary/15 bg-card p-6 shadow-xl shadow-primary/10 ring-1 ring-inset ring-primary/10 dark:shadow-primary/15 md:flex-row md:items-center"
+        data-testid="card-profile-summary"
+      >
+        <div
+          className="absolute left-0 top-0 h-24 w-full bg-gradient-to-r from-primary via-primary/85 to-primary/70 dark:from-primary/30 dark:via-primary/15 dark:to-card md:h-32"
+          data-testid="profile-summary-gradient"
+        />
+
+        <div className="relative pt-12 md:pt-14 flex flex-col md:flex-row items-start md:items-center gap-5 w-full">
+          <Avatar className="h-20 w-20 md:h-24 md:w-24 border-4 border-card shadow-md">
+            {user?.profileImageUrl && <AvatarImage src={user.profileImageUrl} alt={displayName} />}
+            <AvatarFallback className="bg-primary text-3xl font-serif text-primary-foreground">{initial}</AvatarFallback>
+          </Avatar>
+
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="text-2xl font-serif font-medium text-foreground md:text-primary-foreground dark:md:text-foreground"
+                data-testid="text-profile-display-name"
+              >
+                {displayName}
+              </div>
+              {user?.isAdmin === true && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-secondary/50 bg-secondary/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-secondary-foreground shadow-sm md:border-primary-foreground/35 md:bg-background/90 md:text-primary dark:md:border-secondary/50 dark:md:bg-secondary/15 dark:md:text-secondary-foreground"
+                  data-testid="badge-profile-admin"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                  Admin
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1.5 text-muted-foreground text-sm">
+              <Mail className="h-4 w-4 shrink-0" />
+              <span className="truncate">{user?.email || profile?.email || "No email provided"}</span>
+              {user?.email && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-green-600">
+                  <CheckCircle2 className="h-3 w-3" /> Verified
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {user?.isAdmin === true && (
+        <Card className="border-border/60 shadow-sm overflow-hidden bg-primary/5">
+          <CardHeader className="flex flex-row items-center gap-3 border-b border-border/40 px-5 py-4 sm:px-6">
+            <div className="p-2 bg-primary/10 rounded-lg text-primary">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">Administrator Access</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
+                Review requests, advisors, service settings, and login activity with this account.
+              </p>
+              <Link
+                href="/admin"
+                data-testid="link-open-admin-panel"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                Open admin panel <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {profile && (
+        <>
+          <AppearanceSection />
+          {isAuthenticated && <PasskeySecuritySection />}
+          <PersonalDetailsSection profile={profile} onSave={handleSave} isSubmitting={isSubmitting} />
+          <RetirementSettingsSection profile={profile} onSave={handleSave} isSubmitting={isSubmitting} />
+          <ContactInfoSection profile={profile} user={user} onSave={handleSave} isSubmitting={isSubmitting} />
+          <AccountDataControls email={user?.email || profile.email} />
+        </>
+      )}
+
+      {isAuthenticated && (
+        <Card className="overflow-hidden border-border bg-card shadow-sm">
+          <CardHeader className="flex flex-row items-center gap-3 border-b border-border px-5 py-4 sm:px-6">
+            <div className="rounded-lg bg-muted p-2 text-muted-foreground">
+              <LogOut className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold text-card-foreground">Security & Access</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex flex-col gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div>
+                  <h3 className="text-sm font-semibold text-card-foreground">ezyRetire PIN</h3>
+                  <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                    Replace your four-digit PIN after verifying a fresh code sent to your account email.
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline" className="min-h-11 shrink-0 shadow-sm">
+                <Link href="/login?changePin=true&returnTo=%2Fprofile" data-testid="link-change-pin">
+                  Change PIN
+                </Link>
+              </Button>
+            </div>
+            <div className="flex flex-col gap-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+                Sign out of your account on this device. You will need a new sign-in code sent to your email to access your workspace again.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 shrink-0 shadow-sm"
+                data-testid="button-sign-out"
+                onClick={async () => {
+                  if (carryPendingFinancialChangeNoticeAcrossLogout(queryClient)) {
+                    activateFinancialDataAccount(null);
+                  }
+                  try {
+                    const registration = await navigator.serviceWorker?.getRegistration(import.meta.env.BASE_URL);
+                    const subscription = await registration?.pushManager.getSubscription();
+                    if (subscription) {
+                      try {
+                        await removePushSubscription(subscription.endpoint);
+                      } finally {
+                        await subscription.unsubscribe();
+                      }
+                    }
+                  } catch {
+                    // Logout must still succeed; an unreachable subscription is
+                    // removed after the push service returns 404/410.
+                  }
+                  logout();
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function AccountDataControls({ email }: { email: string | null | undefined }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [expanded, setExpanded] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const statusQuery = useGetAccountDeletionStatus({
+    query: {
+      queryKey: getGetAccountDeletionStatusQueryKey(),
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        return status === "processing" || status === "blocked" ? 10_000 : false;
+      },
+    },
+  });
+  const requestDeletion = useRequestAccountDeletion();
+  const cancelDeletion = useCancelAccountDeletion();
+  const form = useForm<z.infer<typeof deletionConfirmationSchema>>({
+    resolver: zodResolver(deletionConfirmationSchema),
+    defaultValues: { email: "", confirmation: "" as "DELETE MY ACCOUNT" },
+  });
+  const status = statusQuery.data;
+  const canCancel = status?.status === "cooling_off";
+
+  const submitDeletion = form.handleSubmit((data) => {
+    requestDeletion.mutate({ data }, {
+      onSuccess: async () => {
+        setDialogOpen(false);
+        form.reset();
+        await completeAccountDeletionSignOut(queryClient);
+      },
+      onError: (error) => {
+        const recentAuthRequired = "status" in error && error.status === 403;
+        toast({
+          title: recentAuthRequired ? "Sign in again first" : "Deletion was not scheduled",
+          description: recentAuthRequired
+            ? "For your security, sign out and sign back in, then retry within 15 minutes."
+            : "Check both confirmation fields and try again.",
+          variant: "destructive",
+        });
+      },
+    });
+  });
+
+  return (
+    <>
+      <Card className="overflow-hidden border-border/60 shadow-sm">
+        <CardHeader className="border-b border-border/40 bg-muted/20 p-0">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-6"
+            aria-expanded={expanded}
+            aria-controls="account-data-card-content"
+            onClick={() => setExpanded((value) => !value)}
+            data-testid="button-toggle-account-data"
+          >
+            <span className="rounded-lg bg-primary/10 p-2 text-primary"><Database className="h-5 w-5" /></span>
+            <span className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">Your data & account</CardTitle>
+              <span className="mt-1 block text-sm font-normal text-muted-foreground">Download your information or manage account deletion.</span>
+            </span>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+        </CardHeader>
+        {expanded && <CardContent id="account-data-card-content" className="space-y-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold">Personal data export</h3>
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                Download a portable ZIP archive of your account information and vault files for
+                personal records, portability, support or audit review, or future migration tools.
+                It cannot currently be restored into ezyRetire.
+              </p>
+            </div>
+            <Button asChild className="min-h-11 shrink-0 gap-2">
+              <a href="/api/account/export" download data-testid="link-export-personal-data">
+                <Download className="h-4 w-4" /> Download ZIP export
+              </a>
+            </Button>
+          </div>
+
+          {statusQuery.isLoading ? (
+            <p role="status" className="text-sm text-muted-foreground" data-testid="status-account-deletion-loading">
+              Checking account status…
+            </p>
+          ) : status?.status && status.status !== "none" && status.status !== "cancelled" ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4" data-testid="status-account-deletion">
+              <h3 className="text-sm font-semibold">
+                {status.status === "cooling_off" ? "Deletion scheduled" : status.status === "blocked" ? "Cleanup retrying" : "Deletion processing"}
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                {status.status === "cooling_off" && status.scheduledFor
+                  ? `Your seven-day cooling period ends ${new Date(status.scheduledFor).toLocaleString("en-IN")}.`
+                  : status.status === "blocked"
+                    ? "Secure object cleanup has not finished. No database data will be erased until cleanup succeeds."
+                    : "Deletion has started and can no longer be cancelled."}
+              </p>
+              {canCancel && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-4 min-h-11 gap-2"
+                  disabled={cancelDeletion.isPending}
+                  onClick={() => cancelDeletion.mutate(undefined, {
+                    onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetAccountDeletionStatusQueryKey() }),
+                  })}
+                  data-testid="button-cancel-account-deletion"
+                >
+                  <XCircle className="h-4 w-4" />
+                  {cancelDeletion.isPending ? "Cancelling…" : "Cancel deletion"}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 rounded-xl border border-negative/30 bg-negative-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-negative">Delete account</h3>
+                <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                  This signs out every device immediately. You then have seven days to cancel before
+                  your account, plans, transactions, vault files and support history are permanently erased.
+                </p>
+              </div>
+              <Button type="button" variant="destructive" className="min-h-11 shrink-0" onClick={() => setDialogOpen(true)} data-testid="button-open-account-deletion">
+                Delete account
+              </Button>
+            </div>
+          )}
+        </CardContent>}
+      </Card>
+
+      <AlertDialog open={dialogOpen} onOpenChange={(open) => { if (!requestDeletion.isPending) setDialogOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Export anything you need first. Every device will be signed out now. Deletion begins
+              after a seven-day cooling period and cannot be undone once processing starts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={submitDeletion}>
+              <FormField control={form.control} name="email" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Account email</FormLabel>
+                  <FormControl><Input {...field} placeholder={email || "you@example.com"} autoComplete="email" data-testid="input-delete-account-email" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="confirmation" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type DELETE MY ACCOUNT</FormLabel>
+                  <FormControl><Input {...field} autoComplete="off" data-testid="input-delete-account-confirmation" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <AlertDialogFooter>
+                <AlertDialogCancel type="button" disabled={requestDeletion.isPending}>Keep my account</AlertDialogCancel>
+                <Button type="submit" variant="destructive" disabled={requestDeletion.isPending} data-testid="button-confirm-account-deletion">
+                  {requestDeletion.isPending ? "Scheduling…" : "Schedule permanent deletion"}
+                </Button>
+              </AlertDialogFooter>
+            </form>
+          </Form>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

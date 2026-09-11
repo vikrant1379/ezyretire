@@ -1,3 +1,30 @@
+# Private Object Storage broker
+
+Vercel continues to host the API, authentication, and finance routes, but it
+does not receive Object Storage bucket credentials and never contacts the
+Replit localhost sidecar. Set `REPLIT_STORAGE_BROKER_ORIGIN` to the verified
+HTTPS origin of the production Replit deployment (no path, query, credentials,
+or fragment). Set the same strong `STORAGE_BROKER_SECRET` in Replit and Vercel.
+A domain-separated key derived from `SESSION_SECRET` is retained only as a
+backward-compatible fallback. Both a dedicated secret and a fallback
+`SESSION_SECRET` root must contain at least 32 bytes.
+
+If the Replit deployment is private, set `PUBLISHED_SITE_ACCESS_TOKEN` on
+Vercel and update it after every republish. The API sends it only as a
+server-side `Authorization: Bearer` header to the Replit deployment. It is
+never placed in broker URLs or bodies. `PRIVATE_OBJECT_DIR` and
+all Object Storage bucket configuration belong only on Replit.
+
+Financial backups larger than Vercel's request-ingress limit must use
+`POST /api/financial-data/restore-uploads/request-url`, upload the exact
+`application/json` byte count to the returned signed URL, and submit only the
+small `{ "restoreUpload": { "objectPath": "...", "size": 123 } }` envelope to
+`POST /api/financial-data/restore`. The broker pins and promotes that upload
+before parsing it; Vercel never receives the large request body. Direct restore
+JSON remains supported for smaller callers. Existing `/objects/vault/<uuid>`
+documents are legacy read/delete-compatible only when the database proves
+same-account ownership.
+
 # Vercel deployment rules
 
 This repo is a **pnpm workspace**: a Vite SPA plus an Express app compiled as Vercel serverless functions. Local `tsc` uses `moduleResolution: "bundler"`. Vercel’s function compiler uses **Node ESM** (`module` / `moduleResolution`: `nodenext`). Code that typechecks locally can still fail the Vercel build. Follow this file whenever you add imports, packages, or schema.
@@ -44,6 +71,27 @@ A save writes the whole document, which is around ten statements inside one tran
 If you ever move the Neon project, change `regions` in `vercel.json` in the same commit. Leaving it on the default `iad1` with an Asia database is the single most expensive mistake available here.
 
 Local development pays this gap unavoidably, since your machine is not in a data centre next to Neon. Expect saves to be slower locally than in production.
+
+### Email sign-in must finish before the function deadline
+
+The email OTP delivery policy in `artifacts/api-server/src/lib/email-otp.ts` has one
+8-second end-to-end provider budget, including all attempts and retry delays.
+`vercel.json` gives API functions 30 seconds. Keep the delivery budget at no more
+than 10 seconds and always below `maxDuration`; the remaining time is reserved for
+challenge issuance, preserving or deleting challenge state after delivery failure,
+logging, and serializing the JSON response.
+
+Do not calculate the worst case by looking only at a single provider attempt.
+Attempt timeouts, retry count, and retry delays must all fit inside the shared
+delivery budget. Transport timeouts and ambiguous provider outcomes must leave the
+same deterministic challenge pending for a same-code, same-idempotency-key retry.
+Definitive configuration, sender, quota, or recipient failures may delete the new
+pending challenge. Increasing Vercel's function duration is not a substitute for
+bounding provider work.
+
+If either timeout policy changes, update the explicit budget test in
+`email-otp.test.ts` and confirm the API still has ample cleanup/JSON-response
+headroom under the `functions.api/**/*.ts.maxDuration` value in `vercel.json`.
 
 ### Dashboard settings Vercel accepts
 

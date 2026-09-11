@@ -7,13 +7,29 @@
   "outputDirectory": "artifacts/wealthone-expenses/dist/public",
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 300
     }
   },
   "crons": [
     {
       "path": "/api/internal/purge-login-activities",
       "schedule": "17 8 * * *"
+    },
+    {
+      "path": "/api/internal/evaluate-planning",
+      "schedule": "7 * * * *"
+    },
+    {
+      "path": "/api/internal/cleanup-vault-deletions",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/process-account-deletions",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/cleanup-pin-attempts",
+      "schedule": "37 * * * *"
     }
   ],
   "rewrites": [

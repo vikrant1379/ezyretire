@@ -78,6 +78,467 @@ export declare const GetCurrentAuthUserResponse: zod.ZodObject<{
     } | null;
 }>;
 /**
+ * @summary Update the authenticated user's profile
+ */
+export declare const UpdateAuthProfileBody: zod.ZodObject<{
+    fullName: zod.ZodString;
+    dateOfBirth: zod.ZodString;
+    gender: zod.ZodString;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    onboardingCompleted: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    fullName: string;
+    dateOfBirth: string;
+    gender: string;
+    onboardingCompleted: boolean;
+    phone?: string | null | undefined;
+}, {
+    fullName: string;
+    dateOfBirth: string;
+    gender: string;
+    onboardingCompleted: boolean;
+    phone?: string | null | undefined;
+}>;
+export declare const UpdateAuthProfileResponse: zod.ZodUnknown;
+/**
+ * @summary Create or replace a four-digit account PIN after recent email verification
+ */
+export declare const setupAccountPinBodyPinRegExp: RegExp;
+export declare const SetupAccountPinBody: zod.ZodObject<{
+    pin: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    pin: string;
+}, {
+    pin: string;
+}>;
+export declare const SetupAccountPinResponse: zod.ZodObject<{
+    user: zod.ZodObject<{
+        id: zod.ZodString;
+        email: zod.ZodNullable<zod.ZodString>;
+        profileImageUrl: zod.ZodNullable<zod.ZodString>;
+        fullName: zod.ZodNullable<zod.ZodString>;
+        dateOfBirth: zod.ZodNullable<zod.ZodString>;
+        gender: zod.ZodNullable<zod.ZodString>;
+        phone: zod.ZodNullable<zod.ZodString>;
+        onboardingCompleted: zod.ZodBoolean;
+        isAdmin: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    }, {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    }>;
+    pinConfigured: zod.ZodLiteral<true>;
+}, "strip", zod.ZodTypeAny, {
+    user: {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    };
+    pinConfigured: true;
+}, {
+    user: {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    };
+    pinConfigured: true;
+}>;
+/**
+ * @summary Sign in to a remembered account with its four-digit PIN
+ */
+export declare const loginWithAccountPinBodyEmailMax = 320;
+export declare const loginWithAccountPinBodyEmailRegExp: RegExp;
+export declare const loginWithAccountPinBodyPinRegExp: RegExp;
+export declare const LoginWithAccountPinBody: zod.ZodObject<{
+    email: zod.ZodString;
+    pin: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    email: string;
+    pin: string;
+}, {
+    email: string;
+    pin: string;
+}>;
+export declare const LoginWithAccountPinResponse: zod.ZodObject<{
+    user: zod.ZodObject<{
+        id: zod.ZodString;
+        email: zod.ZodNullable<zod.ZodString>;
+        profileImageUrl: zod.ZodNullable<zod.ZodString>;
+        fullName: zod.ZodNullable<zod.ZodString>;
+        dateOfBirth: zod.ZodNullable<zod.ZodString>;
+        gender: zod.ZodNullable<zod.ZodString>;
+        phone: zod.ZodNullable<zod.ZodString>;
+        onboardingCompleted: zod.ZodBoolean;
+        isAdmin: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    }, {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    user: {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    };
+}, {
+    user: {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    };
+}>;
+/**
+ * @summary Create passkey registration options for a recently email-verified customer
+ */
+export declare const BeginPasskeyRegistrationBody: zod.ZodObject<{}, "strip", zod.ZodTypeAny, {}, {}>;
+export declare const BeginPasskeyRegistrationResponse: zod.ZodObject<{
+    challengeId: zod.ZodString;
+    options: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    options: Record<string, unknown>;
+    challengeId: string;
+}, {
+    options: Record<string, unknown>;
+    challengeId: string;
+}>;
+/**
+ * @summary Verify and store a passkey
+ */
+export declare const completePasskeyRegistrationBodyNameMax = 80;
+export declare const CompletePasskeyRegistrationBody: zod.ZodObject<{
+    challengeId: zod.ZodString;
+    name: zod.ZodString;
+    response: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    challengeId: string;
+    name: string;
+    response: Record<string, unknown>;
+}, {
+    challengeId: string;
+    name: string;
+    response: Record<string, unknown>;
+}>;
+export declare const CompletePasskeyRegistrationResponse: zod.ZodObject<{
+    credential: zod.ZodObject<{
+        id: zod.ZodString;
+        name: zod.ZodString;
+        transports: zod.ZodArray<zod.ZodString, "many">;
+        deviceType: zod.ZodNullable<zod.ZodString>;
+        backedUp: zod.ZodBoolean;
+        createdAt: zod.ZodDate;
+        lastUsedAt: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }, {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    credential: {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    };
+}, {
+    credential: {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    };
+}>;
+/**
+ * @summary Create discoverable username-less passkey authentication options
+ */
+export declare const BeginPasskeyAuthenticationBody: zod.ZodObject<{}, "strip", zod.ZodTypeAny, {}, {}>;
+export declare const BeginPasskeyAuthenticationResponse: zod.ZodObject<{
+    challengeId: zod.ZodString;
+    options: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    options: Record<string, unknown>;
+    challengeId: string;
+}, {
+    options: Record<string, unknown>;
+    challengeId: string;
+}>;
+/**
+ * @summary Verify a discoverable passkey and issue the normal session
+ */
+export declare const CompletePasskeyAuthenticationBody: zod.ZodObject<{
+    challengeId: zod.ZodString;
+    response: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    challengeId: string;
+    response: Record<string, unknown>;
+}, {
+    challengeId: string;
+    response: Record<string, unknown>;
+}>;
+export declare const CompletePasskeyAuthenticationResponse: zod.ZodObject<{
+    user: zod.ZodObject<{
+        id: zod.ZodString;
+        email: zod.ZodNullable<zod.ZodString>;
+        profileImageUrl: zod.ZodNullable<zod.ZodString>;
+        fullName: zod.ZodNullable<zod.ZodString>;
+        dateOfBirth: zod.ZodNullable<zod.ZodString>;
+        gender: zod.ZodNullable<zod.ZodString>;
+        phone: zod.ZodNullable<zod.ZodString>;
+        onboardingCompleted: zod.ZodBoolean;
+        isAdmin: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    }, {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    }>;
+    needsProfile: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    user: {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    };
+    needsProfile: boolean;
+}, {
+    user: {
+        id: string;
+        email: string | null;
+        profileImageUrl: string | null;
+        fullName: string | null;
+        dateOfBirth: string | null;
+        gender: string | null;
+        phone: string | null;
+        onboardingCompleted: boolean;
+        isAdmin: boolean;
+    };
+    needsProfile: boolean;
+}>;
+/**
+ * @summary List active passkeys after recent email verification
+ */
+export declare const ListPasskeysResponse: zod.ZodObject<{
+    credentials: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        name: zod.ZodString;
+        transports: zod.ZodArray<zod.ZodString, "many">;
+        deviceType: zod.ZodNullable<zod.ZodString>;
+        backedUp: zod.ZodBoolean;
+        createdAt: zod.ZodDate;
+        lastUsedAt: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }, {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    credentials: {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }[];
+}, {
+    credentials: {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }[];
+}>;
+/**
+ * @summary Rename an owned active passkey
+ */
+export declare const renamePasskeyPathIdMax = 1024;
+export declare const RenamePasskeyParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const renamePasskeyBodyNameMax = 80;
+export declare const RenamePasskeyBody: zod.ZodObject<{
+    name: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    name: string;
+}, {
+    name: string;
+}>;
+export declare const RenamePasskeyResponse: zod.ZodObject<{
+    credential: zod.ZodObject<{
+        id: zod.ZodString;
+        name: zod.ZodString;
+        transports: zod.ZodArray<zod.ZodString, "many">;
+        deviceType: zod.ZodNullable<zod.ZodString>;
+        backedUp: zod.ZodBoolean;
+        createdAt: zod.ZodDate;
+        lastUsedAt: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }, {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    credential: {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    };
+}, {
+    credential: {
+        id: string;
+        name: string;
+        transports: string[];
+        deviceType: string | null;
+        backedUp: boolean;
+        createdAt: Date;
+        lastUsedAt: Date | null;
+    };
+}>;
+/**
+ * @summary Revoke an owned active passkey
+ */
+export declare const revokePasskeyPathIdMax = 1024;
+export declare const RevokePasskeyParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const RevokePasskeyBody: zod.ZodObject<{}, "strip", zod.ZodTypeAny, {}, {}>;
+export declare const RevokePasskeyResponse: zod.ZodVoid;
+/**
  * @summary Start browser login
  */
 export declare const BeginBrowserLoginQueryParams: zod.ZodObject<{
@@ -100,6 +561,110 @@ export declare const BeginAdminBrowserLoginQueryParams: zod.ZodObject<{
 }>;
 export declare const BeginAdminBrowserLoginResponse: zod.ZodVoid;
 /**
+ * @summary Get paginated successful login history
+ */
+export declare const getAdminLoginActivityQueryPageDefault = 1;
+export declare const getAdminLoginActivityQueryPageSizeDefault = 25;
+export declare const getAdminLoginActivityQueryPageSizeMax = 100;
+export declare const GetAdminLoginActivityQueryParams: zod.ZodObject<{
+    page: zod.ZodDefault<zod.ZodNumber>;
+    pageSize: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    page: number;
+    pageSize: number;
+}, {
+    page?: number | undefined;
+    pageSize?: number | undefined;
+}>;
+export declare const getAdminLoginActivityResponsePageMultipleOf = 1;
+export declare const getAdminLoginActivityResponsePageSizeMultipleOf = 1;
+export declare const getAdminLoginActivityResponseTotalMultipleOf = 1;
+export declare const getAdminLoginActivityResponseTotalPagesMultipleOf = 1;
+export declare const GetAdminLoginActivityResponse: zod.ZodObject<{
+    items: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        userId: zod.ZodString;
+        userName: zod.ZodNullable<zod.ZodString>;
+        userEmail: zod.ZodNullable<zod.ZodString>;
+        loggedInAt: zod.ZodDate;
+        authMethod: zod.ZodEnum<["email_otp", "oidc"]>;
+        deviceType: zod.ZodNullable<zod.ZodString>;
+        browser: zod.ZodNullable<zod.ZodString>;
+        operatingSystem: zod.ZodNullable<zod.ZodString>;
+        country: zod.ZodNullable<zod.ZodString>;
+        region: zod.ZodNullable<zod.ZodString>;
+        city: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        deviceType: string | null;
+        userId: string;
+        userName: string | null;
+        userEmail: string | null;
+        loggedInAt: Date;
+        authMethod: "email_otp" | "oidc";
+        browser: string | null;
+        operatingSystem: string | null;
+        country: string | null;
+        region: string | null;
+        city: string | null;
+    }, {
+        id: string;
+        deviceType: string | null;
+        userId: string;
+        userName: string | null;
+        userEmail: string | null;
+        loggedInAt: Date;
+        authMethod: "email_otp" | "oidc";
+        browser: string | null;
+        operatingSystem: string | null;
+        country: string | null;
+        region: string | null;
+        city: string | null;
+    }>, "many">;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
+    total: zod.ZodNumber;
+    totalPages: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    page: number;
+    pageSize: number;
+    items: {
+        id: string;
+        deviceType: string | null;
+        userId: string;
+        userName: string | null;
+        userEmail: string | null;
+        loggedInAt: Date;
+        authMethod: "email_otp" | "oidc";
+        browser: string | null;
+        operatingSystem: string | null;
+        country: string | null;
+        region: string | null;
+        city: string | null;
+    }[];
+    total: number;
+    totalPages: number;
+}, {
+    page: number;
+    pageSize: number;
+    items: {
+        id: string;
+        deviceType: string | null;
+        userId: string;
+        userName: string | null;
+        userEmail: string | null;
+        loggedInAt: Date;
+        authMethod: "email_otp" | "oidc";
+        browser: string | null;
+        operatingSystem: string | null;
+        country: string | null;
+        region: string | null;
+        city: string | null;
+    }[];
+    total: number;
+    totalPages: number;
+}>;
+/**
  * @summary Complete browser login
  */
 export declare const HandleBrowserLoginCallbackResponse: zod.ZodVoid;
@@ -115,6 +680,3463 @@ export declare const LogoutBrowserSessionQueryParams: zod.ZodObject<{
 }>;
 export declare const LogoutBrowserSessionResponse: zod.ZodVoid;
 /**
+ * @summary Get the signed-in account's financial planning document
+ */
+export declare const getFinancialDataResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const getFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const getFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const getFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const getFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const getFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+export declare const getFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+export declare const getFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const getFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const getFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const getFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const getFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const getFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const getFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const getFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+export declare const GetFinancialDataResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Replace the signed-in account's financial planning document
+ */
+export declare const putFinancialDataBodyNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const putFinancialDataBodyNetWorthSnapshotsItemAssetsMin = 0;
+export declare const putFinancialDataBodyNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const putFinancialDataBodyNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const putFinancialDataBodyNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const putFinancialDataBodyEmergencyFundTargetMonthsMin = 0;
+export declare const putFinancialDataBodyEmergencyFundReserveBalanceMin = 0;
+export declare const putFinancialDataBodyEmergencyFundMonthlyContributionMin = 0;
+export declare const putFinancialDataBodyRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const putFinancialDataBodyRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const putFinancialDataBodyRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const putFinancialDataBodyRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const putFinancialDataBodyRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const putFinancialDataBodyRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const putFinancialDataBodyIncomeReceiptsItemAmountMin = 0;
+export declare const PutFinancialDataBody: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+export declare const putFinancialDataResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const putFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const putFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const putFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const putFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const putFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+export declare const putFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+export declare const putFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const putFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const putFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const putFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const putFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const putFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const putFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const putFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+export declare const PutFinancialDataResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Clear the signed-in account's financial planning document
+ */
+export declare const deleteFinancialDataResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const deleteFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const deleteFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const deleteFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const deleteFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const deleteFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+export declare const deleteFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+export declare const deleteFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const deleteFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const deleteFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const deleteFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const deleteFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const deleteFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const deleteFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const deleteFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+export declare const DeleteFinancialDataResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Atomically commit reviewed premium bank statement expenses
+ */
+export declare const importBankStatementExpensesBodyRowsItemImportIdRegExp: RegExp;
+export declare const importBankStatementExpensesBodyRowsItemSourceRowIdMax = 256;
+export declare const importBankStatementExpensesBodyRowsItemParserVersionMin = 3;
+export declare const importBankStatementExpensesBodyRowsItemParserVersionMax = 64;
+export declare const importBankStatementExpensesBodyRowsItemAmountExclusiveMin = 0;
+export declare const importBankStatementExpensesBodyRowsItemCategoryMax = 80;
+export declare const importBankStatementExpensesBodyRowsItemMerchantMax = 160;
+export declare const importBankStatementExpensesBodyRowsItemPaymentMethodMax = 80;
+export declare const importBankStatementExpensesBodyRowsItemNoteMax = 2000;
+export declare const importBankStatementExpensesBodyRowsMax = 5000;
+export declare const ImportBankStatementExpensesBody: zod.ZodObject<{
+    expectedAccountId: zod.ZodString;
+    rows: zod.ZodArray<zod.ZodObject<{
+        importId: zod.ZodString;
+        sourceRowId: zod.ZodString;
+        bank: zod.ZodEnum<["SBI", "HDFC", "ICICI", "Axis", "Kotak", "PNB", "BOB", "IndusInd"]>;
+        parserVersion: zod.ZodString;
+        date: zod.ZodDate;
+        amount: zod.ZodNumber;
+        category: zod.ZodString;
+        merchant: zod.ZodString;
+        paymentMethod: zod.ZodString;
+        note: zod.ZodOptional<zod.ZodString>;
+        reimbursable: zod.ZodOptional<zod.ZodBoolean>;
+        recurring: zod.ZodOptional<zod.ZodBoolean>;
+    }, "strip", zod.ZodTypeAny, {
+        date: Date;
+        amount: number;
+        importId: string;
+        sourceRowId: string;
+        bank: "SBI" | "HDFC" | "ICICI" | "Axis" | "Kotak" | "PNB" | "BOB" | "IndusInd";
+        parserVersion: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        note?: string | undefined;
+        reimbursable?: boolean | undefined;
+        recurring?: boolean | undefined;
+    }, {
+        date: Date;
+        amount: number;
+        importId: string;
+        sourceRowId: string;
+        bank: "SBI" | "HDFC" | "ICICI" | "Axis" | "Kotak" | "PNB" | "BOB" | "IndusInd";
+        parserVersion: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        note?: string | undefined;
+        reimbursable?: boolean | undefined;
+        recurring?: boolean | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    expectedAccountId: string;
+    rows: {
+        date: Date;
+        amount: number;
+        importId: string;
+        sourceRowId: string;
+        bank: "SBI" | "HDFC" | "ICICI" | "Axis" | "Kotak" | "PNB" | "BOB" | "IndusInd";
+        parserVersion: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        note?: string | undefined;
+        reimbursable?: boolean | undefined;
+        recurring?: boolean | undefined;
+    }[];
+}, {
+    expectedAccountId: string;
+    rows: {
+        date: Date;
+        amount: number;
+        importId: string;
+        sourceRowId: string;
+        bank: "SBI" | "HDFC" | "ICICI" | "Axis" | "Kotak" | "PNB" | "BOB" | "IndusInd";
+        parserVersion: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        note?: string | undefined;
+        reimbursable?: boolean | undefined;
+        recurring?: boolean | undefined;
+    }[];
+}>;
+export declare const importBankStatementExpensesResponseDuplicateCountMin = 0;
+export declare const importBankStatementExpensesResponseDataNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const importBankStatementExpensesResponseDataNetWorthSnapshotsItemAssetsMin = 0;
+export declare const importBankStatementExpensesResponseDataNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const importBankStatementExpensesResponseDataNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const importBankStatementExpensesResponseDataNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const importBankStatementExpensesResponseDataEmergencyFundTargetMonthsMin = 0;
+export declare const importBankStatementExpensesResponseDataEmergencyFundReserveBalanceMin = 0;
+export declare const importBankStatementExpensesResponseDataEmergencyFundMonthlyContributionMin = 0;
+export declare const importBankStatementExpensesResponseDataRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const importBankStatementExpensesResponseDataRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const importBankStatementExpensesResponseDataRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const importBankStatementExpensesResponseDataIncomeReceiptsItemAmountMin = 0;
+export declare const ImportBankStatementExpensesResponse: zod.ZodObject<{
+    added: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+    duplicateCount: zod.ZodNumber;
+    data: zod.ZodObject<{
+        netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            month: zod.ZodString;
+            assets: zod.ZodNumber;
+            liabilities: zod.ZodNumber;
+            netWorth: zod.ZodNumber;
+            healthScore: zod.ZodOptional<zod.ZodNumber>;
+        }, "strip", zod.ZodTypeAny, {
+            month: string;
+            assets: number;
+            liabilities: number;
+            netWorth: number;
+            healthScore?: number | undefined;
+        }, {
+            month: string;
+            assets: number;
+            liabilities: number;
+            netWorth: number;
+            healthScore?: number | undefined;
+        }>, "many">>;
+        emergencyFund: zod.ZodOptional<zod.ZodObject<{
+            targetMonths: zod.ZodNumber;
+            reserveBalance: zod.ZodNumber;
+            monthlyContribution: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            targetMonths: number;
+            reserveBalance: number;
+            monthlyContribution: number;
+        }, {
+            targetMonths: number;
+            reserveBalance: number;
+            monthlyContribution: number;
+        }>>;
+        retirementInputs: zod.ZodOptional<zod.ZodObject<{
+            dateOfBirth: zod.ZodOptional<zod.ZodString>;
+            targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+            lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+            generalInflation: zod.ZodOptional<zod.ZodNumber>;
+            salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+            monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+            investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+            lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+            customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+            retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+            pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                name: zod.ZodString;
+                monthlyAmount: zod.ZodNumber;
+                startAge: zod.ZodOptional<zod.ZodNumber>;
+                annualEscalationRate: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }, {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }>, "many">>;
+        }, "strip", zod.ZodTypeAny, {
+            dateOfBirth?: string | undefined;
+            targetRetirementAge?: number | undefined;
+            lifeExpectancy?: number | undefined;
+            generalInflation?: number | undefined;
+            salaryGrowth?: number | undefined;
+            monthlyContributionOverride?: number | undefined;
+            investSurplus?: boolean | undefined;
+            lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+            customLifestyleExpense?: number | undefined;
+            retirementSpendingAdjustmentPercent?: number | undefined;
+            pensionSources?: {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }[] | undefined;
+        }, {
+            dateOfBirth?: string | undefined;
+            targetRetirementAge?: number | undefined;
+            lifeExpectancy?: number | undefined;
+            generalInflation?: number | undefined;
+            salaryGrowth?: number | undefined;
+            monthlyContributionOverride?: number | undefined;
+            investSurplus?: boolean | undefined;
+            lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+            customLifestyleExpense?: number | undefined;
+            retirementSpendingAdjustmentPercent?: number | undefined;
+            pensionSources?: {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }[] | undefined;
+        }>>;
+        incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            incomeSourceId: zod.ZodString;
+            receivedDate: zod.ZodDate;
+            amount: zod.ZodNumber;
+            note: zod.ZodOptional<zod.ZodString>;
+            createdAt: zod.ZodDate;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            createdAt: Date;
+            incomeSourceId: string;
+            receivedDate: Date;
+            amount: number;
+            note?: string | undefined;
+        }, {
+            id: string;
+            createdAt: Date;
+            incomeSourceId: string;
+            receivedDate: Date;
+            amount: number;
+            note?: string | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        netWorthSnapshots?: {
+            month: string;
+            assets: number;
+            liabilities: number;
+            netWorth: number;
+            healthScore?: number | undefined;
+        }[] | undefined;
+        emergencyFund?: {
+            targetMonths: number;
+            reserveBalance: number;
+            monthlyContribution: number;
+        } | undefined;
+        retirementInputs?: {
+            dateOfBirth?: string | undefined;
+            targetRetirementAge?: number | undefined;
+            lifeExpectancy?: number | undefined;
+            generalInflation?: number | undefined;
+            salaryGrowth?: number | undefined;
+            monthlyContributionOverride?: number | undefined;
+            investSurplus?: boolean | undefined;
+            lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+            customLifestyleExpense?: number | undefined;
+            retirementSpendingAdjustmentPercent?: number | undefined;
+            pensionSources?: {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }[] | undefined;
+        } | undefined;
+        incomeReceipts?: {
+            id: string;
+            createdAt: Date;
+            incomeSourceId: string;
+            receivedDate: Date;
+            amount: number;
+            note?: string | undefined;
+        }[] | undefined;
+    }, {
+        netWorthSnapshots?: {
+            month: string;
+            assets: number;
+            liabilities: number;
+            netWorth: number;
+            healthScore?: number | undefined;
+        }[] | undefined;
+        emergencyFund?: {
+            targetMonths: number;
+            reserveBalance: number;
+            monthlyContribution: number;
+        } | undefined;
+        retirementInputs?: {
+            dateOfBirth?: string | undefined;
+            targetRetirementAge?: number | undefined;
+            lifeExpectancy?: number | undefined;
+            generalInflation?: number | undefined;
+            salaryGrowth?: number | undefined;
+            monthlyContributionOverride?: number | undefined;
+            investSurplus?: boolean | undefined;
+            lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+            customLifestyleExpense?: number | undefined;
+            retirementSpendingAdjustmentPercent?: number | undefined;
+            pensionSources?: {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }[] | undefined;
+        } | undefined;
+        incomeReceipts?: {
+            id: string;
+            createdAt: Date;
+            incomeSourceId: string;
+            receivedDate: Date;
+            amount: number;
+            note?: string | undefined;
+        }[] | undefined;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    added: Record<string, unknown>[];
+    duplicateCount: number;
+    data: {
+        netWorthSnapshots?: {
+            month: string;
+            assets: number;
+            liabilities: number;
+            netWorth: number;
+            healthScore?: number | undefined;
+        }[] | undefined;
+        emergencyFund?: {
+            targetMonths: number;
+            reserveBalance: number;
+            monthlyContribution: number;
+        } | undefined;
+        retirementInputs?: {
+            dateOfBirth?: string | undefined;
+            targetRetirementAge?: number | undefined;
+            lifeExpectancy?: number | undefined;
+            generalInflation?: number | undefined;
+            salaryGrowth?: number | undefined;
+            monthlyContributionOverride?: number | undefined;
+            investSurplus?: boolean | undefined;
+            lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+            customLifestyleExpense?: number | undefined;
+            retirementSpendingAdjustmentPercent?: number | undefined;
+            pensionSources?: {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }[] | undefined;
+        } | undefined;
+        incomeReceipts?: {
+            id: string;
+            createdAt: Date;
+            incomeSourceId: string;
+            receivedDate: Date;
+            amount: number;
+            note?: string | undefined;
+        }[] | undefined;
+    };
+}, {
+    added: Record<string, unknown>[];
+    duplicateCount: number;
+    data: {
+        netWorthSnapshots?: {
+            month: string;
+            assets: number;
+            liabilities: number;
+            netWorth: number;
+            healthScore?: number | undefined;
+        }[] | undefined;
+        emergencyFund?: {
+            targetMonths: number;
+            reserveBalance: number;
+            monthlyContribution: number;
+        } | undefined;
+        retirementInputs?: {
+            dateOfBirth?: string | undefined;
+            targetRetirementAge?: number | undefined;
+            lifeExpectancy?: number | undefined;
+            generalInflation?: number | undefined;
+            salaryGrowth?: number | undefined;
+            monthlyContributionOverride?: number | undefined;
+            investSurplus?: boolean | undefined;
+            lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+            customLifestyleExpense?: number | undefined;
+            retirementSpendingAdjustmentPercent?: number | undefined;
+            pensionSources?: {
+                id: string;
+                name: string;
+                monthlyAmount: number;
+                annualEscalationRate: number;
+                startAge?: number | undefined;
+            }[] | undefined;
+        } | undefined;
+        incomeReceipts?: {
+            id: string;
+            createdAt: Date;
+            incomeSourceId: string;
+            receivedDate: Date;
+            amount: number;
+            note?: string | undefined;
+        }[] | undefined;
+    };
+}>;
+/**
+ * @summary Download a complete versioned export for the signed-in account
+ */
+export declare const ExportPersonalDataResponse: zod.ZodUnknown;
+/**
+ * @summary Get the signed-in account deletion lifecycle
+ */
+export declare const getAccountDeletionStatusResponseAttemptsMultipleOf = 1;
+export declare const GetAccountDeletionStatusResponse: zod.ZodObject<{
+    id: zod.ZodOptional<zod.ZodString>;
+    status: zod.ZodEnum<["none", "cooling_off", "cancelled", "processing", "blocked", "completed"]>;
+    requestedAt: zod.ZodOptional<zod.ZodDate>;
+    scheduledFor: zod.ZodOptional<zod.ZodDate>;
+    cancelledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    completedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    attempts: zod.ZodOptional<zod.ZodNumber>;
+    retryingObjectCleanup: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    status: "none" | "cooling_off" | "cancelled" | "processing" | "blocked" | "completed";
+    id?: string | undefined;
+    requestedAt?: Date | undefined;
+    scheduledFor?: Date | undefined;
+    cancelledAt?: Date | null | undefined;
+    completedAt?: Date | null | undefined;
+    attempts?: number | undefined;
+    retryingObjectCleanup?: boolean | undefined;
+}, {
+    status: "none" | "cooling_off" | "cancelled" | "processing" | "blocked" | "completed";
+    id?: string | undefined;
+    requestedAt?: Date | undefined;
+    scheduledFor?: Date | undefined;
+    cancelledAt?: Date | null | undefined;
+    completedAt?: Date | null | undefined;
+    attempts?: number | undefined;
+    retryingObjectCleanup?: boolean | undefined;
+}>;
+/**
+ * @summary Schedule deletion after recent authentication and strong confirmation
+ */
+export declare const RequestAccountDeletionBody: zod.ZodObject<{
+    email: zod.ZodString;
+    confirmation: zod.ZodEnum<["DELETE MY ACCOUNT"]>;
+}, "strip", zod.ZodTypeAny, {
+    email: string;
+    confirmation: "DELETE MY ACCOUNT";
+}, {
+    email: string;
+    confirmation: "DELETE MY ACCOUNT";
+}>;
+export declare const requestAccountDeletionResponseAttemptsMultipleOf = 1;
+export declare const RequestAccountDeletionResponse: zod.ZodObject<{
+    id: zod.ZodOptional<zod.ZodString>;
+    status: zod.ZodEnum<["none", "cooling_off", "cancelled", "processing", "blocked", "completed"]>;
+    requestedAt: zod.ZodOptional<zod.ZodDate>;
+    scheduledFor: zod.ZodOptional<zod.ZodDate>;
+    cancelledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    completedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    attempts: zod.ZodOptional<zod.ZodNumber>;
+    retryingObjectCleanup: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    status: "none" | "cooling_off" | "cancelled" | "processing" | "blocked" | "completed";
+    id?: string | undefined;
+    requestedAt?: Date | undefined;
+    scheduledFor?: Date | undefined;
+    cancelledAt?: Date | null | undefined;
+    completedAt?: Date | null | undefined;
+    attempts?: number | undefined;
+    retryingObjectCleanup?: boolean | undefined;
+}, {
+    status: "none" | "cooling_off" | "cancelled" | "processing" | "blocked" | "completed";
+    id?: string | undefined;
+    requestedAt?: Date | undefined;
+    scheduledFor?: Date | undefined;
+    cancelledAt?: Date | null | undefined;
+    completedAt?: Date | null | undefined;
+    attempts?: number | undefined;
+    retryingObjectCleanup?: boolean | undefined;
+}>;
+/**
+ * @summary Cancel deletion during the seven-day cooling period
+ */
+export declare const cancelAccountDeletionResponseAttemptsMultipleOf = 1;
+export declare const CancelAccountDeletionResponse: zod.ZodObject<{
+    id: zod.ZodOptional<zod.ZodString>;
+    status: zod.ZodEnum<["none", "cooling_off", "cancelled", "processing", "blocked", "completed"]>;
+    requestedAt: zod.ZodOptional<zod.ZodDate>;
+    scheduledFor: zod.ZodOptional<zod.ZodDate>;
+    cancelledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    completedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    attempts: zod.ZodOptional<zod.ZodNumber>;
+    retryingObjectCleanup: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    status: "none" | "cooling_off" | "cancelled" | "processing" | "blocked" | "completed";
+    id?: string | undefined;
+    requestedAt?: Date | undefined;
+    scheduledFor?: Date | undefined;
+    cancelledAt?: Date | null | undefined;
+    completedAt?: Date | null | undefined;
+    attempts?: number | undefined;
+    retryingObjectCleanup?: boolean | undefined;
+}, {
+    status: "none" | "cooling_off" | "cancelled" | "processing" | "blocked" | "completed";
+    id?: string | undefined;
+    requestedAt?: Date | undefined;
+    scheduledFor?: Date | undefined;
+    cancelledAt?: Date | null | undefined;
+    completedAt?: Date | null | undefined;
+    attempts?: number | undefined;
+    retryingObjectCleanup?: boolean | undefined;
+}>;
+/**
+ * @summary Update emergency-fund settings or one monthly net-worth snapshot
+ */
+export declare const updateFinancialHealthPlanningBodyThreeEmergencyFundTargetMonthsMin = 0;
+export declare const updateFinancialHealthPlanningBodyThreeEmergencyFundReserveBalanceMin = 0;
+export declare const updateFinancialHealthPlanningBodyThreeEmergencyFundMonthlyContributionMin = 0;
+export declare const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotMonthRegExp: RegExp;
+export declare const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotAssetsMin = 0;
+export declare const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotLiabilitiesMin = 0;
+export declare const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotHealthScoreMin = 0;
+export declare const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotHealthScoreMax = 100;
+export declare const UpdateFinancialHealthPlanningBody: zod.ZodIntersection<zod.ZodUnion<[zod.ZodUnknown, zod.ZodUnknown]>, zod.ZodObject<{
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    netWorthSnapshot: zod.ZodOptional<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>>;
+}, "strip", zod.ZodTypeAny, {
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    netWorthSnapshot?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    } | undefined;
+}, {
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    netWorthSnapshot?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    } | undefined;
+}>>;
+export declare const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const updateFinancialHealthPlanningResponseEmergencyFundTargetMonthsMin = 0;
+export declare const updateFinancialHealthPlanningResponseEmergencyFundReserveBalanceMin = 0;
+export declare const updateFinancialHealthPlanningResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const updateFinancialHealthPlanningResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const updateFinancialHealthPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const updateFinancialHealthPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const updateFinancialHealthPlanningResponseIncomeReceiptsItemAmountMin = 0;
+export declare const UpdateFinancialHealthPlanningResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Authoritatively restore the signed-in account's financial planning document
+ */
+export declare const restoreFinancialDataBodyOneNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const restoreFinancialDataBodyOneNetWorthSnapshotsItemAssetsMin = 0;
+export declare const restoreFinancialDataBodyOneNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const restoreFinancialDataBodyOneNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const restoreFinancialDataBodyOneNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const restoreFinancialDataBodyOneEmergencyFundTargetMonthsMin = 0;
+export declare const restoreFinancialDataBodyOneEmergencyFundReserveBalanceMin = 0;
+export declare const restoreFinancialDataBodyOneEmergencyFundMonthlyContributionMin = 0;
+export declare const restoreFinancialDataBodyOneRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const restoreFinancialDataBodyOneRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const restoreFinancialDataBodyOneRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const restoreFinancialDataBodyOneIncomeReceiptsItemAmountMin = 0;
+export declare const restoreFinancialDataBodyTwoRestoreUploadObjectPathRegExp: RegExp;
+export declare const restoreFinancialDataBodyTwoRestoreUploadSizeMax = 12582912;
+export declare const restoreFinancialDataBodyTwoRestoreUploadSizeMultipleOf = 1;
+export declare const RestoreFinancialDataBody: zod.ZodUnion<[zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>, zod.ZodObject<{
+    restoreUpload: zod.ZodObject<{
+        objectPath: zod.ZodString;
+        size: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        objectPath: string;
+        size: number;
+    }, {
+        objectPath: string;
+        size: number;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    restoreUpload: {
+        objectPath: string;
+        size: number;
+    };
+}, {
+    restoreUpload: {
+        objectPath: string;
+        size: number;
+    };
+}>]>;
+export declare const restoreFinancialDataResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const restoreFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const restoreFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const restoreFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const restoreFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const restoreFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+export declare const restoreFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+export declare const restoreFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const restoreFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const restoreFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const restoreFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const restoreFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const restoreFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const restoreFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const restoreFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+export declare const RestoreFinancialDataResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Create an owner-bound upload URL for a large financial restore backup
+ */
+export declare const requestFinancialRestoreUploadUrlBodySizeMax = 12582912;
+export declare const requestFinancialRestoreUploadUrlBodySizeMultipleOf = 1;
+export declare const RequestFinancialRestoreUploadUrlBody: zod.ZodObject<{
+    size: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    size: number;
+}, {
+    size: number;
+}>;
+export declare const requestFinancialRestoreUploadUrlResponseMetadataSizeMultipleOf = 1;
+export declare const RequestFinancialRestoreUploadUrlResponse: zod.ZodObject<{
+    uploadURL: zod.ZodString;
+    objectPath: zod.ZodString;
+    metadata: zod.ZodObject<{
+        size: zod.ZodNumber;
+        contentType: zod.ZodEnum<["application/json"]>;
+    }, "strip", zod.ZodTypeAny, {
+        size: number;
+        contentType: "application/json";
+    }, {
+        size: number;
+        contentType: "application/json";
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    objectPath: string;
+    uploadURL: string;
+    metadata: {
+        size: number;
+        contentType: "application/json";
+    };
+}, {
+    objectPath: string;
+    uploadURL: string;
+    metadata: {
+        size: number;
+        contentType: "application/json";
+    };
+}>;
+/**
+ * @summary Deliberately delete one owned expense
+ */
+export declare const DeleteFinancialExpenseParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const deleteFinancialExpenseResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const deleteFinancialExpenseResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const deleteFinancialExpenseResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const deleteFinancialExpenseResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const deleteFinancialExpenseResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const deleteFinancialExpenseResponseEmergencyFundTargetMonthsMin = 0;
+export declare const deleteFinancialExpenseResponseEmergencyFundReserveBalanceMin = 0;
+export declare const deleteFinancialExpenseResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const deleteFinancialExpenseResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const deleteFinancialExpenseResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const deleteFinancialExpenseResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const deleteFinancialExpenseResponseIncomeReceiptsItemAmountMin = 0;
+export declare const DeleteFinancialExpenseResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Replace retirement assumptions, lifestyle, and pension sources
+ */
+export declare const updateRetirementPlanningBodyTargetRetirementAgeMin = 18;
+export declare const updateRetirementPlanningBodyTargetRetirementAgeMax = 120;
+export declare const updateRetirementPlanningBodyLifeExpectancyMin = 18;
+export declare const updateRetirementPlanningBodyLifeExpectancyMax = 130;
+export declare const updateRetirementPlanningBodyGeneralInflationMin = 0;
+export declare const updateRetirementPlanningBodyGeneralInflationMax = 25;
+export declare const updateRetirementPlanningBodySalaryGrowthMin = 0;
+export declare const updateRetirementPlanningBodySalaryGrowthMax = 100;
+export declare const updateRetirementPlanningBodyMonthlyContributionOverrideMin = 0;
+export declare const updateRetirementPlanningBodyCustomLifestyleExpenseMin = 0;
+export declare const updateRetirementPlanningBodyPensionSourcesItemMonthlyAmountMin = 0;
+export declare const updateRetirementPlanningBodyPensionSourcesItemStartAgeMin = 0;
+export declare const updateRetirementPlanningBodyPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const UpdateRetirementPlanningBody: zod.ZodObject<{
+    dateOfBirth: zod.ZodString;
+    targetRetirementAge: zod.ZodNumber;
+    lifeExpectancy: zod.ZodNumber;
+    generalInflation: zod.ZodNumber;
+    salaryGrowth: zod.ZodNumber;
+    monthlyContributionOverride: zod.ZodNumber;
+    investSurplus: zod.ZodBoolean;
+    lifestyleChoice: zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>;
+    customLifestyleExpense: zod.ZodNumber;
+    pensionSources: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        name: zod.ZodString;
+        monthlyAmount: zod.ZodNumber;
+        startAge: zod.ZodOptional<zod.ZodNumber>;
+        annualEscalationRate: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        name: string;
+        monthlyAmount: number;
+        annualEscalationRate: number;
+        startAge?: number | undefined;
+    }, {
+        id: string;
+        name: string;
+        monthlyAmount: number;
+        annualEscalationRate: number;
+        startAge?: number | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    dateOfBirth: string;
+    targetRetirementAge: number;
+    lifeExpectancy: number;
+    generalInflation: number;
+    salaryGrowth: number;
+    monthlyContributionOverride: number;
+    investSurplus: boolean;
+    lifestyleChoice: "Basic" | "Comfortable" | "Premium" | "Custom";
+    customLifestyleExpense: number;
+    pensionSources: {
+        id: string;
+        name: string;
+        monthlyAmount: number;
+        annualEscalationRate: number;
+        startAge?: number | undefined;
+    }[];
+}, {
+    dateOfBirth: string;
+    targetRetirementAge: number;
+    lifeExpectancy: number;
+    generalInflation: number;
+    salaryGrowth: number;
+    monthlyContributionOverride: number;
+    investSurplus: boolean;
+    lifestyleChoice: "Basic" | "Comfortable" | "Premium" | "Custom";
+    customLifestyleExpense: number;
+    pensionSources: {
+        id: string;
+        name: string;
+        monthlyAmount: number;
+        annualEscalationRate: number;
+        startAge?: number | undefined;
+    }[];
+}>;
+export declare const updateRetirementPlanningResponseNetWorthSnapshotsItemMonthRegExp: RegExp;
+export declare const updateRetirementPlanningResponseNetWorthSnapshotsItemAssetsMin = 0;
+export declare const updateRetirementPlanningResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+export declare const updateRetirementPlanningResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export declare const updateRetirementPlanningResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+export declare const updateRetirementPlanningResponseEmergencyFundTargetMonthsMin = 0;
+export declare const updateRetirementPlanningResponseEmergencyFundReserveBalanceMin = 0;
+export declare const updateRetirementPlanningResponseEmergencyFundMonthlyContributionMin = 0;
+export declare const updateRetirementPlanningResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+export declare const updateRetirementPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export declare const updateRetirementPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+export declare const updateRetirementPlanningResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+export declare const updateRetirementPlanningResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+export declare const updateRetirementPlanningResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+export declare const updateRetirementPlanningResponseIncomeReceiptsItemAmountMin = 0;
+export declare const UpdateRetirementPlanningResponse: zod.ZodObject<{
+    netWorthSnapshots: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        assets: zod.ZodNumber;
+        liabilities: zod.ZodNumber;
+        netWorth: zod.ZodNumber;
+        healthScore: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }, {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }>, "many">>;
+    emergencyFund: zod.ZodOptional<zod.ZodObject<{
+        targetMonths: zod.ZodNumber;
+        reserveBalance: zod.ZodNumber;
+        monthlyContribution: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }, {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    }>>;
+    retirementInputs: zod.ZodOptional<zod.ZodObject<{
+        dateOfBirth: zod.ZodOptional<zod.ZodString>;
+        targetRetirementAge: zod.ZodOptional<zod.ZodNumber>;
+        lifeExpectancy: zod.ZodOptional<zod.ZodNumber>;
+        generalInflation: zod.ZodOptional<zod.ZodNumber>;
+        salaryGrowth: zod.ZodOptional<zod.ZodNumber>;
+        monthlyContributionOverride: zod.ZodOptional<zod.ZodNumber>;
+        investSurplus: zod.ZodOptional<zod.ZodBoolean>;
+        lifestyleChoice: zod.ZodOptional<zod.ZodEnum<["Basic", "Comfortable", "Premium", "Custom"]>>;
+        customLifestyleExpense: zod.ZodOptional<zod.ZodNumber>;
+        retirementSpendingAdjustmentPercent: zod.ZodOptional<zod.ZodNumber>;
+        pensionSources: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            name: zod.ZodString;
+            monthlyAmount: zod.ZodNumber;
+            startAge: zod.ZodOptional<zod.ZodNumber>;
+            annualEscalationRate: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }, {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }, {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    }>>;
+    incomeReceipts: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        incomeSourceId: zod.ZodString;
+        receivedDate: zod.ZodDate;
+        amount: zod.ZodNumber;
+        note: zod.ZodOptional<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }, {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}, {
+    netWorthSnapshots?: {
+        month: string;
+        assets: number;
+        liabilities: number;
+        netWorth: number;
+        healthScore?: number | undefined;
+    }[] | undefined;
+    emergencyFund?: {
+        targetMonths: number;
+        reserveBalance: number;
+        monthlyContribution: number;
+    } | undefined;
+    retirementInputs?: {
+        dateOfBirth?: string | undefined;
+        targetRetirementAge?: number | undefined;
+        lifeExpectancy?: number | undefined;
+        generalInflation?: number | undefined;
+        salaryGrowth?: number | undefined;
+        monthlyContributionOverride?: number | undefined;
+        investSurplus?: boolean | undefined;
+        lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom" | undefined;
+        customLifestyleExpense?: number | undefined;
+        retirementSpendingAdjustmentPercent?: number | undefined;
+        pensionSources?: {
+            id: string;
+            name: string;
+            monthlyAmount: number;
+            annualEscalationRate: number;
+            startAge?: number | undefined;
+        }[] | undefined;
+    } | undefined;
+    incomeReceipts?: {
+        id: string;
+        createdAt: Date;
+        incomeSourceId: string;
+        receivedDate: Date;
+        amount: number;
+        note?: string | undefined;
+    }[] | undefined;
+}>;
+/**
+ * @summary Get effective account capabilities
+ */
+export declare const GetEntitlementsResponse: zod.ZodObject<{
+    plan: zod.ZodEnum<["free", "premium"]>;
+    premium: zod.ZodBoolean;
+    validUntil: zod.ZodNullable<zod.ZodDate>;
+    capabilities: zod.ZodObject<{
+        receiptOcr: zod.ZodBoolean;
+        bankStatementImport: zod.ZodBoolean;
+        documentVault: zod.ZodBoolean;
+        nomineeTracker: zod.ZodBoolean;
+        verifiedMobile: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        receiptOcr: boolean;
+        bankStatementImport: boolean;
+        documentVault: boolean;
+        nomineeTracker: boolean;
+        verifiedMobile: boolean;
+    }, {
+        receiptOcr: boolean;
+        bankStatementImport: boolean;
+        documentVault: boolean;
+        nomineeTracker: boolean;
+        verifiedMobile: boolean;
+    }>;
+    mobileVerification: zod.ZodObject<{
+        hasMobile: zod.ZodBoolean;
+        verified: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        hasMobile: boolean;
+        verified: boolean;
+    }, {
+        hasMobile: boolean;
+        verified: boolean;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    plan: "free" | "premium";
+    premium: boolean;
+    validUntil: Date | null;
+    capabilities: {
+        receiptOcr: boolean;
+        bankStatementImport: boolean;
+        documentVault: boolean;
+        nomineeTracker: boolean;
+        verifiedMobile: boolean;
+    };
+    mobileVerification: {
+        hasMobile: boolean;
+        verified: boolean;
+    };
+}, {
+    plan: "free" | "premium";
+    premium: boolean;
+    validUntil: Date | null;
+    capabilities: {
+        receiptOcr: boolean;
+        bankStatementImport: boolean;
+        documentVault: boolean;
+        nomineeTracker: boolean;
+        verifiedMobile: boolean;
+    };
+    mobileVerification: {
+        hasMobile: boolean;
+        verified: boolean;
+    };
+}>;
+/**
+ * @summary Request mobile verification by SMS
+ */
+export declare const RequestMobileOtpResponse: zod.ZodUnknown;
+/**
+ * @summary Verify a delivered mobile verification challenge
+ */
+export declare const verifyMobileOtpBodyCodeRegExp: RegExp;
+export declare const VerifyMobileOtpBody: zod.ZodObject<{
+    challengeId: zod.ZodString;
+    code: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    code: string;
+    challengeId: string;
+}, {
+    code: string;
+    challengeId: string;
+}>;
+export declare const VerifyMobileOtpResponse: zod.ZodUnknown;
+/**
+ * @summary Request a private direct-upload URL
+ */
+export declare const requestVaultUploadUrlBodyNameMax = 240;
+export declare const requestVaultUploadUrlBodySizeMax = 20971520;
+export declare const requestVaultUploadUrlBodySizeMultipleOf = 1;
+export declare const requestVaultUploadUrlBodyPurposeDefault = "vault_document";
+export declare const RequestVaultUploadUrlBody: zod.ZodObject<{
+    name: zod.ZodString;
+    contentType: zod.ZodEnum<["application/pdf", "image/jpeg", "image/png", "image/webp"]>;
+    size: zod.ZodNumber;
+    purpose: zod.ZodDefault<zod.ZodEnum<["vault_document", "receipt_review"]>>;
+}, "strip", zod.ZodTypeAny, {
+    name: string;
+    size: number;
+    contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+    purpose: "vault_document" | "receipt_review";
+}, {
+    name: string;
+    size: number;
+    contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+    purpose?: "vault_document" | "receipt_review" | undefined;
+}>;
+export declare const requestVaultUploadUrlResponseMetadataNameMax = 240;
+export declare const requestVaultUploadUrlResponseMetadataSizeMax = 20971520;
+export declare const requestVaultUploadUrlResponseMetadataSizeMultipleOf = 1;
+export declare const requestVaultUploadUrlResponseMetadataPurposeDefault = "vault_document";
+export declare const RequestVaultUploadUrlResponse: zod.ZodObject<{
+    uploadURL: zod.ZodString;
+    objectPath: zod.ZodString;
+    metadata: zod.ZodObject<{
+        name: zod.ZodString;
+        contentType: zod.ZodEnum<["application/pdf", "image/jpeg", "image/png", "image/webp"]>;
+        size: zod.ZodNumber;
+        purpose: zod.ZodDefault<zod.ZodEnum<["vault_document", "receipt_review"]>>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string;
+        size: number;
+        contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+        purpose: "vault_document" | "receipt_review";
+    }, {
+        name: string;
+        size: number;
+        contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+        purpose?: "vault_document" | "receipt_review" | undefined;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    objectPath: string;
+    uploadURL: string;
+    metadata: {
+        name: string;
+        size: number;
+        contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+        purpose: "vault_document" | "receipt_review";
+    };
+}, {
+    objectPath: string;
+    uploadURL: string;
+    metadata: {
+        name: string;
+        size: number;
+        contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+        purpose?: "vault_document" | "receipt_review" | undefined;
+    };
+}>;
+/**
+ * @summary Retry cleanup of this account's expired uploads and receipt reviews
+ */
+export declare const cleanupExpiredVaultStorageBodyObjectPathRegExp: RegExp;
+export declare const CleanupExpiredVaultStorageBody: zod.ZodObject<{
+    objectPath: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    objectPath?: string | undefined;
+}, {
+    objectPath?: string | undefined;
+}>;
+export declare const CleanupExpiredVaultStorageResponse: zod.ZodObject<{
+    cleanupPending: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    cleanupPending: boolean;
+}, {
+    cleanupPending: boolean;
+}>;
+/**
+ * @summary Get account-scoped pending storage cleanup status
+ */
+export declare const getVaultCleanupStatusResponsePendingMin = 0;
+export declare const getVaultCleanupStatusResponseFailedMin = 0;
+export declare const getVaultCleanupStatusResponseScheduledMin = 0;
+export declare const GetVaultCleanupStatusResponse: zod.ZodObject<{
+    pending: zod.ZodNumber;
+    failed: zod.ZodNumber;
+    scheduled: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    pending: number;
+    failed: number;
+    scheduled: number;
+}, {
+    pending: number;
+    failed: number;
+    scheduled: number;
+}>;
+/**
+ * @summary List account vault metadata
+ */
+export declare const ListVaultDocumentsResponse: zod.ZodUnknown;
+/**
+ * @summary Confirm a completed upload and create metadata
+ */
+export declare const confirmVaultDocumentBodyOneNameMax = 240;
+export declare const confirmVaultDocumentBodyOneSizeMax = 20971520;
+export declare const confirmVaultDocumentBodyOneSizeMultipleOf = 1;
+export declare const confirmVaultDocumentBodyOnePurposeDefault = "vault_document";
+export declare const confirmVaultDocumentBodyTwoCategoryMax = 64;
+export declare const ConfirmVaultDocumentBody: zod.ZodIntersection<zod.ZodObject<{
+    name: zod.ZodString;
+    contentType: zod.ZodEnum<["application/pdf", "image/jpeg", "image/png", "image/webp"]>;
+    size: zod.ZodNumber;
+    purpose: zod.ZodDefault<zod.ZodEnum<["vault_document", "receipt_review"]>>;
+}, "strip", zod.ZodTypeAny, {
+    name: string;
+    size: number;
+    contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+    purpose: "vault_document" | "receipt_review";
+}, {
+    name: string;
+    size: number;
+    contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+    purpose?: "vault_document" | "receipt_review" | undefined;
+}>, zod.ZodObject<{
+    objectPath: zod.ZodString;
+    category: zod.ZodOptional<zod.ZodString>;
+    expiresOn: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+}, "strip", zod.ZodTypeAny, {
+    objectPath: string;
+    category?: string | undefined;
+    expiresOn?: Date | null | undefined;
+}, {
+    objectPath: string;
+    category?: string | undefined;
+    expiresOn?: Date | null | undefined;
+}>>;
+export declare const ConfirmVaultDocumentResponse: zod.ZodVoid;
+/**
+ * @summary Replace document content after direct upload
+ */
+export declare const ReplaceVaultDocumentParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const replaceVaultDocumentBodyOneNameMax = 240;
+export declare const replaceVaultDocumentBodyOneSizeMax = 20971520;
+export declare const replaceVaultDocumentBodyOneSizeMultipleOf = 1;
+export declare const replaceVaultDocumentBodyOnePurposeDefault = "vault_document";
+export declare const replaceVaultDocumentBodyTwoCategoryMax = 64;
+export declare const ReplaceVaultDocumentBody: zod.ZodIntersection<zod.ZodObject<{
+    name: zod.ZodString;
+    contentType: zod.ZodEnum<["application/pdf", "image/jpeg", "image/png", "image/webp"]>;
+    size: zod.ZodNumber;
+    purpose: zod.ZodDefault<zod.ZodEnum<["vault_document", "receipt_review"]>>;
+}, "strip", zod.ZodTypeAny, {
+    name: string;
+    size: number;
+    contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+    purpose: "vault_document" | "receipt_review";
+}, {
+    name: string;
+    size: number;
+    contentType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+    purpose?: "vault_document" | "receipt_review" | undefined;
+}>, zod.ZodObject<{
+    objectPath: zod.ZodString;
+    category: zod.ZodOptional<zod.ZodString>;
+    expiresOn: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+}, "strip", zod.ZodTypeAny, {
+    objectPath: string;
+    category?: string | undefined;
+    expiresOn?: Date | null | undefined;
+}, {
+    objectPath: string;
+    category?: string | undefined;
+    expiresOn?: Date | null | undefined;
+}>>;
+export declare const ReplaceVaultDocumentResponse: zod.ZodObject<{
+    cleanupPending: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    cleanupPending: boolean;
+}, {
+    cleanupPending: boolean;
+}>;
+/**
+ * @summary Delete document metadata and object
+ */
+export declare const DeleteVaultDocumentParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const DeleteVaultDocumentResponse: zod.ZodObject<{
+    cleanupPending: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    cleanupPending: boolean;
+}, {
+    cleanupPending: boolean;
+}>;
+/**
+ * @summary Download an account-owned private document
+ */
+export declare const DownloadVaultDocumentParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const DownloadVaultDocumentResponse: zod.ZodUnknown;
+/**
+ * @summary Inline-preview an account-owned raster image
+ */
+export declare const PreviewVaultDocumentParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const PreviewVaultDocumentResponse: zod.ZodUnknown;
+/**
+ * @summary Archive or restore a document
+ */
+export declare const UpdateVaultDocumentLifecycleParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UpdateVaultDocumentLifecycleBody: zod.ZodObject<{
+    archived: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    archived: boolean;
+}, {
+    archived: boolean;
+}>;
+export declare const UpdateVaultDocumentLifecycleResponse: zod.ZodUnknown;
+/**
+ * @summary Stage OCR candidates without saving financial data
+ */
+export declare const createReceiptReviewBodyCandidatesMax = 50;
+export declare const CreateReceiptReviewBody: zod.ZodObject<{
+    documentId: zod.ZodString;
+    candidates: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    documentId: string;
+    candidates: Record<string, unknown>[];
+}, {
+    documentId: string;
+    candidates: Record<string, unknown>[];
+}>;
+export declare const CreateReceiptReviewResponse: zod.ZodVoid;
+/**
+ * @summary Get staged receipt candidates
+ */
+export declare const GetReceiptReviewParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const GetReceiptReviewResponse: zod.ZodUnknown;
+/**
+ * @summary Discard staged candidates
+ */
+export declare const DiscardReceiptReviewParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const DiscardReceiptReviewResponse: zod.ZodObject<{
+    cleanupPending: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    cleanupPending: boolean;
+}, {
+    cleanupPending: boolean;
+}>;
+/**
+ * @summary Confirm reviewed receipt values
+ */
+export declare const ConfirmReceiptReviewParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const confirmReceiptReviewBodyValuesMerchantMax = 160;
+export declare const confirmReceiptReviewBodyValuesAmountMin = 0;
+export declare const confirmReceiptReviewBodyValuesCategoryMax = 80;
+export declare const confirmReceiptReviewBodyValuesLineItemsItemDescriptionMax = 120;
+export declare const confirmReceiptReviewBodyValuesLineItemsItemAmountMin = 0;
+export declare const confirmReceiptReviewBodyValuesLineItemsMax = 100;
+export declare const ConfirmReceiptReviewBody: zod.ZodObject<{
+    values: zod.ZodObject<{
+        merchant: zod.ZodString;
+        amount: zod.ZodNumber;
+        date: zod.ZodDate;
+        category: zod.ZodString;
+        retainOriginal: zod.ZodOptional<zod.ZodBoolean>;
+        lineItems: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            description: zod.ZodString;
+            amount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            description: string;
+        }, {
+            amount: number;
+            description: string;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    }, {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    values: {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    };
+}, {
+    values: {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    };
+}>;
+export declare const confirmReceiptReviewResponseValuesMerchantMax = 160;
+export declare const confirmReceiptReviewResponseValuesAmountMin = 0;
+export declare const confirmReceiptReviewResponseValuesCategoryMax = 80;
+export declare const confirmReceiptReviewResponseValuesLineItemsItemDescriptionMax = 120;
+export declare const confirmReceiptReviewResponseValuesLineItemsItemAmountMin = 0;
+export declare const confirmReceiptReviewResponseValuesLineItemsMax = 100;
+export declare const ConfirmReceiptReviewResponse: zod.ZodObject<{
+    reviewId: zod.ZodString;
+    expense: zod.ZodObject<{
+        id: zod.ZodString;
+        userId: zod.ZodString;
+        loanId: zod.ZodNullable<zod.ZodString>;
+        accountId: zod.ZodNullable<zod.ZodString>;
+        date: zod.ZodString;
+        amount: zod.ZodString;
+        category: zod.ZodString;
+        merchant: zod.ZodString;
+        paymentMethod: zod.ZodString;
+        note: zod.ZodString;
+        reimbursable: zod.ZodBoolean;
+        recurring: zod.ZodBoolean;
+        createdAt: zod.ZodDate;
+        updatedAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        id: string;
+        createdAt: Date;
+        userId: string;
+        amount: string;
+        note: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        reimbursable: boolean;
+        recurring: boolean;
+        loanId: string | null;
+        accountId: string | null;
+        updatedAt: Date;
+    }, {
+        date: string;
+        id: string;
+        createdAt: Date;
+        userId: string;
+        amount: string;
+        note: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        reimbursable: boolean;
+        recurring: boolean;
+        loanId: string | null;
+        accountId: string | null;
+        updatedAt: Date;
+    }>;
+    status: zod.ZodEnum<["confirmed"]>;
+    values: zod.ZodObject<{
+        merchant: zod.ZodString;
+        amount: zod.ZodNumber;
+        date: zod.ZodDate;
+        category: zod.ZodString;
+        retainOriginal: zod.ZodOptional<zod.ZodBoolean>;
+        lineItems: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            description: zod.ZodString;
+            amount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            description: string;
+        }, {
+            amount: number;
+            description: string;
+        }>, "many">>;
+    }, "strip", zod.ZodTypeAny, {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    }, {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    }>;
+    saved: zod.ZodLiteral<true>;
+    retainedOriginal: zod.ZodBoolean;
+    cleanupPending: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    status: "confirmed";
+    values: {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    };
+    cleanupPending: boolean;
+    reviewId: string;
+    expense: {
+        date: string;
+        id: string;
+        createdAt: Date;
+        userId: string;
+        amount: string;
+        note: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        reimbursable: boolean;
+        recurring: boolean;
+        loanId: string | null;
+        accountId: string | null;
+        updatedAt: Date;
+    };
+    saved: true;
+    retainedOriginal: boolean;
+}, {
+    status: "confirmed";
+    values: {
+        date: Date;
+        amount: number;
+        category: string;
+        merchant: string;
+        retainOriginal?: boolean | undefined;
+        lineItems?: {
+            amount: number;
+            description: string;
+        }[] | undefined;
+    };
+    cleanupPending: boolean;
+    reviewId: string;
+    expense: {
+        date: string;
+        id: string;
+        createdAt: Date;
+        userId: string;
+        amount: string;
+        note: string;
+        category: string;
+        merchant: string;
+        paymentMethod: string;
+        reimbursable: boolean;
+        recurring: boolean;
+        loanId: string | null;
+        accountId: string | null;
+        updatedAt: Date;
+    };
+    saved: true;
+    retainedOriginal: boolean;
+}>;
+/**
+ * @summary List account nominees
+ */
+export declare const ListNomineesResponse: zod.ZodUnknown;
+/**
+ * @summary Create an account nominee
+ */
+export declare const createNomineeBodyNameMax = 120;
+export declare const createNomineeBodyRelationshipMax = 64;
+export declare const createNomineeBodyAllocationPercentMin = 0;
+export declare const createNomineeBodyAllocationPercentMax = 100;
+export declare const createNomineeBodyAllocationPercentMultipleOf = 1;
+export declare const createNomineeBodyCoverageLabelMax = 160;
+export declare const createNomineeBodyInstitutionMax = 160;
+export declare const createNomineeBodyContactMax = 160;
+export declare const createNomineeBodyNotesMax = 1000;
+export declare const CreateNomineeBody: zod.ZodObject<{
+    name: zod.ZodString;
+    relationship: zod.ZodString;
+    allocationPercent: zod.ZodNumber;
+    coverageType: zod.ZodOptional<zod.ZodEnum<["life", "health", "investment", "other"]>>;
+    coverageLabel: zod.ZodOptional<zod.ZodString>;
+    institution: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodEnum<["active", "needs_review", "inactive"]>>;
+    reviewStatus: zod.ZodOptional<zod.ZodEnum<["not_reviewed", "reviewed", "needs_update"]>>;
+    reminderOn: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    dateOfBirth: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    contact: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+}, "strip", zod.ZodTypeAny, {
+    name: string;
+    relationship: string;
+    allocationPercent: number;
+    status?: "active" | "needs_review" | "inactive" | undefined;
+    dateOfBirth?: Date | null | undefined;
+    coverageType?: "life" | "health" | "investment" | "other" | undefined;
+    coverageLabel?: string | undefined;
+    institution?: string | null | undefined;
+    reviewStatus?: "not_reviewed" | "reviewed" | "needs_update" | undefined;
+    reminderOn?: Date | null | undefined;
+    contact?: string | null | undefined;
+    notes?: string | null | undefined;
+}, {
+    name: string;
+    relationship: string;
+    allocationPercent: number;
+    status?: "active" | "needs_review" | "inactive" | undefined;
+    dateOfBirth?: Date | null | undefined;
+    coverageType?: "life" | "health" | "investment" | "other" | undefined;
+    coverageLabel?: string | undefined;
+    institution?: string | null | undefined;
+    reviewStatus?: "not_reviewed" | "reviewed" | "needs_update" | undefined;
+    reminderOn?: Date | null | undefined;
+    contact?: string | null | undefined;
+    notes?: string | null | undefined;
+}>;
+export declare const CreateNomineeResponse: zod.ZodVoid;
+/**
+ * @summary Replace an account nominee
+ */
+export declare const UpdateNomineeParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const updateNomineeBodyNameMax = 120;
+export declare const updateNomineeBodyRelationshipMax = 64;
+export declare const updateNomineeBodyAllocationPercentMin = 0;
+export declare const updateNomineeBodyAllocationPercentMax = 100;
+export declare const updateNomineeBodyAllocationPercentMultipleOf = 1;
+export declare const updateNomineeBodyCoverageLabelMax = 160;
+export declare const updateNomineeBodyInstitutionMax = 160;
+export declare const updateNomineeBodyContactMax = 160;
+export declare const updateNomineeBodyNotesMax = 1000;
+export declare const UpdateNomineeBody: zod.ZodObject<{
+    name: zod.ZodString;
+    relationship: zod.ZodString;
+    allocationPercent: zod.ZodNumber;
+    coverageType: zod.ZodOptional<zod.ZodEnum<["life", "health", "investment", "other"]>>;
+    coverageLabel: zod.ZodOptional<zod.ZodString>;
+    institution: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodEnum<["active", "needs_review", "inactive"]>>;
+    reviewStatus: zod.ZodOptional<zod.ZodEnum<["not_reviewed", "reviewed", "needs_update"]>>;
+    reminderOn: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    dateOfBirth: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+    contact: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+}, "strip", zod.ZodTypeAny, {
+    name: string;
+    relationship: string;
+    allocationPercent: number;
+    status?: "active" | "needs_review" | "inactive" | undefined;
+    dateOfBirth?: Date | null | undefined;
+    coverageType?: "life" | "health" | "investment" | "other" | undefined;
+    coverageLabel?: string | undefined;
+    institution?: string | null | undefined;
+    reviewStatus?: "not_reviewed" | "reviewed" | "needs_update" | undefined;
+    reminderOn?: Date | null | undefined;
+    contact?: string | null | undefined;
+    notes?: string | null | undefined;
+}, {
+    name: string;
+    relationship: string;
+    allocationPercent: number;
+    status?: "active" | "needs_review" | "inactive" | undefined;
+    dateOfBirth?: Date | null | undefined;
+    coverageType?: "life" | "health" | "investment" | "other" | undefined;
+    coverageLabel?: string | undefined;
+    institution?: string | null | undefined;
+    reviewStatus?: "not_reviewed" | "reviewed" | "needs_update" | undefined;
+    reminderOn?: Date | null | undefined;
+    contact?: string | null | undefined;
+    notes?: string | null | undefined;
+}>;
+export declare const UpdateNomineeResponse: zod.ZodUnknown;
+/**
+ * @summary Delete an account nominee
+ */
+export declare const DeleteNomineeParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const DeleteNomineeResponse: zod.ZodVoid;
+/**
  * @summary Get the signed-in user's latest advice request and assigned advisor
  */
 export declare const GetAdviceOverviewResponse: zod.ZodObject<{
@@ -124,7 +4146,7 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
         userName: zod.ZodString;
         userEmail: zod.ZodString;
         whatsappNumber: zod.ZodString;
-        topic: zod.ZodEnum<["financial", "investment", "retirement"]>;
+        topic: zod.ZodEnum<["financial", "investment", "retirement", "tax_planning", "tax_compliance"]>;
         note: zod.ZodString;
         consent: zod.ZodBoolean;
         feeAmount: zod.ZodNumber;
@@ -136,39 +4158,39 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
         createdAt: zod.ZodDate;
         updatedAt: zod.ZodDate;
     }, "strip", zod.ZodTypeAny, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>, zod.ZodNull]>;
     advisor: zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodNumber;
@@ -188,10 +4210,11 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -199,14 +4222,14 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -214,7 +4237,6 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }>, zod.ZodNull]>;
     settings: zod.ZodObject<{
         consultationFee: zod.ZodNumber;
@@ -234,30 +4256,31 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
     }>;
 }, "strip", zod.ZodTypeAny, {
     request: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     } | null;
     advisor: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -265,7 +4288,6 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     } | null;
     settings: {
         consultationFee: number;
@@ -275,30 +4297,31 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
     };
 }, {
     request: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     } | null;
     advisor: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -306,7 +4329,6 @@ export declare const GetAdviceOverviewResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     } | null;
     settings: {
         consultationFee: number;
@@ -324,19 +4346,19 @@ export declare const createAdviceRequestBodyNoteMax = 1000;
 export declare const CreateAdviceRequestBody: zod.ZodObject<{
     userName: zod.ZodString;
     whatsappNumber: zod.ZodString;
-    topic: zod.ZodEnum<["financial", "investment", "retirement"]>;
+    topic: zod.ZodEnum<["financial", "investment", "retirement", "tax_planning", "tax_compliance"]>;
     note: zod.ZodOptional<zod.ZodString>;
     consent: zod.ZodLiteral<true>;
 }, "strip", zod.ZodTypeAny, {
     userName: string;
     whatsappNumber: string;
-    topic: "financial" | "investment" | "retirement";
+    topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
     consent: true;
     note?: string | undefined;
 }, {
     userName: string;
     whatsappNumber: string;
-    topic: "financial" | "investment" | "retirement";
+    topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
     consent: true;
     note?: string | undefined;
 }>;
@@ -347,7 +4369,7 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         userName: zod.ZodString;
         userEmail: zod.ZodString;
         whatsappNumber: zod.ZodString;
-        topic: zod.ZodEnum<["financial", "investment", "retirement"]>;
+        topic: zod.ZodEnum<["financial", "investment", "retirement", "tax_planning", "tax_compliance"]>;
         note: zod.ZodString;
         consent: zod.ZodBoolean;
         feeAmount: zod.ZodNumber;
@@ -359,39 +4381,39 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         createdAt: zod.ZodDate;
         updatedAt: zod.ZodDate;
     }, "strip", zod.ZodTypeAny, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>, zod.ZodNull]>;
     advisor: zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodNumber;
@@ -411,10 +4433,11 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -422,14 +4445,14 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -437,7 +4460,6 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }>, zod.ZodNull]>;
     settings: zod.ZodObject<{
         consultationFee: zod.ZodNumber;
@@ -457,30 +4479,31 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
     }>;
 }, "strip", zod.ZodTypeAny, {
     request: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     } | null;
     advisor: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -488,7 +4511,6 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     } | null;
     settings: {
         consultationFee: number;
@@ -498,30 +4520,31 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
     };
 }, {
     request: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     } | null;
     advisor: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -529,7 +4552,6 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     } | null;
     settings: {
         consultationFee: number;
@@ -537,6 +4559,19 @@ export declare const CreateAdviceRequestResponse: zod.ZodObject<{
         businessWhatsapp: string;
         upiId: string;
     };
+}>;
+/**
+ * @summary Get the signed-in customer's WhatsApp support destination
+ */
+export declare const GetWhatsAppSupportResponse: zod.ZodObject<{
+    available: zod.ZodBoolean;
+    whatsappUrl: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    available: boolean;
+    whatsappUrl: string | null;
+}, {
+    available: boolean;
+    whatsappUrl: string | null;
 }>;
 /**
  * @summary Submit a manual payment reference for the signed-in user's active request
@@ -557,7 +4592,7 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
         userName: zod.ZodString;
         userEmail: zod.ZodString;
         whatsappNumber: zod.ZodString;
-        topic: zod.ZodEnum<["financial", "investment", "retirement"]>;
+        topic: zod.ZodEnum<["financial", "investment", "retirement", "tax_planning", "tax_compliance"]>;
         note: zod.ZodString;
         consent: zod.ZodBoolean;
         feeAmount: zod.ZodNumber;
@@ -569,39 +4604,39 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
         createdAt: zod.ZodDate;
         updatedAt: zod.ZodDate;
     }, "strip", zod.ZodTypeAny, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>, zod.ZodNull]>;
     advisor: zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodNumber;
@@ -621,10 +4656,11 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -632,14 +4668,14 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -647,7 +4683,6 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }>, zod.ZodNull]>;
     settings: zod.ZodObject<{
         consultationFee: zod.ZodNumber;
@@ -667,30 +4702,31 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
     }>;
 }, "strip", zod.ZodTypeAny, {
     request: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     } | null;
     advisor: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -698,7 +4734,6 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     } | null;
     settings: {
         consultationFee: number;
@@ -708,30 +4743,31 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
     };
 }, {
     request: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     } | null;
     advisor: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -739,7 +4775,6 @@ export declare const SubmitAdvicePaymentReferenceResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     } | null;
     settings: {
         consultationFee: number;
@@ -758,7 +4793,7 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         userName: zod.ZodString;
         userEmail: zod.ZodString;
         whatsappNumber: zod.ZodString;
-        topic: zod.ZodEnum<["financial", "investment", "retirement"]>;
+        topic: zod.ZodEnum<["financial", "investment", "retirement", "tax_planning", "tax_compliance"]>;
         note: zod.ZodString;
         consent: zod.ZodBoolean;
         feeAmount: zod.ZodNumber;
@@ -770,39 +4805,39 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         createdAt: zod.ZodDate;
         updatedAt: zod.ZodDate;
     }, "strip", zod.ZodTypeAny, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }, {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>, "many">;
     advisors: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodNumber;
@@ -822,10 +4857,11 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -833,14 +4869,14 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }, {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -848,7 +4884,6 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }>, "many">;
     settings: zod.ZodObject<{
         consultationFee: zod.ZodNumber;
@@ -874,30 +4909,31 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         upiId: string;
     };
     requests: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }[];
     advisors: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -905,7 +4941,6 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }[];
 }, {
     settings: {
@@ -915,30 +4950,31 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         upiId: string;
     };
     requests: {
-        status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+        status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
         id: number;
+        createdAt: Date;
         userId: string;
         userName: string;
         userEmail: string;
-        whatsappNumber: string;
-        topic: "financial" | "investment" | "retirement";
         note: string;
+        updatedAt: Date;
+        whatsappNumber: string;
+        topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
         consent: boolean;
         feeAmount: number;
         paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
         paymentReference: string | null;
         paymentSubmittedAt: Date | null;
         advisorId: number | null;
-        createdAt: Date;
-        updatedAt: Date;
     }[];
     advisors: {
         id: number;
         phone: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
+        createdAt: Date;
         credentials: string;
+        updatedAt: Date;
+        active: boolean;
         bio: string;
         specialties: string[];
         languages: string[];
@@ -946,7 +4982,6 @@ export declare const GetAdviceAdminDashboardResponse: zod.ZodObject<{
         whatsapp: string;
         bookingUrl: string;
         photoUrl: string;
-        active: boolean;
     }[];
 }>;
 /**
@@ -1008,9 +5043,9 @@ export declare const CreateAdvisorBody: zod.ZodObject<{
     availability: string;
     whatsapp: string;
     phone?: string | undefined;
+    active?: boolean | undefined;
     bookingUrl?: string | undefined;
     photoUrl?: string | undefined;
-    active?: boolean | undefined;
 }, {
     name: string;
     credentials: string;
@@ -1020,9 +5055,9 @@ export declare const CreateAdvisorBody: zod.ZodObject<{
     availability: string;
     whatsapp: string;
     phone?: string | undefined;
+    active?: boolean | undefined;
     bookingUrl?: string | undefined;
     photoUrl?: string | undefined;
-    active?: boolean | undefined;
 }>;
 export declare const CreateAdvisorResponse: zod.ZodObject<{
     id: zod.ZodNumber;
@@ -1042,10 +5077,11 @@ export declare const CreateAdvisorResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     id: number;
     phone: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string;
+    createdAt: Date;
     credentials: string;
+    updatedAt: Date;
+    active: boolean;
     bio: string;
     specialties: string[];
     languages: string[];
@@ -1053,14 +5089,14 @@ export declare const CreateAdvisorResponse: zod.ZodObject<{
     whatsapp: string;
     bookingUrl: string;
     photoUrl: string;
-    active: boolean;
 }, {
     id: number;
     phone: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string;
+    createdAt: Date;
     credentials: string;
+    updatedAt: Date;
+    active: boolean;
     bio: string;
     specialties: string[];
     languages: string[];
@@ -1068,7 +5104,6 @@ export declare const CreateAdvisorResponse: zod.ZodObject<{
     whatsapp: string;
     bookingUrl: string;
     photoUrl: string;
-    active: boolean;
 }>;
 /**
  * @summary Update an advisor profile
@@ -1103,9 +5138,9 @@ export declare const UpdateAdvisorBody: zod.ZodObject<{
     availability: string;
     whatsapp: string;
     phone?: string | undefined;
+    active?: boolean | undefined;
     bookingUrl?: string | undefined;
     photoUrl?: string | undefined;
-    active?: boolean | undefined;
 }, {
     name: string;
     credentials: string;
@@ -1115,9 +5150,9 @@ export declare const UpdateAdvisorBody: zod.ZodObject<{
     availability: string;
     whatsapp: string;
     phone?: string | undefined;
+    active?: boolean | undefined;
     bookingUrl?: string | undefined;
     photoUrl?: string | undefined;
-    active?: boolean | undefined;
 }>;
 export declare const UpdateAdvisorResponse: zod.ZodObject<{
     id: zod.ZodNumber;
@@ -1137,10 +5172,11 @@ export declare const UpdateAdvisorResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     id: number;
     phone: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string;
+    createdAt: Date;
     credentials: string;
+    updatedAt: Date;
+    active: boolean;
     bio: string;
     specialties: string[];
     languages: string[];
@@ -1148,14 +5184,14 @@ export declare const UpdateAdvisorResponse: zod.ZodObject<{
     whatsapp: string;
     bookingUrl: string;
     photoUrl: string;
-    active: boolean;
 }, {
     id: number;
     phone: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string;
+    createdAt: Date;
     credentials: string;
+    updatedAt: Date;
+    active: boolean;
     bio: string;
     specialties: string[];
     languages: string[];
@@ -1163,7 +5199,6 @@ export declare const UpdateAdvisorResponse: zod.ZodObject<{
     whatsapp: string;
     bookingUrl: string;
     photoUrl: string;
-    active: boolean;
 }>;
 /**
  * @summary Verify manual payment, assign an advisor, or update status
@@ -1180,11 +5215,11 @@ export declare const UpdateAdviceRequestBody: zod.ZodObject<{
     status: zod.ZodOptional<zod.ZodEnum<["submitted", "reviewing", "assigned", "completed", "cancelled"]>>;
     advisorId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
 }, "strip", zod.ZodTypeAny, {
-    status?: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled" | undefined;
+    status?: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned" | undefined;
     paymentStatus?: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded" | undefined;
     advisorId?: number | null | undefined;
 }, {
-    status?: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled" | undefined;
+    status?: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned" | undefined;
     paymentStatus?: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded" | undefined;
     advisorId?: number | null | undefined;
 }>;
@@ -1194,7 +5229,7 @@ export declare const UpdateAdviceRequestResponse: zod.ZodObject<{
     userName: zod.ZodString;
     userEmail: zod.ZodString;
     whatsappNumber: zod.ZodString;
-    topic: zod.ZodEnum<["financial", "investment", "retirement"]>;
+    topic: zod.ZodEnum<["financial", "investment", "retirement", "tax_planning", "tax_compliance"]>;
     note: zod.ZodString;
     consent: zod.ZodBoolean;
     feeAmount: zod.ZodNumber;
@@ -1206,39 +5241,39 @@ export declare const UpdateAdviceRequestResponse: zod.ZodObject<{
     createdAt: zod.ZodDate;
     updatedAt: zod.ZodDate;
 }, "strip", zod.ZodTypeAny, {
-    status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+    status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
     id: number;
+    createdAt: Date;
     userId: string;
     userName: string;
     userEmail: string;
-    whatsappNumber: string;
-    topic: "financial" | "investment" | "retirement";
     note: string;
+    updatedAt: Date;
+    whatsappNumber: string;
+    topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
     consent: boolean;
     feeAmount: number;
     paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
     paymentReference: string | null;
     paymentSubmittedAt: Date | null;
     advisorId: number | null;
-    createdAt: Date;
-    updatedAt: Date;
 }, {
-    status: "submitted" | "reviewing" | "assigned" | "completed" | "cancelled";
+    status: "cancelled" | "completed" | "submitted" | "reviewing" | "assigned";
     id: number;
+    createdAt: Date;
     userId: string;
     userName: string;
     userEmail: string;
-    whatsappNumber: string;
-    topic: "financial" | "investment" | "retirement";
     note: string;
+    updatedAt: Date;
+    whatsappNumber: string;
+    topic: "investment" | "financial" | "retirement" | "tax_planning" | "tax_compliance";
     consent: boolean;
     feeAmount: number;
     paymentStatus: "pending" | "submitted" | "paid" | "rejected" | "waived" | "refunded";
     paymentReference: string | null;
     paymentSubmittedAt: Date | null;
     advisorId: number | null;
-    createdAt: Date;
-    updatedAt: Date;
 }>;
 /**
  * @summary Retry a failed or skipped WhatsApp notification
@@ -1255,11 +5290,11 @@ export declare const RetryWhatsAppNotificationResponse: zod.ZodObject<{
     providerMessageId: zod.ZodNullable<zod.ZodString>;
     error: zod.ZodNullable<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
-    status: "sent" | "failed" | "skipped";
+    status: "failed" | "sent" | "skipped";
     providerMessageId: string | null;
     error: string | null;
 }, {
-    status: "sent" | "failed" | "skipped";
+    status: "failed" | "sent" | "skipped";
     providerMessageId: string | null;
     error: string | null;
 }>;

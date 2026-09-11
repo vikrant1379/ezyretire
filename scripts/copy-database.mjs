@@ -40,6 +40,7 @@ const TABLES_IN_DEPENDENCY_ORDER = [
   "dependents",
   "income_sources",
   "salary_details",
+  "income_receipts",
   "loans",
   "expenses",
   "budgets",

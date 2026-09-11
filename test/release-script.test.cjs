@@ -58,10 +58,14 @@ test("release procedure requires immutable guarded tags", () => {
 });
 const mandatoryReleaseGates = [
   "test:release-contract",
+  "check:pdf-ua",
   "check:release-records",
   "check:favicon-visual",
+  "check:design-system-visual",
   "check:pwa",
   "check:published-favicons",
+  "check:published-fonts",
+  "check:published-auth-analytics",
 ];
 
 test("root release check runs every mandatory gate in order", async () => {

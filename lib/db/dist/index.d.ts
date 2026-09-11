@@ -1,5 +1,6 @@
 import * as schema from "./schema/index.js";
 export declare const databaseUrlVariableName: import("../database-url.mjs").DatabaseVariableName, databaseUrl: string;
+export declare const poolMax: number;
 export declare const pool: import("pg").Pool;
 export declare const db: import("drizzle-orm/node-postgres").NodePgDatabase<typeof schema> & {
     $client: import("pg").Pool;

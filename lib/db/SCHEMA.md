@@ -16,6 +16,8 @@ Money columns are `numeric(14,2)` (INR). Rate columns are `numeric(8,4)`. Identi
 | `financial_accounts` | `user_id` | `users` | `id` | N:1 | CASCADE |
 | `income_sources` | `user_id` | `users` | `id` | N:1 | CASCADE |
 | `income_sources` | `account_id` | `financial_accounts` | `id` | N:1 optional | SET NULL |
+| `income_receipts` | `user_id` | `users` | `id` | N:1 | CASCADE |
+| `income_receipts` | (`user_id`, `income_source_id`) | `income_sources` | (`user_id`, `id`) | N:1 | CASCADE |
 | `salary_details` | `income_source_id` (PK) | `income_sources` | `id` | 1:1 | CASCADE |
 | `loans` | `user_id` | `users` | `id` | N:1 | CASCADE |
 | `loans` | `account_id` | `financial_accounts` | `id` | N:1 optional | SET NULL |
@@ -31,7 +33,10 @@ Money columns are `numeric(14,2)` (INR). Rate columns are `numeric(8,4)`. Identi
 | `whatsapp_notification_events` | `advice_request_id` | `advice_requests` | `id` | N:1 | CASCADE |
 | `login_activities` | `user_id` | `users` | `id` | N:1 | CASCADE |
 
-**No foreign keys:** `sessions`, `advice_settings`.
+**No foreign keys:** `sessions`, `advice_settings`, `account_data_exports`,
+`account_deletion_requests`. Compliance tables intentionally survive deletion of
+the customer row and replace their `user_id` value with a one-way account hash
+when erasure completes.
 
 **Logical join (no FK):** `budgets.category` matches `expenses.category` for the same `user_id`.
 
@@ -42,6 +47,7 @@ erDiagram
   users ||--o{ dependents : user_id
   users ||--o{ financial_accounts : user_id
   users ||--o{ income_sources : user_id
+  users ||--o{ income_receipts : user_id
   users ||--o{ expenses : user_id
   users ||--o{ budgets : user_id
   users ||--o{ investments : user_id
@@ -52,6 +58,7 @@ erDiagram
   financial_accounts ||--o{ expenses : account_id
   financial_accounts ||--o{ investments : account_id
   income_sources ||--o| salary_details : income_source_id
+  income_sources ||--o{ income_receipts : income_source_id
   income_sources ||--o{ investments : linked_income_source_id
   loans ||--o{ expenses : loan_id
   advisors ||--o{ advice_requests : advisor_id
@@ -91,6 +98,28 @@ Login identity only. File: [`auth.ts`](src/schema/auth.ts). Expenses, income, in
 
 Not referenced by other tables.
 
+## Compliance lifecycle tables
+
+`account_data_exports` records export ID, account identifier, format version,
+status, section record counts, request time, and completion time. It never stores
+the generated package.
+
+`account_deletion_requests` records the cooling/processing/cancellation lifecycle,
+one-way account and email identifiers, retry count/error, and the three-year
+audit-retention deadline. Its inventory phase/cursor/completion fields checkpoint
+bounded object discovery, while `next_attempt_at` persists retry backoff. It intentionally has no user foreign key so the minimal
+record survives erasure; direct identifiers are not stored after completion.
+
+`account_deletion_objects` is the temporary durable work ledger for an active
+deletion request. Each unique object path is marked pending or complete with its
+attempt metadata. It references the request, not the user, so deleting the user
+cannot erase unfinished cleanup evidence. The final erasure transaction removes
+this path-bearing ledger before retaining the pseudonymous compliance record.
+
+`planning_scheduler_state` contains only the singleton global planning cursor. It
+has no customer profile fields and prevents bounded scheduled scans from mutating
+`users.updated_at` or starving IDs beyond the first page.
+
 ## `email_otp_challenges`
 
 Short-lived email verification attempts. Codes are stored only as keyed hashes.
@@ -119,7 +148,7 @@ Successful sign-ins only. A daily scheduled purge removes records older than 90 
 |---|---|---|---|---|
 | `id` | varchar PK | no | UUID | |
 | `user_id` | varchar FK → `users.id` | no | | CASCADE |
-| `auth_method` | varchar(16) | no | | `email_otp` or `oidc` |
+| `auth_method` | varchar(16) | no | | `email_otp`, `oidc`, or `passkey` |
 | `device_type` | varchar(32) | yes | | Bounded User-Agent classification |
 | `browser` | varchar(80) | yes | | Bounded User-Agent classification |
 | `operating_system` | varchar(80) | yes | | Bounded User-Agent classification |
@@ -127,6 +156,17 @@ Successful sign-ins only. A daily scheduled purge removes records older than 90 
 | `region` | varchar(100) | yes | | Approximate Vercel geography |
 | `city` | varchar(100) | yes | | Approximate Vercel geography |
 | `created_at` | timestamp | no | IST now | Login time |
+
+---
+
+## Passkey tables
+
+`passkey_credentials` stores each customer's credential ID, WebAuthn public key, signature counter, transports, device/backup metadata, display name, last-use time, and revocation lifecycle. Customers may own multiple credentials; revoked rows remain for lifecycle history and cannot authenticate.
+
+`passkey_challenges` stores five-minute registration or authentication challenges. Registration rows are bound to their owner. All rows carry a keyed requester-network hash, expiry, atomic `consumed_at` marker, and a one-way hash of the browser's short-lived HttpOnly ceremony cookie; challenge material is deleted or rendered unusable by lifecycle rather than reused.
+Each challenge also stores the exact RP ID and origin used to issue it; verification requires both to match the current explicitly configured values. A matching trusted HTTP Origin, JSON request, and browser ceremony cookie are required before verification, preventing login CSRF and cross-browser assertion redemption. Expired challenges remain stored through the ten-minute issuance rate window before a bounded cleanup (100 rows); consumed rows remain for at least 24 hours.
+
+`passkey_audit_events` records `registered`, `renamed`, `revoked`, and `authenticated` lifecycle events against a customer and credential ID. It contains no assertion payload, public key, challenge, IP address, or user-agent.
 
 ---
 
@@ -224,6 +264,22 @@ N:1 bank / broker / EPF accounts. **No UI yet.** Optional parent of income, loan
 | `income_end_mode` | varchar(16) | no | `retirement` | `retirement` or `custom` |
 | `income_end_date` | date | yes | | Inclusive end month when mode is `custom` |
 | `notes` | text | no | `''` | |
+| `created_at` | timestamp | no | IST now | |
+| `updated_at` | timestamp | no | IST now | |
+
+## `income_receipts`
+
+Actual income ledger entries. The composite source key guarantees that every receipt belongs
+to the same user as its scheduled income source.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | varchar PK | no | `gen_random_uuid()` | |
+| `user_id` | varchar FK → `users.id` | no | | CASCADE, indexed with date |
+| `income_source_id` | varchar | no | | Composite FK with `user_id` → `income_sources`; CASCADE |
+| `received_date` | date | no | | Actual calendar date received |
+| `amount` | numeric(14,2) | no | `0` | Actual amount received |
+| `note` | text | no | `''` | Optional reconciliation note |
 | `created_at` | timestamp | no | IST now | |
 | `updated_at` | timestamp | no | IST now | |
 

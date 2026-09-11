@@ -1,12 +1,14 @@
 import {
   boolean,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
   numeric,
   pgTable,
   text,
+  unique,
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -28,6 +30,127 @@ export type StoredUiPreferences = {
   incomeSort?: { by?: string; direction?: string };
 };
 
+export type StoredPlanningData = {
+  plannedExpenses?: Array<Record<string, unknown>>;
+  onboardingProgress?: Record<string, unknown>;
+  netWorthSnapshots?: Array<Record<string, unknown>>;
+  emergencyFund?: Record<string, unknown>;
+  goals?: StoredGoal[];
+  customReminders?: StoredCustomReminder[];
+  notificationPreferences?: StoredNotificationPreferences;
+  notificationState?: StoredNotificationState[];
+  pushSubscriptions?: StoredPushSubscription[];
+  monthlyReportSnapshots?: StoredMonthlyReportSnapshot[];
+  monthlyReportEmailDeliveries?: Record<string, string>;
+  monthlyReportEmailFailures?: Record<string, StoredMonthlyReportEmailFailure>;
+  lifestyleChoice?: string;
+  customLifestyleExpense?: number;
+  retirementSpendingAdjustmentPercent?: number;
+  pensionSources?: Array<Record<string, unknown>>;
+};
+
+export type StoredMonthlyReportEmailFailure = {
+  category: "report_too_large" | "email_unavailable" | "temporary";
+  failedAt: string;
+};
+
+export type StoredGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string;
+  priority: number;
+  monthlyAllocation: number;
+  annualInflationRate: number;
+  createdAt: string;
+};
+
+export type StoredCustomReminder = {
+  id: string;
+  title: string;
+  date: string;
+  amount?: number;
+  notes?: string;
+  recurrence: "none" | "monthly" | "yearly";
+  enabled: boolean;
+  createdAt: string;
+};
+
+export type StoredNotificationPreferences = {
+  enabled: boolean;
+  types: Record<string, boolean>;
+  inApp: boolean;
+  push: boolean;
+  weeklyDigest: boolean;
+  monthlyReportEmail: boolean;
+  digestDay: number;
+  quietHours: { start: string; end: string };
+  timeZone: string;
+};
+
+export type StoredNotificationState = {
+  id: string;
+  dedupeKey: string;
+  type: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  deliverAfter: string;
+  channels: Array<"in-app" | "push">;
+  readAt?: string;
+  dismissedAt?: string;
+  inAppDeliveredAt?: string;
+  pushDeliveredAt?: string;
+  emailDeliveredAt?: string;
+};
+
+export type StoredPushSubscription = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  expirationTime?: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StoredMonthlyReportSnapshot = {
+  id: string;
+  month: string;
+  generatedAt: string;
+  retirementForecast?: StoredRetirementForecastSnapshot;
+  sections: Array<Record<string, unknown>>;
+};
+
+export type StoredRetirementForecastSnapshot = {
+  modelVersion?: number;
+  projectedRetirementMonth: string | null;
+  projectedRetirementAge: number | null;
+  asOfDate: string;
+  assumptions: {
+    targetRetirementAge: number;
+    lifeExpectancy: number;
+    generalInflation: number;
+    salaryGrowth: number;
+    monthlyContribution: number;
+    monthlySpending: number;
+    portfolioValue: number;
+    investedPrincipal?: number;
+    portfolioReturnAmount?: number;
+    expectedReturn: number;
+  };
+  projectionInputs?: {
+    expenses: Array<Record<string, unknown>>;
+    budgets: Array<Record<string, unknown>>;
+    incomes: Array<Record<string, unknown>>;
+    investments: Array<Record<string, unknown>>;
+    loans: Array<Record<string, unknown>>;
+    plannedExpenses: Array<Record<string, unknown>>;
+    emergencyFund: Record<string, unknown>;
+    assumptions: Record<string, unknown>;
+  };
+  drivers: string[];
+};
 export type StoredFundAllocation = {
   id: string;
   sourceId: string;
@@ -53,6 +176,10 @@ export const userProfilesTable = pgTable("user_profiles", {
   riskPreference: varchar("risk_preference", { length: 24 }).notNull().default("Balanced"),
   uiPreferences: jsonb("ui_preferences")
     .$type<StoredUiPreferences>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  planningData: jsonb("planning_data")
+    .$type<StoredPlanningData>()
     .notNull()
     .default(sql`'{}'::jsonb`),
   preferredCurrency: varchar("preferred_currency", { length: 3 }).notNull().default("INR"),
@@ -167,7 +294,40 @@ export const incomeSourcesTable = pgTable(
       .default(defaultIstNow)
       .$onUpdate(() => new Date()),
   },
-  (table) => [index("income_sources_user_id_idx").on(table.userId)],
+  (table) => [
+    index("income_sources_user_id_idx").on(table.userId),
+    unique("income_sources_user_id_id_unique").on(table.userId, table.id),
+  ],
+);
+
+export const incomeReceiptsTable = pgTable(
+  "income_receipts",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    incomeSourceId: varchar("income_source_id").notNull(),
+    receivedDate: date("received_date", { mode: "string" }).notNull(),
+    amount: money("amount").notNull().default("0"),
+    note: text("note").notNull().default(""),
+    createdAt: istTimestamp("created_at").notNull().default(defaultIstNow),
+    updatedAt: istTimestamp("updated_at")
+      .notNull()
+      .default(defaultIstNow)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("income_receipts_user_date_idx").on(table.userId, table.receivedDate),
+    index("income_receipts_source_idx").on(table.incomeSourceId),
+    foreignKey({
+      columns: [table.userId, table.incomeSourceId],
+      foreignColumns: [incomeSourcesTable.userId, incomeSourcesTable.id],
+      name: "income_receipts_owner_source_fk",
+    }).onDelete("cascade"),
+  ],
 );
 
 export const salaryDetailsTable = pgTable("salary_details", {
@@ -210,6 +370,7 @@ export const loansTable = pgTable(
     totalTenureMonths: integer("total_tenure_months").notNull().default(0),
     startDate: varchar("start_date", { length: 40 }).notNull().default(""),
     emi: money("emi").notNull().default("0"),
+    repaymentType: varchar("repayment_type", { length: 32 }).notNull().default("emi"),
     prepayments: money("prepayments").notNull().default("0"),
     notes: text("notes").notNull().default(""),
     createdAt: istTimestamp("created_at").notNull().default(defaultIstNow),
@@ -254,10 +415,31 @@ export const expensesTable = pgTable(
   ],
 );
 
+export const bankStatementImportProvenanceTable = pgTable(
+  "bank_statement_import_provenance",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    importId: varchar("import_id", { length: 128 }).notNull(),
+    sourceRowId: varchar("source_row_id", { length: 256 }).notNull(),
+    bank: varchar("bank", { length: 32 }).notNull(),
+    parserVersion: varchar("parser_version", { length: 64 }).notNull(),
+    expenseId: varchar("expense_id").notNull().references(() => expensesTable.id, { onDelete: "cascade" }),
+    createdAt: istTimestamp("created_at").notNull().default(defaultIstNow),
+  },
+  (table) => [
+    unique("bank_statement_import_provenance_key").on(table.userId, table.importId, table.sourceRowId),
+    index("bank_statement_import_provenance_user_idx").on(table.userId),
+  ],
+);
+
 export type StoredBudgetSchedule = {
   id: string;
   amount: number;
   startMonth: string;
+  cadence?: "monthly" | "quarterly" | "half-yearly" | "yearly" | "one-time";
+  /** Zero-based calendar month for a yearly expense. */
+  annualMonth?: number;
   endMode: "custom" | "retirement" | "lifelong";
   endMonth?: string;
   note?: string;

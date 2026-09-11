@@ -16,6 +16,7 @@ const configuredPoolMax = Number(
   getEnvironmentValue(process.env, "DB_POOL_MAX") ??
     (process.env.VERCEL ? "3" : "10"),
 );
+export const poolMax = configuredPoolMax;
 
 if (!Number.isInteger(configuredPoolMax) || configuredPoolMax <= 0) {
   throw new Error("DB_POOL_MAX must be a positive integer");

@@ -5,9 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-    status: string;
-}
 export interface AuthUser {
     id: string;
     /** @nullable */
@@ -25,6 +22,519 @@ export interface AuthUser {
     onboardingCompleted: boolean;
     isAdmin: boolean;
 }
+export interface PinSetupEnvelope {
+    user: AuthUser;
+    pinConfigured: true;
+}
+export interface PinLoginEnvelope {
+    user: AuthUser;
+}
+export interface CleanupStatus {
+    cleanupPending: boolean;
+    [key: string]: unknown;
+}
+export interface ConfirmedReceiptExpense {
+    id: string;
+    userId: string;
+    /** @nullable */
+    loanId: string | null;
+    /** @nullable */
+    accountId: string | null;
+    date: string;
+    amount: string;
+    category: string;
+    merchant: string;
+    paymentMethod: string;
+    note: string;
+    reimbursable: boolean;
+    recurring: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+export type ReceiptConfirmationResultStatus = typeof ReceiptConfirmationResultStatus[keyof typeof ReceiptConfirmationResultStatus];
+export declare const ReceiptConfirmationResultStatus: {
+    readonly confirmed: "confirmed";
+};
+export type ReceiptConfirmationValuesLineItemsItem = {
+    /** @maxLength 120 */
+    description: string;
+    /** @minimum 0 */
+    amount: number;
+};
+export interface ReceiptConfirmationValues {
+    /** @maxLength 160 */
+    merchant: string;
+    /** @minimum 0 */
+    amount: number;
+    date: string;
+    /** @maxLength 80 */
+    category: string;
+    retainOriginal?: boolean;
+    /** @maxItems 100 */
+    lineItems?: ReceiptConfirmationValuesLineItemsItem[];
+}
+export interface ReceiptConfirmationResult {
+    reviewId: string;
+    expense: ConfirmedReceiptExpense;
+    status: ReceiptConfirmationResultStatus;
+    values: ReceiptConfirmationValues;
+    saved: true;
+    retainedOriginal: boolean;
+    cleanupPending: boolean;
+}
+export interface PasskeyCredential {
+    id: string;
+    name: string;
+    transports: string[];
+    /** @nullable */
+    deviceType: string | null;
+    backedUp: boolean;
+    createdAt: string;
+    /** @nullable */
+    lastUsedAt: string | null;
+}
+export interface PasskeyCredentialEnvelope {
+    credential: PasskeyCredential;
+}
+export type PasskeyOptionsEnvelopeOptions = {
+    [key: string]: unknown;
+};
+export interface PasskeyOptionsEnvelope {
+    challengeId: string;
+    options: PasskeyOptionsEnvelopeOptions;
+}
+export type PasskeyRegistrationVerificationResponse = {
+    [key: string]: unknown;
+};
+export interface PasskeyRegistrationVerification {
+    challengeId: string;
+    /**
+       * @minLength 1
+       * @maxLength 80
+       */
+    name: string;
+    response: PasskeyRegistrationVerificationResponse;
+}
+export type PasskeyAuthenticationVerificationResponse = {
+    [key: string]: unknown;
+};
+export interface PasskeyAuthenticationVerification {
+    challengeId: string;
+    response: PasskeyAuthenticationVerificationResponse;
+}
+export interface PasskeyLoginEnvelope {
+    user: AuthUser;
+    needsProfile: boolean;
+}
+export type ReviewedBankImportRowBank = typeof ReviewedBankImportRowBank[keyof typeof ReviewedBankImportRowBank];
+export declare const ReviewedBankImportRowBank: {
+    readonly SBI: "SBI";
+    readonly HDFC: "HDFC";
+    readonly ICICI: "ICICI";
+    readonly Axis: "Axis";
+    readonly Kotak: "Kotak";
+    readonly PNB: "PNB";
+    readonly BOB: "BOB";
+    readonly IndusInd: "IndusInd";
+};
+export interface ReviewedBankImportRow {
+    /** @pattern ^[a-fA-F0-9]{64}$ */
+    importId: string;
+    /**
+       * @minLength 1
+       * @maxLength 256
+       */
+    sourceRowId: string;
+    bank: ReviewedBankImportRowBank;
+    /**
+       * @minLength 3
+       * @maxLength 64
+       */
+    parserVersion: string;
+    date: string;
+    /** @exclusiveMinimum 0 */
+    amount: number;
+    /**
+       * @minLength 1
+       * @maxLength 80
+       */
+    category: string;
+    /**
+       * @minLength 1
+       * @maxLength 160
+       */
+    merchant: string;
+    /**
+       * @minLength 1
+       * @maxLength 80
+       */
+    paymentMethod: string;
+    /** @maxLength 2000 */
+    note?: string;
+    reimbursable?: boolean;
+    recurring?: boolean;
+}
+export type BankStatementImportResultAddedItem = {
+    [key: string]: unknown;
+};
+export interface NetWorthSnapshot {
+    /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+    month: string;
+    /** @minimum 0 */
+    assets: number;
+    /** @minimum 0 */
+    liabilities: number;
+    netWorth: number;
+    /**
+       * @minimum 0
+       * @maximum 100
+       */
+    healthScore?: number;
+}
+export interface EmergencyFundPlan {
+    /** @minimum 0 */
+    targetMonths: number;
+    /** @minimum 0 */
+    reserveBalance: number;
+    /** @minimum 0 */
+    monthlyContribution: number;
+}
+export type FinancialRetirementInputsLifestyleChoice = typeof FinancialRetirementInputsLifestyleChoice[keyof typeof FinancialRetirementInputsLifestyleChoice];
+export declare const FinancialRetirementInputsLifestyleChoice: {
+    readonly Basic: "Basic";
+    readonly Comfortable: "Comfortable";
+    readonly Premium: "Premium";
+    readonly Custom: "Custom";
+};
+export interface PensionSource {
+    id: string;
+    /** @minLength 1 */
+    name: string;
+    /** @minimum 0 */
+    monthlyAmount: number;
+    /** @minimum 0 */
+    startAge?: number;
+    /** @minimum 0 */
+    annualEscalationRate: number;
+}
+export interface FinancialRetirementInputs {
+    dateOfBirth?: string;
+    targetRetirementAge?: number;
+    lifeExpectancy?: number;
+    generalInflation?: number;
+    salaryGrowth?: number;
+    monthlyContributionOverride?: number;
+    investSurplus?: boolean;
+    lifestyleChoice?: FinancialRetirementInputsLifestyleChoice;
+    /** @minimum 0 */
+    customLifestyleExpense?: number;
+    /**
+       * @minimum -90
+       * @maximum 300
+       */
+    retirementSpendingAdjustmentPercent?: number;
+    pensionSources?: PensionSource[];
+    [key: string]: unknown;
+}
+export interface IncomeReceipt {
+    id: string;
+    incomeSourceId: string;
+    receivedDate: string;
+    /** @minimum 0 */
+    amount: number;
+    note?: string;
+    createdAt: string;
+}
+export interface FinancialDataDocument {
+    netWorthSnapshots?: NetWorthSnapshot[];
+    emergencyFund?: EmergencyFundPlan;
+    retirementInputs?: FinancialRetirementInputs;
+    incomeReceipts?: IncomeReceipt[];
+    [key: string]: unknown;
+}
+export interface BankStatementImportResult {
+    added: BankStatementImportResultAddedItem[];
+    /** @minimum 0 */
+    duplicateCount: number;
+    data: FinancialDataDocument;
+}
+export type EntitlementContractPlan = typeof EntitlementContractPlan[keyof typeof EntitlementContractPlan];
+export declare const EntitlementContractPlan: {
+    readonly free: "free";
+    readonly premium: "premium";
+};
+export type EntitlementContractCapabilities = {
+    receiptOcr: boolean;
+    bankStatementImport: boolean;
+    documentVault: boolean;
+    nomineeTracker: boolean;
+    verifiedMobile: boolean;
+};
+export type EntitlementContractMobileVerification = {
+    hasMobile: boolean;
+    verified: boolean;
+};
+export interface EntitlementContract {
+    plan: EntitlementContractPlan;
+    premium: boolean;
+    /** @nullable */
+    validUntil: string | null;
+    capabilities: EntitlementContractCapabilities;
+    mobileVerification: EntitlementContractMobileVerification;
+}
+export interface OtpVerification {
+    challengeId: string;
+    /** @pattern ^\d{6}$ */
+    code: string;
+}
+export type VaultUploadMetadataContentType = typeof VaultUploadMetadataContentType[keyof typeof VaultUploadMetadataContentType];
+export declare const VaultUploadMetadataContentType: {
+    readonly 'application/pdf': "application/pdf";
+    readonly 'image/jpeg': "image/jpeg";
+    readonly 'image/png': "image/png";
+    readonly 'image/webp': "image/webp";
+};
+export type VaultUploadMetadataPurpose = typeof VaultUploadMetadataPurpose[keyof typeof VaultUploadMetadataPurpose];
+export declare const VaultUploadMetadataPurpose: {
+    readonly vault_document: "vault_document";
+    readonly receipt_review: "receipt_review";
+};
+export interface VaultUploadMetadata {
+    /**
+       * @minLength 1
+       * @maxLength 240
+       */
+    name: string;
+    contentType: VaultUploadMetadataContentType;
+    /**
+       * @minimum 1
+       * @maximum 20971520
+       */
+    size: number;
+    purpose?: VaultUploadMetadataPurpose;
+}
+export interface VaultUploadUrl {
+    uploadURL: string;
+    objectPath: string;
+    metadata: VaultUploadMetadata;
+}
+export type VaultDocumentConfirmation = VaultUploadMetadata & ({
+    objectPath: string;
+    /** @maxLength 64 */
+    category?: string;
+    /** @nullable */
+    expiresOn?: string | null;
+});
+export type ReceiptReviewInputCandidatesItem = {
+    [key: string]: unknown;
+};
+export interface ReceiptReviewInput {
+    documentId: string;
+    /** @maxItems 50 */
+    candidates: ReceiptReviewInputCandidatesItem[];
+}
+export type NomineeInputCoverageType = typeof NomineeInputCoverageType[keyof typeof NomineeInputCoverageType];
+export declare const NomineeInputCoverageType: {
+    readonly life: "life";
+    readonly health: "health";
+    readonly investment: "investment";
+    readonly other: "other";
+};
+export type NomineeInputStatus = typeof NomineeInputStatus[keyof typeof NomineeInputStatus];
+export declare const NomineeInputStatus: {
+    readonly active: "active";
+    readonly needs_review: "needs_review";
+    readonly inactive: "inactive";
+};
+export type NomineeInputReviewStatus = typeof NomineeInputReviewStatus[keyof typeof NomineeInputReviewStatus];
+export declare const NomineeInputReviewStatus: {
+    readonly not_reviewed: "not_reviewed";
+    readonly reviewed: "reviewed";
+    readonly needs_update: "needs_update";
+};
+export interface NomineeInput {
+    /**
+       * @minLength 1
+       * @maxLength 120
+       */
+    name: string;
+    /**
+       * @minLength 1
+       * @maxLength 64
+       */
+    relationship: string;
+    /**
+       * @minimum 0
+       * @maximum 100
+       */
+    allocationPercent: number;
+    coverageType?: NomineeInputCoverageType;
+    /** @maxLength 160 */
+    coverageLabel?: string;
+    /**
+       * @maxLength 160
+       * @nullable
+       */
+    institution?: string | null;
+    status?: NomineeInputStatus;
+    reviewStatus?: NomineeInputReviewStatus;
+    /** @nullable */
+    reminderOn?: string | null;
+    /** @nullable */
+    dateOfBirth?: string | null;
+    /**
+       * @maxLength 160
+       * @nullable
+       */
+    contact?: string | null;
+    /**
+       * @maxLength 1000
+       * @nullable
+       */
+    notes?: string | null;
+}
+export type FinancialHealthPlanningUpdate = (unknown & {
+    emergencyFund?: EmergencyFundPlan;
+    netWorthSnapshot?: NetWorthSnapshot;
+});
+export type FinancialRetirementPlanReplacementLifestyleChoice = typeof FinancialRetirementPlanReplacementLifestyleChoice[keyof typeof FinancialRetirementPlanReplacementLifestyleChoice];
+export declare const FinancialRetirementPlanReplacementLifestyleChoice: {
+    readonly Basic: "Basic";
+    readonly Comfortable: "Comfortable";
+    readonly Premium: "Premium";
+    readonly Custom: "Custom";
+};
+export interface FinancialRetirementPlanReplacement {
+    dateOfBirth: string;
+    /**
+       * @minimum 18
+       * @maximum 120
+       */
+    targetRetirementAge: number;
+    /**
+       * @minimum 18
+       * @maximum 130
+       */
+    lifeExpectancy: number;
+    /**
+       * @minimum 0
+       * @maximum 25
+       */
+    generalInflation: number;
+    /**
+       * @minimum 0
+       * @maximum 100
+       */
+    salaryGrowth: number;
+    /** @minimum 0 */
+    monthlyContributionOverride: number;
+    investSurplus: boolean;
+    lifestyleChoice: FinancialRetirementPlanReplacementLifestyleChoice;
+    /** @minimum 0 */
+    customLifestyleExpense: number;
+    pensionSources: PensionSource[];
+    [key: string]: unknown;
+}
+export type FinancialRestoreUploadReferenceRestoreUpload = {
+    /** @pattern ^/objects/vault-staging/[0-9a-fA-F-]{36}$ */
+    objectPath: string;
+    /**
+       * @minimum 1
+       * @maximum 12582912
+       */
+    size: number;
+};
+export interface FinancialRestoreUploadReference {
+    restoreUpload: FinancialRestoreUploadReferenceRestoreUpload;
+}
+export type LoginActivityAuthMethod = typeof LoginActivityAuthMethod[keyof typeof LoginActivityAuthMethod];
+export declare const LoginActivityAuthMethod: {
+    readonly email_otp: "email_otp";
+    readonly oidc: "oidc";
+};
+export interface LoginActivity {
+    id: string;
+    userId: string;
+    /** @nullable */
+    userName: string | null;
+    /** @nullable */
+    userEmail: string | null;
+    loggedInAt: string;
+    authMethod: LoginActivityAuthMethod;
+    /** @nullable */
+    deviceType: string | null;
+    /** @nullable */
+    browser: string | null;
+    /** @nullable */
+    operatingSystem: string | null;
+    /** @nullable */
+    country: string | null;
+    /** @nullable */
+    region: string | null;
+    /** @nullable */
+    city: string | null;
+}
+export interface LoginActivityPage {
+    items: LoginActivity[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+}
+export interface HealthStatus {
+    status: string;
+}
+export type PersonalDataExportManifestRecordCounts = {
+    [key: string]: number;
+};
+export type PersonalDataExportManifest = {
+    format: string;
+    version: string;
+    exportId: string;
+    accountId: string;
+    generatedAt: string;
+    complete: boolean;
+    recordCounts: PersonalDataExportManifestRecordCounts;
+    securityExclusions: string[];
+    readme: string;
+    [key: string]: unknown;
+};
+export type PersonalDataExportData = {
+    [key: string]: unknown;
+};
+export interface PersonalDataExport {
+    manifest: PersonalDataExportManifest;
+    data: PersonalDataExportData;
+}
+export type AccountDeletionConfirmationConfirmation = typeof AccountDeletionConfirmationConfirmation[keyof typeof AccountDeletionConfirmationConfirmation];
+export declare const AccountDeletionConfirmationConfirmation: {
+    readonly DELETE_MY_ACCOUNT: "DELETE MY ACCOUNT";
+};
+export interface AccountDeletionConfirmation {
+    email: string;
+    confirmation: AccountDeletionConfirmationConfirmation;
+}
+export type AccountDeletionStatusStatus = typeof AccountDeletionStatusStatus[keyof typeof AccountDeletionStatusStatus];
+export declare const AccountDeletionStatusStatus: {
+    readonly none: "none";
+    readonly cooling_off: "cooling_off";
+    readonly cancelled: "cancelled";
+    readonly processing: "processing";
+    readonly blocked: "blocked";
+    readonly completed: "completed";
+};
+export interface AccountDeletionStatus {
+    id?: string;
+    status: AccountDeletionStatusStatus;
+    requestedAt?: string;
+    scheduledFor?: string;
+    /** @nullable */
+    cancelledAt?: string | null;
+    /** @nullable */
+    completedAt?: string | null;
+    attempts?: number;
+    retryingObjectCleanup?: boolean;
+}
 export interface AuthUserEnvelope {
     user: AuthUser | null;
 }
@@ -32,7 +542,8 @@ export interface AuthProfileUpdate {
     fullName: string;
     dateOfBirth: string;
     gender: string;
-    phone: string;
+    /** @nullable */
+    phone?: string | null;
     onboardingCompleted: boolean;
 }
 export interface AdviceSettings {
@@ -189,12 +700,37 @@ export interface AdviceAdminDashboard {
     advisors: Advisor[];
     settings: AdviceSettings;
 }
-export type UpdateAuthProfileBody = {
-    fullName: string;
-    dateOfBirth: string;
-    gender: string;
-    phone: string;
-    onboardingCompleted: boolean;
+export type SetupAccountPinBody = {
+    /** @pattern ^\d{4}$ */
+    pin: string;
+};
+export type LoginWithAccountPinBody = {
+    /**
+       * @maxLength 320
+       * @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$
+       */
+    email: string;
+    /** @pattern ^\d{4}$ */
+    pin: string;
+};
+export type BeginPasskeyRegistrationBody = {
+    [key: string]: unknown;
+};
+export type BeginPasskeyAuthenticationBody = {
+    [key: string]: unknown;
+};
+export type ListPasskeys200 = {
+    credentials: PasskeyCredential[];
+};
+export type RenamePasskeyBody = {
+    /**
+       * @minLength 1
+       * @maxLength 80
+       */
+    name: string;
+};
+export type RevokePasskeyBody = {
+    [key: string]: unknown;
 };
 export type BeginBrowserLoginParams = {
     returnTo?: string;
@@ -202,8 +738,69 @@ export type BeginBrowserLoginParams = {
 export type BeginAdminBrowserLoginParams = {
     returnTo?: string;
 };
+export type GetAdminLoginActivityParams = {
+    /**
+     * @minimum 1
+     */
+    page?: number;
+    /**
+     * @minimum 1
+     * @maximum 100
+     */
+    pageSize?: number;
+};
 export type LogoutBrowserSessionParams = {
     returnTo?: string;
+};
+export type ImportBankStatementExpensesBody = {
+    /** @minLength 1 */
+    expectedAccountId: string;
+    /**
+       * @minItems 1
+       * @maxItems 5000
+       */
+    rows: ReviewedBankImportRow[];
+};
+export type RequestFinancialRestoreUploadUrlBody = {
+    /**
+       * @minimum 1
+       * @maximum 12582912
+       */
+    size: number;
+};
+export type RequestFinancialRestoreUploadUrl200MetadataContentType = typeof RequestFinancialRestoreUploadUrl200MetadataContentType[keyof typeof RequestFinancialRestoreUploadUrl200MetadataContentType];
+export declare const RequestFinancialRestoreUploadUrl200MetadataContentType: {
+    readonly 'application/json': "application/json";
+};
+export type RequestFinancialRestoreUploadUrl200Metadata = {
+    size: number;
+    contentType: RequestFinancialRestoreUploadUrl200MetadataContentType;
+};
+export type RequestFinancialRestoreUploadUrl200 = {
+    uploadURL: string;
+    objectPath: string;
+    metadata: RequestFinancialRestoreUploadUrl200Metadata;
+};
+export type CleanupExpiredVaultStorageBody = {
+    /**
+       * Cancel and immediately remove this account's unconsumed upload
+       * @pattern ^/objects/vault/[0-9a-fA-F-]{36}$
+       */
+    objectPath?: string;
+};
+export type GetVaultCleanupStatus200 = {
+    /** @minimum 0 */
+    pending: number;
+    /** @minimum 0 */
+    failed: number;
+    /** @minimum 0 */
+    scheduled: number;
+};
+export type UpdateVaultDocumentLifecycleBody = {
+    archived: boolean;
+};
+export type ConfirmReceiptReviewBody = {
+    values: ReceiptConfirmationValues;
 };
 export type RetryWhatsAppNotification200Status = typeof RetryWhatsAppNotification200Status[keyof typeof RetryWhatsAppNotification200Status];
 export declare const RetryWhatsAppNotification200Status: {

@@ -66,7 +66,10 @@ export default defineConfig({
       client: "zod",
       target: "generated",
       schemas: { path: "generated/types", type: "typescript" },
-      mode: "split",
+      // Orval's split Zod client can emit shared validation constants after
+      // schemas that reference them. A single client keeps declarations in
+      // dependency order and remains compatible with the existing api.ts export.
+      mode: "single",
       clean: true,
       indexFiles: false,
       prettier: true,

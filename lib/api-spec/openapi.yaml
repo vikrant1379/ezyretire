@@ -18,6 +18,10 @@ tags:
     description: Admin management of advisors, requests, and manual payment settings
   - name: Admin Login Activity
     description: Restricted successful login history
+  - name: Financial Data
+    description: Account-scoped financial planning document
+  - name: Premium Tools
+    description: Premium entitlement, mobile verification, receipt review, vault, and nominee operations
 paths:
   /healthz:
     get:
@@ -62,6 +66,234 @@ paths:
           description: Invalid profile details
         "401":
           description: Login required
+  /auth/pin/setup:
+    post:
+      tags: [Auth]
+      operationId: setupAccountPin
+      summary: Create or replace a four-digit account PIN after recent email verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              additionalProperties: false
+              properties:
+                pin:
+                  type: string
+                  pattern: '^\d{4}$'
+      responses:
+        "200":
+          description: PIN configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinSetupEnvelope"
+        "400":
+          description: Invalid PIN
+        "401":
+          description: Login required
+        "403":
+          description: Recent email verification required
+  /auth/pin/login:
+    post:
+      tags: [Auth]
+      operationId: loginWithAccountPin
+      summary: Sign in to a remembered account with its four-digit PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, pin]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  maxLength: 320
+                  pattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+                pin:
+                  type: string
+                  pattern: '^\d{4}$'
+      responses:
+        "200":
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinLoginEnvelope"
+        "400":
+          description: Invalid input
+        "401":
+          description: Generic authentication failure
+        "423":
+          description: Account deletion in progress
+        "429":
+          description: PIN attempts temporarily limited
+  /auth/passkeys/registration/options:
+    post:
+      tags: [Auth]
+      operationId: beginPasskeyRegistration
+      summary: Create passkey registration options for a recently email-verified customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Registration ceremony options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyOptionsEnvelope"
+        "401":
+          description: Login required
+        "403":
+          description: Recent email verification or trusted browser request required
+        "429":
+          description: Challenge rate limit exceeded
+  /auth/passkeys/registration/verify:
+    post:
+      tags: [Auth]
+      operationId: completePasskeyRegistration
+      summary: Verify and store a passkey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyRegistrationVerification"
+      responses:
+        "201":
+          description: Passkey registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyCredentialEnvelope"
+        "400":
+          description: Invalid, expired, consumed, or unverifiable ceremony
+        "403":
+          description: Recent email verification or trusted browser request required
+  /auth/passkeys/authentication/options:
+    post:
+      tags: [Auth]
+      operationId: beginPasskeyAuthentication
+      summary: Create discoverable username-less passkey authentication options
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Authentication ceremony options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyOptionsEnvelope"
+        "403":
+          description: Trusted same-origin JSON request required
+        "429":
+          description: Challenge rate limit exceeded
+  /auth/passkeys/authentication/verify:
+    post:
+      tags: [Auth]
+      operationId: completePasskeyAuthentication
+      summary: Verify a discoverable passkey and issue the normal session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyAuthenticationVerification"
+      responses:
+        "200":
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyLoginEnvelope"
+        "401":
+          description: Generic authentication failure
+        "403":
+          description: Trusted same-origin JSON request required
+  /auth/passkeys:
+    get:
+      tags: [Auth]
+      operationId: listPasskeys
+      summary: List active passkeys after recent email verification
+      responses:
+        "200":
+          description: Active passkeys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [credentials]
+                properties:
+                  credentials:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PasskeyCredential"
+        "403":
+          description: Recent email verification required
+  /auth/passkeys/{id}:
+    patch:
+      tags: [Auth]
+      operationId: renamePasskey
+      summary: Rename an owned active passkey
+      parameters:
+        - $ref: "#/components/parameters/PasskeyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+      responses:
+        "200":
+          description: Renamed passkey
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyCredentialEnvelope"
+        "403":
+          description: Recent email verification or trusted browser request required
+        "404":
+          description: Owned active passkey not found
+    delete:
+      tags: [Auth]
+      operationId: revokePasskey
+      summary: Revoke an owned active passkey
+      parameters:
+        - $ref: "#/components/parameters/PasskeyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "204":
+          description: Passkey revoked
+        "403":
+          description: Recent email verification or trusted browser request required
+        "404":
+          description: Owned active passkey not found
   /login:
     get:
       tags: [Auth]
@@ -144,6 +376,672 @@ paths:
       responses:
         "302":
           description: Redirect after logout
+  /financial-data:
+    get:
+      tags: [Financial Data]
+      operationId: getFinancialData
+      summary: Get the signed-in account's financial planning document
+      responses:
+        "200":
+          description: Financial planning data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "401":
+          description: Login required
+    put:
+      tags: [Financial Data]
+      operationId: putFinancialData
+      summary: Replace the signed-in account's financial planning document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancialDataDocument"
+      responses:
+        "200":
+          description: Normalized saved financial planning data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "400":
+          description: Invalid financial planning data
+        "413":
+          description: Resulting canonical financial save exceeds the account admission limit
+        "401":
+          description: Login required
+    delete:
+      tags: [Financial Data]
+      operationId: deleteFinancialData
+      summary: Clear the signed-in account's financial planning document
+      responses:
+        "200":
+          description: Empty normalized financial planning data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "401":
+          description: Login required
+  /financial-data/bank-statement-import:
+    post:
+      tags: [Financial Data]
+      operationId: importBankStatementExpenses
+      summary: Atomically commit reviewed premium bank statement expenses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedAccountId, rows]
+              properties:
+                expectedAccountId:
+                  type: string
+                  minLength: 1
+                rows:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  items:
+                    $ref: "#/components/schemas/ReviewedBankImportRow"
+      responses:
+        "200":
+          description: Import result and canonical account financial data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankStatementImportResult"
+        "400": { description: Invalid reviewed rows }
+        "401": { description: Login required }
+        "409": { description: Signed-in account differs from the reviewed account }
+        "403": { description: Active premium plan required }
+        "413": { description: Resulting canonical financial save exceeds the account size limit }
+  /account/export:
+    get:
+      tags: [Account Compliance]
+      operationId: exportPersonalData
+      summary: Download a complete versioned export for the signed-in account
+      responses:
+        "200":
+          description: Account-isolated ZIP containing data.json, index.html, and owner-authorized vault files
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+              example: null
+        "401":
+          description: Login required
+  /account/deletion:
+    get:
+      tags: [Account Compliance]
+      operationId: getAccountDeletionStatus
+      summary: Get the signed-in account deletion lifecycle
+      responses:
+        "200":
+          description: Current lifecycle status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionStatus"
+        "401":
+          description: Login required
+    post:
+      tags: [Account Compliance]
+      operationId: requestAccountDeletion
+      summary: Schedule deletion after recent authentication and strong confirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeletionConfirmation"
+      responses:
+        "200":
+          description: Existing active deletion request (idempotent replay)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionStatus"
+        "202":
+          description: Deletion scheduled and all sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionStatus"
+        "400":
+          description: Confirmation did not match
+        "403":
+          description: Recent authentication required
+    delete:
+      tags: [Account Compliance]
+      operationId: cancelAccountDeletion
+      summary: Cancel deletion during the seven-day cooling period
+      responses:
+        "200":
+          description: Deletion cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionStatus"
+        "409":
+          description: Deletion can no longer be cancelled
+  /financial-data/health:
+    patch:
+      tags: [Financial Data]
+      operationId: updateFinancialHealthPlanning
+      summary: Update emergency-fund settings or one monthly net-worth snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancialHealthPlanningUpdate"
+      responses:
+        "200":
+          description: Updated financial planning data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "400":
+          description: Invalid financial health update
+        "401":
+          description: Login required
+  /financial-data/restore:
+    post:
+      tags: [Financial Data]
+      operationId: restoreFinancialData
+      summary: Authoritatively restore the signed-in account's financial planning document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/FinancialDataDocument"
+                - $ref: "#/components/schemas/FinancialRestoreUploadReference"
+      responses:
+        "200":
+          description: Normalized restored financial planning data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "400":
+          description: Invalid financial planning data
+        "409":
+          description: A backup expense ID belongs to another account
+        "413":
+          description: Resulting canonical financial save exceeds the account admission limit
+        "401":
+          description: Login required
+  /financial-data/restore-uploads/request-url:
+    post:
+      tags: [Financial Data]
+      operationId: requestFinancialRestoreUploadUrl
+      summary: Create an owner-bound upload URL for a large financial restore backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [size]
+              properties:
+                size:
+                  type: number
+                  multipleOf: 1
+                  minimum: 1
+                  maximum: 12582912
+      responses:
+        "200":
+          description: Short-lived restore upload URL and immutable reference metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uploadURL, objectPath, metadata]
+                properties:
+                  uploadURL: { type: string }
+                  objectPath: { type: string }
+                  metadata:
+                    type: object
+                    required: [size, contentType]
+                    properties:
+                      size: { type: number, multipleOf: 1 }
+                      contentType: { type: string, enum: [application/json] }
+        "400":
+          description: Invalid restore upload size
+        "401":
+          description: Login required
+        "503":
+          description: Storage provider unavailable
+  /financial-data/expenses/{id}:
+    delete:
+      tags: [Financial Data]
+      operationId: deleteFinancialExpense
+      summary: Deliberately delete one owned expense
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Canonical financial data after deletion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "401":
+          description: Login required
+        "404":
+          description: Expense not found
+  /financial-data/retirement-plan:
+    put:
+      tags: [Financial Data]
+      operationId: updateRetirementPlanning
+      summary: Replace retirement assumptions, lifestyle, and pension sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancialRetirementPlanReplacement"
+      responses:
+        "200":
+          description: Updated financial planning data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDataDocument"
+        "400":
+          description: Invalid retirement plan update
+        "401":
+          description: Login required
+  /entitlements:
+    get:
+      tags: [Premium Tools]
+      operationId: getEntitlements
+      summary: Get effective account capabilities
+      responses:
+        "200":
+          description: Effective entitlement contract
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementContract"
+        "401":
+          description: Login required
+  /auth/mobile-otp/request:
+    post:
+      tags: [Premium Tools]
+      operationId: requestMobileOtp
+      summary: Request mobile verification by SMS
+      responses:
+        "200":
+          description: Verification delivery result
+        "400":
+          description: Account has no valid mobile number
+        "401":
+          description: Login required
+        "429":
+          description: Request throttled
+        "503":
+          description: SMS and fallback email delivery failed
+  /auth/mobile-otp/verify:
+    post:
+      tags: [Premium Tools]
+      operationId: verifyMobileOtp
+      summary: Verify a delivered mobile verification challenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpVerification"
+      responses:
+        "200":
+          description: Mobile number verified
+        "400":
+          description: Invalid verification input
+        "401":
+          description: Login required or verification failed
+  /vault/uploads/request-url:
+    post:
+      tags: [Premium Tools]
+      operationId: requestVaultUploadUrl
+      summary: Request a private direct-upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultUploadMetadata"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultUploadUrl"
+        "400":
+          description: Unsupported upload
+        "401":
+          description: Login required
+  /vault/cleanup:
+    post:
+      tags: [Premium Tools]
+      operationId: cleanupExpiredVaultStorage
+      summary: Retry cleanup of this account's expired uploads and receipt reviews
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                objectPath:
+                  type: string
+                  pattern: "^/objects/vault/[0-9a-fA-F-]{36}$"
+                  description: Cancel and immediately remove this account's unconsumed upload
+      responses:
+        "200":
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+        "401":
+          description: Login required
+        "403":
+          description: Active premium plan required
+        "503":
+          description: Some objects could not be removed and remain available for retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+  /vault/cleanup-status:
+    get:
+      tags: [Premium Tools]
+      operationId: getVaultCleanupStatus
+      summary: Get account-scoped pending storage cleanup status
+      responses:
+        "200":
+          description: Cleanup status without object paths
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending, failed, scheduled]
+                properties:
+                  pending: { type: number, minimum: 0 }
+                  failed: { type: number, minimum: 0 }
+                  scheduled: { type: number, minimum: 0 }
+        "401":
+          description: Login required
+  /vault/documents:
+    get:
+      tags: [Premium Tools]
+      operationId: listVaultDocuments
+      summary: List account vault metadata
+      responses:
+        "200":
+          description: Account documents
+        "401":
+          description: Login required
+    post:
+      tags: [Premium Tools]
+      operationId: confirmVaultDocument
+      summary: Confirm a completed upload and create metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultDocumentConfirmation"
+      responses:
+        "201":
+          description: Document confirmed
+        "400":
+          description: Upload or metadata invalid
+        "401":
+          description: Login required
+  /vault/documents/{id}:
+    put:
+      tags: [Premium Tools]
+      operationId: replaceVaultDocument
+      summary: Replace document content after direct upload
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultDocumentConfirmation"
+      responses:
+        "200":
+          description: Document replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+        "404":
+          description: Document not found
+    delete:
+      tags: [Premium Tools]
+      operationId: deleteVaultDocument
+      summary: Delete document metadata and object
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      responses:
+        "200":
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+        "202":
+          description: Metadata deleted and physical cleanup remains pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+        "404":
+          description: Document not found
+  /vault/documents/{id}/download:
+    get:
+      tags: [Premium Tools]
+      operationId: downloadVaultDocument
+      summary: Download an account-owned private document
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      responses:
+        "200":
+          description: Private document bytes
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Document not found
+  /vault/documents/{id}/preview:
+    get:
+      tags: [Premium Tools]
+      operationId: previewVaultDocument
+      summary: Inline-preview an account-owned raster image
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      responses:
+        "200":
+          description: Raster image bytes
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Preview unavailable or document not found
+  /vault/documents/{id}/lifecycle:
+    patch:
+      tags: [Premium Tools]
+      operationId: updateVaultDocumentLifecycle
+      summary: Archive or restore a document
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archived]
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        "200":
+          description: Lifecycle updated
+        "404":
+          description: Document not found
+  /receipts/reviews:
+    post:
+      tags: [Premium Tools]
+      operationId: createReceiptReview
+      summary: Stage OCR candidates without saving financial data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptReviewInput"
+      responses:
+        "201":
+          description: Candidates staged for review
+        "404":
+          description: Vault document not found
+  /receipts/reviews/{id}:
+    get:
+      tags: [Premium Tools]
+      operationId: getReceiptReview
+      summary: Get staged receipt candidates
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      responses:
+        "200":
+          description: Receipt review
+        "404":
+          description: Review not found
+    delete:
+      tags: [Premium Tools]
+      operationId: discardReceiptReview
+      summary: Discard staged candidates
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      responses:
+        "200":
+          description: Review discarded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+        "202":
+          description: Review discarded and physical cleanup remains pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanupStatus"
+  /receipts/reviews/{id}/confirm:
+    post:
+      tags: [Premium Tools]
+      operationId: confirmReceiptReview
+      summary: Confirm reviewed receipt values
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  $ref: "#/components/schemas/ReceiptConfirmationValues"
+      responses:
+        "200":
+          description: Review confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptConfirmationResult"
+        "409":
+          description: Review expired or already completed
+  /nominees:
+    get:
+      tags: [Premium Tools]
+      operationId: listNominees
+      summary: List account nominees
+      responses:
+        "200":
+          description: Account nominees
+    post:
+      tags: [Premium Tools]
+      operationId: createNominee
+      summary: Create an account nominee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NomineeInput"
+      responses:
+        "201":
+          description: Nominee created
+        "409":
+          description: Total allocation would exceed 100 percent
+  /nominees/{id}:
+    put:
+      tags: [Premium Tools]
+      operationId: updateNominee
+      summary: Replace an account nominee
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NomineeInput"
+      responses:
+        "200":
+          description: Nominee updated
+        "404":
+          description: Nominee not found
+    delete:
+      tags: [Premium Tools]
+      operationId: deleteNominee
+      summary: Delete an account nominee
+      parameters:
+        - $ref: "#/components/parameters/StringId"
+      responses:
+        "204":
+          description: Nominee deleted
+        "404":
+          description: Nominee not found
   /advice:
     get:
       tags: [Advice]
@@ -375,7 +1273,490 @@ paths:
         "409":
           description: Notification event is already pending, sent, or cannot be reconstructed
 components:
+  parameters:
+    PasskeyId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 1024
+    StringId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
+    PinSetupEnvelope:
+      type: object
+      required: [user, pinConfigured]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        pinConfigured:
+          type: boolean
+          const: true
+    PinLoginEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+    CleanupStatus:
+      type: object
+      required: [cleanupPending]
+      additionalProperties: true
+      properties:
+        cleanupPending:
+          type: boolean
+    ConfirmedReceiptExpense:
+      type: object
+      required:
+        - id
+        - userId
+        - loanId
+        - accountId
+        - date
+        - amount
+        - category
+        - merchant
+        - paymentMethod
+        - note
+        - reimbursable
+        - recurring
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        loanId: { type: [string, "null"] }
+        accountId: { type: [string, "null"] }
+        date: { type: string }
+        amount: { type: string }
+        category: { type: string }
+        merchant: { type: string }
+        paymentMethod: { type: string }
+        note: { type: string }
+        reimbursable: { type: boolean }
+        recurring: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReceiptConfirmationResult:
+      type: object
+      required:
+        - reviewId
+        - expense
+        - status
+        - values
+        - saved
+        - retainedOriginal
+        - cleanupPending
+      properties:
+        reviewId: { type: string }
+        expense:
+          $ref: "#/components/schemas/ConfirmedReceiptExpense"
+        status:
+          type: string
+          enum: [confirmed]
+        values:
+          $ref: "#/components/schemas/ReceiptConfirmationValues"
+        saved:
+          type: boolean
+          const: true
+        retainedOriginal: { type: boolean }
+        cleanupPending: { type: boolean }
+    PasskeyCredential:
+      type: object
+      required: [id, name, transports, deviceType, backedUp, createdAt, lastUsedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        transports:
+          type: array
+          items: { type: string }
+        deviceType: { type: [string, "null"] }
+        backedUp: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+    PasskeyCredentialEnvelope:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          $ref: "#/components/schemas/PasskeyCredential"
+    PasskeyOptionsEnvelope:
+      type: object
+      required: [challengeId, options]
+      properties:
+        challengeId:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+    PasskeyRegistrationVerification:
+      type: object
+      required: [challengeId, name, response]
+      properties:
+        challengeId:
+          type: string
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        response:
+          type: object
+          additionalProperties: true
+    PasskeyAuthenticationVerification:
+      type: object
+      required: [challengeId, response]
+      properties:
+        challengeId: { type: string }
+        response:
+          type: object
+          additionalProperties: true
+    PasskeyLoginEnvelope:
+      type: object
+      required: [user, needsProfile]
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        needsProfile:
+          type: boolean
+    ReviewedBankImportRow:
+      type: object
+      required: [importId, sourceRowId, bank, parserVersion, date, amount, category, merchant, paymentMethod]
+      properties:
+        importId: { type: string, pattern: "^[a-fA-F0-9]{64}$" }
+        sourceRowId: { type: string, minLength: 1, maxLength: 256 }
+        bank: { type: string, enum: [SBI, HDFC, ICICI, Axis, Kotak, PNB, BOB, IndusInd] }
+        parserVersion: { type: string, minLength: 3, maxLength: 64 }
+        date: { type: string, format: date }
+        amount: { type: number, exclusiveMinimum: 0 }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        merchant: { type: string, minLength: 1, maxLength: 160 }
+        paymentMethod: { type: string, minLength: 1, maxLength: 80 }
+        note: { type: string, maxLength: 2000 }
+        reimbursable: { type: boolean }
+        recurring: { type: boolean }
+    BankStatementImportResult:
+      type: object
+      required: [added, duplicateCount, data]
+      properties:
+        added: { type: array, items: { type: object, additionalProperties: true } }
+        duplicateCount: { type: number, minimum: 0 }
+        data:
+          $ref: "#/components/schemas/FinancialDataDocument"
+    EntitlementContract:
+      type: object
+      required: [plan, premium, validUntil, capabilities, mobileVerification]
+      properties:
+        plan:
+          type: string
+          enum: [free, premium]
+        premium:
+          type: boolean
+        validUntil:
+          type: [string, "null"]
+          format: date-time
+        capabilities:
+          type: object
+          required: [receiptOcr, bankStatementImport, documentVault, nomineeTracker, verifiedMobile]
+          properties:
+            receiptOcr: { type: boolean }
+            bankStatementImport: { type: boolean }
+            documentVault: { type: boolean }
+            nomineeTracker: { type: boolean }
+            verifiedMobile: { type: boolean }
+        mobileVerification:
+          type: object
+          required: [hasMobile, verified]
+          properties:
+            hasMobile: { type: boolean }
+            verified: { type: boolean }
+    OtpVerification:
+      type: object
+      required: [challengeId, code]
+      properties:
+        challengeId:
+          type: string
+        code:
+          type: string
+          pattern: '^\d{6}$'
+    VaultUploadMetadata:
+      type: object
+      required: [name, contentType, size]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        contentType:
+          type: string
+          enum: [application/pdf, image/jpeg, image/png, image/webp]
+        size: { type: number, multipleOf: 1, minimum: 1, maximum: 20971520 }
+        purpose:
+          type: string
+          enum: [vault_document, receipt_review]
+          default: vault_document
+    VaultUploadUrl:
+      type: object
+      required: [uploadURL, objectPath, metadata]
+      properties:
+        uploadURL: { type: string }
+        objectPath: { type: string }
+        metadata:
+          $ref: "#/components/schemas/VaultUploadMetadata"
+    VaultDocumentConfirmation:
+      allOf:
+        - $ref: "#/components/schemas/VaultUploadMetadata"
+        - type: object
+          required: [objectPath]
+          properties:
+            objectPath: { type: string }
+            category: { type: string, maxLength: 64 }
+            expiresOn: { type: [string, "null"], format: date }
+    ReceiptReviewInput:
+      type: object
+      required: [documentId, candidates]
+      properties:
+        documentId: { type: string }
+        candidates:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: true
+    ReceiptConfirmationValues:
+      type: object
+      required: [merchant, amount, date, category]
+      properties:
+        merchant: { type: string, maxLength: 160 }
+        amount: { type: number, minimum: 0 }
+        date: { type: string, format: date }
+        category: { type: string, maxLength: 80 }
+        retainOriginal: { type: boolean }
+        lineItems:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [description, amount]
+            properties:
+              description: { type: string, maxLength: 120 }
+              amount: { type: number, minimum: 0 }
+    NomineeInput:
+      type: object
+      required: [name, relationship, allocationPercent]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        relationship: { type: string, minLength: 1, maxLength: 64 }
+        allocationPercent: { type: number, multipleOf: 1, minimum: 0, maximum: 100 }
+        coverageType:
+          type: string
+          enum: [life, health, investment, other]
+        coverageLabel: { type: string, maxLength: 160 }
+        institution: { type: [string, "null"], maxLength: 160 }
+        status:
+          type: string
+          enum: [active, needs_review, inactive]
+        reviewStatus:
+          type: string
+          enum: [not_reviewed, reviewed, needs_update]
+        reminderOn: { type: [string, "null"], format: date }
+        dateOfBirth: { type: [string, "null"], format: date }
+        contact: { type: [string, "null"], maxLength: 160 }
+        notes: { type: [string, "null"], maxLength: 1000 }
+    NetWorthSnapshot:
+      type: object
+      required: [month, assets, liabilities, netWorth]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        assets:
+          type: number
+          minimum: 0
+        liabilities:
+          type: number
+          minimum: 0
+        netWorth:
+          type: number
+        healthScore:
+          type: number
+          minimum: 0
+          maximum: 100
+    EmergencyFundPlan:
+      type: object
+      required: [targetMonths, reserveBalance, monthlyContribution]
+      properties:
+        targetMonths:
+          type: number
+          minimum: 0
+        reserveBalance:
+          type: number
+          minimum: 0
+        monthlyContribution:
+          type: number
+          minimum: 0
+    FinancialHealthPlanningUpdate:
+      type: object
+      properties:
+        emergencyFund:
+          $ref: "#/components/schemas/EmergencyFundPlan"
+        netWorthSnapshot:
+          $ref: "#/components/schemas/NetWorthSnapshot"
+      anyOf:
+        - required: [emergencyFund]
+        - required: [netWorthSnapshot]
+    PensionSource:
+      type: object
+      required: [id, name, monthlyAmount, annualEscalationRate]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        monthlyAmount:
+          type: number
+          minimum: 0
+        startAge:
+          type: number
+          minimum: 0
+        annualEscalationRate:
+          type: number
+          minimum: 0
+    FinancialRetirementInputs:
+      type: object
+      additionalProperties: true
+      properties:
+        dateOfBirth:
+          type: string
+        targetRetirementAge:
+          type: number
+        lifeExpectancy:
+          type: number
+        generalInflation:
+          type: number
+        salaryGrowth:
+          type: number
+        monthlyContributionOverride:
+          type: number
+        investSurplus:
+          type: boolean
+        lifestyleChoice:
+          type: string
+          enum: [Basic, Comfortable, Premium, Custom]
+        customLifestyleExpense:
+          type: number
+          minimum: 0
+        retirementSpendingAdjustmentPercent:
+          type: number
+          minimum: -90
+          maximum: 300
+        pensionSources:
+          type: array
+          items:
+            $ref: "#/components/schemas/PensionSource"
+    FinancialRetirementPlanReplacement:
+      type: object
+      additionalProperties: true
+      required:
+        - dateOfBirth
+        - targetRetirementAge
+        - lifeExpectancy
+        - generalInflation
+        - salaryGrowth
+        - monthlyContributionOverride
+        - investSurplus
+        - lifestyleChoice
+        - customLifestyleExpense
+        - pensionSources
+      properties:
+        dateOfBirth:
+          type: string
+        targetRetirementAge:
+          type: number
+          minimum: 18
+          maximum: 120
+        lifeExpectancy:
+          type: number
+          minimum: 18
+          maximum: 130
+        generalInflation:
+          type: number
+          minimum: 0
+          maximum: 25
+        salaryGrowth:
+          type: number
+          minimum: 0
+          maximum: 100
+        monthlyContributionOverride:
+          type: number
+          minimum: 0
+        investSurplus:
+          type: boolean
+        lifestyleChoice:
+          type: string
+          enum: [Basic, Comfortable, Premium, Custom]
+        customLifestyleExpense:
+          type: number
+          minimum: 0
+        pensionSources:
+          type: array
+          items:
+            $ref: "#/components/schemas/PensionSource"
+    FinancialRestoreUploadReference:
+      type: object
+      additionalProperties: false
+      required: [restoreUpload]
+      properties:
+        restoreUpload:
+          type: object
+          additionalProperties: false
+          required: [objectPath, size]
+          properties:
+            objectPath:
+              type: string
+              pattern: '^/objects/vault-staging/[0-9a-fA-F-]{36}$'
+            size:
+              type: number
+              multipleOf: 1
+              minimum: 1
+              maximum: 12582912
+    FinancialDataDocument:
+      type: object
+      additionalProperties: true
+      properties:
+        netWorthSnapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetWorthSnapshot"
+        emergencyFund:
+          $ref: "#/components/schemas/EmergencyFundPlan"
+        retirementInputs:
+          $ref: "#/components/schemas/FinancialRetirementInputs"
+        incomeReceipts:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeReceipt"
+    IncomeReceipt:
+      type: object
+      required: [id, incomeSourceId, receivedDate, amount, createdAt]
+      properties:
+        id:
+          type: string
+        incomeSourceId:
+          type: string
+        receivedDate:
+          type: string
+          format: date
+        amount:
+          type: number
+          minimum: 0
+        note:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     LoginActivity:
       type: object
       required: [id, userId, userName, userEmail, loggedInAt, authMethod, deviceType, browser, operatingSystem, country, region, city]
@@ -455,6 +1836,59 @@ components:
           type: boolean
         isAdmin:
           type: boolean
+    PersonalDataExport:
+      type: object
+      required: [manifest, data]
+      additionalProperties: false
+      properties:
+        manifest:
+          type: object
+          additionalProperties: true
+          required: [format, version, exportId, accountId, generatedAt, complete, recordCounts, securityExclusions, readme]
+          properties:
+            format: { type: string }
+            version: { type: string }
+            exportId: { type: string }
+            accountId: { type: string }
+            generatedAt: { type: string, format: date-time }
+            complete: { type: boolean }
+            recordCounts:
+              type: object
+              additionalProperties:
+                type: number
+                multipleOf: 1
+            securityExclusions:
+              type: array
+              items: { type: string }
+            readme: { type: string }
+        data:
+          type: object
+          additionalProperties: true
+    AccountDeletionConfirmation:
+      type: object
+      additionalProperties: false
+      required: [email, confirmation]
+      properties:
+        email: { type: string }
+        confirmation:
+          type: string
+          enum: [DELETE MY ACCOUNT]
+    AccountDeletionStatus:
+      type: object
+      required: [status]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [none, cooling_off, cancelled, processing, blocked, completed]
+        requestedAt: { type: string, format: date-time }
+        scheduledFor: { type: string, format: date-time }
+        cancelledAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        attempts:
+          type: number
+          multipleOf: 1
+        retryingObjectCleanup: { type: boolean }
     AuthUserEnvelope:
       type: object
       required: [user]
@@ -465,7 +1899,7 @@ components:
             - type: "null"
     AuthProfileUpdate:
       type: object
-      required: [fullName, dateOfBirth, gender, phone, onboardingCompleted]
+      required: [fullName, dateOfBirth, gender, onboardingCompleted]
       properties:
         fullName:
           type: string
@@ -474,7 +1908,7 @@ components:
         gender:
           type: string
         phone:
-          type: string
+          type: [string, "null"]
         onboardingCompleted:
           type: boolean
     AdviceSettings:
@@ -689,3 +2123,4 @@ components:
             $ref: "#/components/schemas/Advisor"
         settings:
           $ref: "#/components/schemas/AdviceSettings"
+# end merged components

@@ -1,6 +1,8 @@
 export type StoredUiPreferences = {
     investmentOrder?: string[];
     loanOrder?: string[];
+    incomeOrder?: string[];
+    archivedPlanningCategories?: string[];
     investmentSort?: {
         by?: string;
         direction?: string;
@@ -9,6 +11,139 @@ export type StoredUiPreferences = {
         by?: string;
         direction?: string;
     };
+    incomeSort?: {
+        by?: string;
+        direction?: string;
+    };
+};
+export type StoredPlanningData = {
+    plannedExpenses?: Array<Record<string, unknown>>;
+    onboardingProgress?: Record<string, unknown>;
+    netWorthSnapshots?: Array<Record<string, unknown>>;
+    emergencyFund?: Record<string, unknown>;
+    goals?: StoredGoal[];
+    customReminders?: StoredCustomReminder[];
+    notificationPreferences?: StoredNotificationPreferences;
+    notificationState?: StoredNotificationState[];
+    pushSubscriptions?: StoredPushSubscription[];
+    monthlyReportSnapshots?: StoredMonthlyReportSnapshot[];
+    monthlyReportEmailDeliveries?: Record<string, string>;
+    lifestyleChoice?: string;
+    customLifestyleExpense?: number;
+    retirementSpendingAdjustmentPercent?: number;
+    pensionSources?: Array<Record<string, unknown>>;
+};
+export type StoredGoal = {
+    id: string;
+    name: string;
+    targetAmount: number;
+    currentAmount: number;
+    targetDate: string;
+    priority: number;
+    monthlyAllocation: number;
+    annualInflationRate: number;
+    createdAt: string;
+};
+export type StoredCustomReminder = {
+    id: string;
+    title: string;
+    date: string;
+    amount?: number;
+    notes?: string;
+    recurrence: "none" | "monthly" | "yearly";
+    enabled: boolean;
+    createdAt: string;
+};
+export type StoredNotificationPreferences = {
+    enabled: boolean;
+    types: Record<string, boolean>;
+    inApp: boolean;
+    push: boolean;
+    weeklyDigest: boolean;
+    monthlyReportEmail: boolean;
+    digestDay: number;
+    quietHours: {
+        start: string;
+        end: string;
+    };
+    timeZone: string;
+};
+export type StoredNotificationState = {
+    id: string;
+    dedupeKey: string;
+    type: string;
+    title: string;
+    message: string;
+    createdAt: string;
+    deliverAfter: string;
+    channels: Array<"in-app" | "push">;
+    readAt?: string;
+    dismissedAt?: string;
+    inAppDeliveredAt?: string;
+    pushDeliveredAt?: string;
+    emailDeliveredAt?: string;
+};
+export type StoredPushSubscription = {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    expirationTime?: number;
+    createdAt: string;
+    updatedAt: string;
+};
+export type StoredMonthlyReportSnapshot = {
+    id: string;
+    month: string;
+    generatedAt: string;
+    retirementForecast?: StoredRetirementForecastSnapshot;
+    sections: Array<Record<string, unknown>>;
+};
+export type StoredRetirementForecastSnapshot = {
+    modelVersion?: number;
+    projectedRetirementMonth: string | null;
+    projectedRetirementAge: number | null;
+    asOfDate: string;
+    assumptions: {
+        targetRetirementAge: number;
+        lifeExpectancy: number;
+        generalInflation: number;
+        salaryGrowth: number;
+        monthlyContribution: number;
+        monthlySpending: number;
+        portfolioValue: number;
+        investedPrincipal?: number;
+        portfolioReturnAmount?: number;
+        expectedReturn: number;
+    };
+    projectionInputs?: {
+        expenses: Array<Record<string, unknown>>;
+        budgets: Array<Record<string, unknown>>;
+        incomes: Array<Record<string, unknown>>;
+        investments: Array<Record<string, unknown>>;
+        loans: Array<Record<string, unknown>>;
+        plannedExpenses: Array<Record<string, unknown>>;
+        emergencyFund: Record<string, unknown>;
+        assumptions: Record<string, unknown>;
+    };
+    drivers: string[];
+};
+export type StoredFundAllocation = {
+    id: string;
+    sourceId: string;
+    opportunityDate: string;
+    investmentDate: string;
+    amount: number;
+    createdAt: string;
+};
+export type StoredInvestmentDisposal = {
+    id: string;
+    name: string;
+    purchaseDate?: string;
+    saleDate?: string;
+    costBasis?: number;
+    proceeds?: number;
+    assetType?: string;
+    eligibleExemption?: number;
 };
 export declare const userProfilesTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "user_profiles";
@@ -70,6 +205,25 @@ export declare const userProfilesTable: import("drizzle-orm/pg-core").PgTableWit
             generated: undefined;
         }, {}, {
             $type: StoredUiPreferences;
+        }>;
+        planningData: import("drizzle-orm/pg-core").PgColumn<{
+            name: "planning_data";
+            tableName: "user_profiles";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: StoredPlanningData;
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: StoredPlanningData;
         }>;
         preferredCurrency: import("drizzle-orm/pg-core").PgColumn<{
             name: "preferred_currency";
@@ -1079,6 +1233,159 @@ export declare const incomeSourcesTable: import("drizzle-orm/pg-core").PgTableWi
     };
     dialect: "pg";
 }>;
+export declare const incomeReceiptsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "income_receipts";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "income_receipts";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: number | undefined;
+        }>;
+        userId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "user_id";
+            tableName: "income_receipts";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: number | undefined;
+        }>;
+        incomeSourceId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "income_source_id";
+            tableName: "income_receipts";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: number | undefined;
+        }>;
+        receivedDate: import("drizzle-orm/pg-core").PgColumn<{
+            name: "received_date";
+            tableName: "income_receipts";
+            dataType: "string";
+            columnType: "PgDateString";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        amount: import("drizzle-orm/pg-core").PgColumn<{
+            name: string;
+            tableName: "income_receipts";
+            dataType: "string";
+            columnType: "PgNumeric";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        note: import("drizzle-orm/pg-core").PgColumn<{
+            name: "note";
+            tableName: "income_receipts";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "income_receipts";
+            dataType: "custom";
+            columnType: "PgCustomColumn";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            pgColumnBuilderBrand: "PgCustomColumnBuilderBrand";
+        }>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
+            tableName: "income_receipts";
+            dataType: "custom";
+            columnType: "PgCustomColumn";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            pgColumnBuilderBrand: "PgCustomColumnBuilderBrand";
+        }>;
+    };
+    dialect: "pg";
+}>;
 export declare const salaryDetailsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "salary_details";
     schema: undefined;
@@ -1119,6 +1426,25 @@ export declare const salaryDetailsTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        grossCtcMode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "gross_ctc_mode";
+            tableName: "salary_details";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
         basicPay: import("drizzle-orm/pg-core").PgColumn<{
             name: string;
             tableName: "salary_details";
@@ -1221,6 +1547,82 @@ export declare const salaryDetailsTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        tdsMode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "tds_mode";
+            tableName: "salary_details";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
+        taxRegime: import("drizzle-orm/pg-core").PgColumn<{
+            name: "tax_regime";
+            tableName: "salary_details";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 8;
+        }>;
+        financialYear: import("drizzle-orm/pg-core").PgColumn<{
+            name: "financial_year";
+            tableName: "salary_details";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 16;
+        }>;
+        taxRuleVersion: import("drizzle-orm/pg-core").PgColumn<{
+            name: "tax_rule_version";
+            tableName: "salary_details";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 64;
+        }>;
         otherDeductions: import("drizzle-orm/pg-core").PgColumn<{
             name: string;
             tableName: "salary_details";
@@ -1463,6 +1865,25 @@ export declare const loansTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        repaymentType: import("drizzle-orm/pg-core").PgColumn<{
+            name: "repayment_type";
+            tableName: "loans";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 32;
+        }>;
         prepayments: import("drizzle-orm/pg-core").PgColumn<{
             name: string;
             tableName: "loans";
@@ -1803,6 +2224,179 @@ export declare const expensesTable: import("drizzle-orm/pg-core").PgTableWithCol
     };
     dialect: "pg";
 }>;
+export declare const bankStatementImportProvenanceTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "bank_statement_import_provenance";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: number | undefined;
+        }>;
+        userId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "user_id";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: number | undefined;
+        }>;
+        importId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "import_id";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 128;
+        }>;
+        sourceRowId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "source_row_id";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 256;
+        }>;
+        bank: import("drizzle-orm/pg-core").PgColumn<{
+            name: "bank";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 32;
+        }>;
+        parserVersion: import("drizzle-orm/pg-core").PgColumn<{
+            name: "parser_version";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 64;
+        }>;
+        expenseId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "expense_id";
+            tableName: "bank_statement_import_provenance";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: number | undefined;
+        }>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "bank_statement_import_provenance";
+            dataType: "custom";
+            columnType: "PgCustomColumn";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            pgColumnBuilderBrand: "PgCustomColumnBuilderBrand";
+        }>;
+    };
+    dialect: "pg";
+}>;
+export type StoredBudgetSchedule = {
+    id: string;
+    amount: number;
+    startMonth: string;
+    cadence?: "monthly" | "quarterly" | "half-yearly" | "yearly" | "one-time";
+    /** Zero-based calendar month for a yearly expense. */
+    annualMonth?: number;
+    endMode: "custom" | "retirement" | "lifelong";
+    endMonth?: string;
+    note?: string;
+};
+export type StoredBudgetDetails = {
+    schedules?: StoredBudgetSchedule[];
+};
 export declare const budgetsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "budgets";
     schema: undefined;
@@ -1881,6 +2475,25 @@ export declare const budgetsTable: import("drizzle-orm/pg-core").PgTableWithColu
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        details: import("drizzle-orm/pg-core").PgColumn<{
+            name: "details";
+            tableName: "budgets";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: StoredBudgetDetails;
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: StoredBudgetDetails;
+        }>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
             tableName: "budgets";
@@ -2327,7 +2940,7 @@ export declare const investmentsTable: import("drizzle-orm/pg-core").PgTableWith
             tableName: "investments";
             dataType: "json";
             columnType: "PgJsonb";
-            data: Record<string, unknown>;
+            data: StoredInvestmentDetails;
             driverParam: unknown;
             notNull: true;
             hasDefault: true;
@@ -2339,7 +2952,7 @@ export declare const investmentsTable: import("drizzle-orm/pg-core").PgTableWith
             identity: undefined;
             generated: undefined;
         }, {}, {
-            $type: Record<string, unknown>;
+            $type: StoredInvestmentDetails;
         }>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
@@ -2382,4 +2995,11 @@ export declare const investmentsTable: import("drizzle-orm/pg-core").PgTableWith
     };
     dialect: "pg";
 }>;
+export type StoredInvestmentDetails = {
+    unit?: string;
+    location?: string;
+    area?: string;
+    fundAllocations?: StoredFundAllocation[];
+    disposals?: StoredInvestmentDisposal[];
+};
 //# sourceMappingURL=finance.d.ts.map

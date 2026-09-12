@@ -17,6 +17,7 @@
     "#hooks/*": "./src/hooks/*.tsx"
   },
   "scripts": {
+    "test": "node --test scripts/palette.test.mjs",
     "tokens": "node scripts/build-tokens.mjs",
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "prebuild": "node scripts/build-tokens.mjs && pnpm --filter @workspace/wealthone-expenses brand:check",

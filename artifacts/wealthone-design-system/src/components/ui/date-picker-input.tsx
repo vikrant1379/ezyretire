@@ -322,8 +322,8 @@ export function DatePickerInput({
   }
 
   return (
-    <div className={cn("relative", className)}>
-      <div className="relative flex items-center">
+    <div className={cn("relative min-w-0", className)}>
+      <div className={cn("relative flex min-w-0 items-center rounded-md border border-input bg-card shadow-sm", error && "border-warning")}>
         <Input
           id={inputId}
           type="text"
@@ -346,9 +346,9 @@ export function DatePickerInput({
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
           className={cn(
-            "pr-20 font-medium text-primary",
+            "min-w-0 flex-1 border-0 bg-transparent px-2 shadow-none font-medium text-primary",
             calendarOnly && "cursor-pointer",
-            error ? "border-destructive focus-visible:ring-destructive" : "",
+            error ? "border-warning focus-visible:ring-warning" : "",
             className
           )}
         />
@@ -357,7 +357,7 @@ export function DatePickerInput({
             type="button"
             variant="ghost"
             size="icon"
-            className="text-muted-foreground hover:text-foreground absolute right-10 h-7 w-7"
+            className="text-muted-foreground hover:text-foreground h-11 w-11 shrink-0"
             onClick={() => {
               setTextValue("")
               setError("")
@@ -381,14 +381,15 @@ export function DatePickerInput({
           }}
         >
           <PopoverTrigger asChild>
-            <Button ref={calendarTriggerRef} type="button" variant="ghost" size="icon" className="text-muted-foreground absolute right-1 h-8 w-8" aria-label="Open calendar">
+            <Button ref={calendarTriggerRef} type="button" variant="ghost" size="icon" className="text-muted-foreground h-11 w-11 shrink-0" aria-label="Open calendar">
               <CalendarIcon className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="bg-background max-h-[calc(100dvh-2rem)] w-[min(320px,calc(100vw-2rem))] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border p-0 shadow-lg md:max-h-none md:overflow-hidden"
+            className="bg-background !max-h-[min(var(--radix-popover-content-available-height),calc(var(--app-visual-height,100dvh)-var(--app-safe-top,0px)-var(--app-safe-bottom,0px)-1rem))] w-[min(352px,calc(100vw-1rem))] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border p-0 shadow-lg"
             align="end"
-            collisionPadding={16}
+            collisionPadding={8}
+            sticky="always"
           >
             {calendarView === "days" ? (
               <Calendar
@@ -430,7 +431,7 @@ export function DatePickerInput({
                            }
                           setCalendarView(isMonthDropdown ? "months" : "years")
                         }}
-                        className="border-input bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring flex h-9 min-w-0 flex-1 items-center justify-between gap-2 rounded-md border px-3 text-sm font-medium shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1"
+                        className="border-input bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring flex h-11 min-w-0 flex-1 items-center justify-between gap-1 rounded-md border px-2 text-sm font-medium shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1"
                         aria-label={isMonthDropdown ? "Choose month" : "Choose year"}
                       >
                         <span className="truncate">{selectedOption?.label ?? dropdownValue}</span>
@@ -447,7 +448,7 @@ export function DatePickerInput({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 shrink-0"
+                    className="h-11 w-11 shrink-0"
                     onClick={() => setCalendarView("days")}
                     aria-label="Back to calendar"
                   >
@@ -486,7 +487,7 @@ export function DatePickerInput({
                           aria-checked={isSelected}
                           variant={isSelected ? "default" : "outline"}
                           size="sm"
-                          className="h-10"
+                          className="h-11"
                           disabled={isOutsideRange}
                           onKeyDown={(event) => handleGridKeyDown(event, monthIndex, 3, monthButtonRefs)}
                           onClick={() => {
@@ -513,7 +514,7 @@ export function DatePickerInput({
                     </p>
                     <div
                       ref={yearScrollRef}
-                      className="max-h-[min(280px,calc(100dvh-9rem))] touch-pan-y overscroll-contain overflow-y-auto [-webkit-overflow-scrolling:touch] md:max-h-[280px]"
+                      className="max-h-[min(280px,calc(var(--app-visual-height,100dvh)-9rem))] touch-pan-y overscroll-contain overflow-y-auto [-webkit-overflow-scrolling:touch]"
                       onScroll={(event) => setYearScrollTop(event.currentTarget.scrollTop)}
                     >
                       <div
@@ -544,7 +545,7 @@ export function DatePickerInput({
                                 variant={isSelected ? "default" : "ghost"}
                                 size="sm"
                                 className={cn(
-                                  "h-10 rounded-lg border-0 px-1 text-sm font-medium shadow-none",
+                                  "h-11 rounded-lg border-0 px-1 text-sm font-medium shadow-none",
                                   !isSelected && "text-foreground hover:bg-accent"
                                 )}
                                 aria-describedby={yearKeyboardHelpId}
@@ -577,7 +578,8 @@ export function DatePickerInput({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="shadow-xs w-full font-semibold"
+                  type="button"
+                  className="shadow-xs h-11 w-full font-semibold"
                   onClick={() => handleSelect(new Date())}
                   disabled={
                     (minDate && isBefore(startOfDay(new Date()), startOfDay(minDate))) ||
@@ -595,7 +597,7 @@ export function DatePickerInput({
         <span
           id={errorId}
           role="alert"
-          className="text-destructive absolute -bottom-5 left-0 text-xs"
+          className="text-warning absolute -bottom-5 left-0 text-xs"
         >
           {error}
         </span>

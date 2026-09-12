@@ -47,6 +47,17 @@
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
+  --color-positive: hsl(var(--positive));
+  --color-positive-background: hsl(var(--positive-background));
+  --color-negative: hsl(var(--negative));
+  --color-negative-background: hsl(var(--negative-background));
+  --color-warning: hsl(var(--warning));
+  --color-warning-background: hsl(var(--warning-background));
+  --color-support: hsl(var(--support));
+  --color-support-hover: hsl(var(--support-hover));
+  --color-support-foreground: hsl(var(--support-foreground));
+  --color-disabled: hsl(var(--disabled));
+  --color-surface-hover: hsl(var(--surface-hover));
 
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -68,6 +79,38 @@
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
+
+  --text-h1: var(--type-h1-size);
+  --text-h1--line-height: var(--type-h1-leading);
+  --text-h1--letter-spacing: -0.5px;
+  --text-h2: var(--type-h2-size);
+  --text-h2--line-height: var(--type-h2-leading);
+  --text-h2--letter-spacing: -0.3px;
+  --text-h3: var(--type-h3-size);
+  --text-h3--line-height: var(--type-h3-leading);
+  --text-h3--letter-spacing: -0.2px;
+  --text-h4: 1rem;
+  --text-h4--line-height: var(--type-h4-leading);
+  --text-body: var(--type-body-size);
+  --text-body--line-height: var(--type-body-leading);
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.25rem;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-overline: 0.6875rem;
+  --text-overline--line-height: 1rem;
+  --text-tiny: var(--type-tiny-size);
+  --text-tiny--line-height: var(--type-tiny-leading);
+  --text-hero: 2.25rem;
+  --text-hero--line-height: 2.75rem;
+  --text-amount-lg: 1.5rem;
+  --text-amount-lg--line-height: 2rem;
+  --text-amount-md: 1.125rem;
+  --text-amount-md--line-height: 1.625rem;
+  --text-amount-sm: 0.875rem;
+  --text-amount-sm--line-height: 1.25rem;
 
   --text-xs: 0.75rem;
   --text-xs--line-height: calc(1 / 0.75);
@@ -96,10 +139,18 @@
   --text-9xl: 8rem;
   --text-9xl--line-height: 1;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px rgb(0 0 0 / 0.07);
+  --shadow-lg: 0 10px 15px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px rgb(0 0 0 / 0.1);
+
+  --breakpoint-xs: 30rem;
 }
 
 /* LIGHT MODE */
@@ -114,44 +165,69 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 30 40% 98%;
-  --foreground: 226 50% 14.9%;
-  --border: 38 21.6% 90%;
+  --background: 210 12.5% 96.9%;
+  --foreground: 204 24.6% 12%;
+  --border: 202 16.9% 87.3%;
   --card: 0 0% 100%;
-  --card-foreground: 226 50% 14.9%;
-  --sidebar: 30 40% 98%;
-  --sidebar-foreground: 226 50% 14.9%;
-  --sidebar-border: 38 21.6% 90%;
-  --sidebar-primary: 225 71.7% 24.9%;
-  --sidebar-primary-foreground: 30 40% 98%;
-  --sidebar-accent: 38 20% 92.2%;
-  --sidebar-accent-foreground: 226 50% 14.9%;
-  --sidebar-ring: 225 71.7% 24.9%;
+  --card-foreground: 204 24.6% 12%;
+  --sidebar: 210 12.5% 96.9%;
+  --sidebar-foreground: 204 24.6% 12%;
+  --sidebar-border: 202 16.9% 87.3%;
+  --sidebar-primary: 196 86.1% 31%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 202 22.2% 92.9%;
+  --sidebar-accent-foreground: 204 24.6% 12%;
+  --sidebar-ring: 196 86.1% 31%;
   --popover: 0 0% 100%;
-  --popover-foreground: 226 50% 14.9%;
-  --primary: 225 71.7% 24.9%;
-  --primary-foreground: 30 40% 98%;
-  --secondary: 37 93.5% 58%;
-  --secondary-foreground: 226 50% 14.9%;
-  --muted: 38 20% 92.2%;
-  --muted-foreground: 226 14.8% 45.1%;
-  --accent: 38 20% 92.2%;
-  --accent-foreground: 226 50% 14.9%;
-  --destructive: 0 84.3% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --input: 38 21.6% 90%;
-  --ring: 225 71.7% 24.9%;
-  --chart-1: 225 71.7% 24.9%;
-  --chart-2: 37 93.5% 58%;
-  --chart-3: 226 70.9% 64.9%;
-  --chart-4: 226 14.8% 45.1%;
-  --chart-5: 0 84.3% 60%;
+  --popover-foreground: 204 24.6% 12%;
+  --primary: 196 86.1% 31%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 202 22.2% 92.9%;
+  --secondary-foreground: 204 24.6% 12%;
+  --muted: 204 17.2% 94.3%;
+  --muted-foreground: 205 9.3% 40.2%;
+  --accent: 202 22.2% 92.9%;
+  --accent-foreground: 204 24.6% 12%;
+  --destructive: 202 22.2% 92.9%;
+  --destructive-foreground: 204 24.6% 12%;
+  --positive: 157 72.6% 24.3%;
+  --positive-background: 150 33.3% 92.9%;
+  --negative: 356 57.3% 45.9%;
+  --negative-background: 356 51.7% 94.3%;
+  --warning: 29 83.2% 32.7%;
+  --warning-background: 36 75% 92.2%;
+  --support: 196 86.1% 31%;
+  --support-hover: 196 87.4% 24.9%;
+  --support-foreground: 0 0% 100%;
+  --disabled: 202 7.4% 57.6%;
+  --surface-hover: 204 17.2% 94.3%;
+  --input: 205 9.1% 52.5%;
+  --ring: 196 86.1% 31%;
+  --chart-1: 157 72.6% 24.3%;
+  --chart-2: 356 57.3% 45.9%;
+  --chart-3: 196 86.1% 31%;
+  --chart-4: 29 68.4% 42.2%;
+  --chart-5: 186 29.7% 39.6%;
 
-  --app-font-sans: Plus Jakarta Sans, sans-serif;
-  --app-font-serif: Fraunces, serif;
+  --app-font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --app-font-serif: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --app-font-mono: Menlo, monospace;
   --radius: 0.75rem;
   --spacing: 0.25rem;
+
+  --font-heading: var(--app-font-serif);
+  --font-body: var(--app-font-sans);
+  --type-h1-size: 28px;
+  --type-h1-leading: 36px;
+  --type-h2-size: 22px;
+  --type-h2-leading: 30px;
+  --type-h3-size: 18px;
+  --type-h3-leading: 26px;
+  --type-h4-leading: 22px;
+  --type-body-size: 15px;
+  --type-body-leading: 24px;
+  --type-tiny-size: 11px;
+  --type-tiny-leading: 16px;
 
   /* Computed contrast borders (fallback then modern color-mix syntax). */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
@@ -174,46 +250,174 @@
 }
 
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255,255,255, .07);
+  --badge-outline: rgba(255,255,255, .035);
 
   --opaque-button-border-intensity: 9;  /* In terms of percentages */
 
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255,255,255, .025);
+  --elevate-2: rgba(255,255,255, .055);
 
-  --background: 226 49% 10%;
-  --foreground: 30 40% 98%;
-  --border: 226 29.4% 20%;
-  --card: 226 41% 12%;
-  --card-foreground: 30 40% 98%;
-  --sidebar: 226 41% 12%;
-  --sidebar-foreground: 30 40% 98%;
-  --sidebar-border: 226 29.4% 20%;
-  --sidebar-primary: 226 70.9% 64.9%;
-  --sidebar-primary-foreground: 226 49% 10%;
-  --sidebar-accent: 226 29.4% 20%;
-  --sidebar-accent-foreground: 30 40% 98%;
-  --sidebar-ring: 226 70.9% 64.9%;
-  --popover: 226 41% 12%;
-  --popover-foreground: 30 40% 98%;
-  --primary: 226 70.9% 64.9%;
-  --primary-foreground: 226 49% 10%;
-  --secondary: 37 93.5% 58%;
-  --secondary-foreground: 226 49% 10%;
-  --muted: 226 29.4% 20%;
-  --muted-foreground: 226 20.3% 70%;
-  --accent: 226 29.4% 20%;
-  --accent-foreground: 30 40% 98%;
-  --destructive: 0 70.2% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --input: 226 29.4% 20%;
-  --ring: 226 70.9% 64.9%;
-  --chart-1: 226 70.9% 64.9%;
-  --chart-2: 37 93.5% 58%;
-  --chart-3: 226 20.3% 70%;
-  --chart-4: 0 84.3% 60%;
-  --chart-5: 30 40% 98%;
+  --background: 207 20.9% 8.4%;
+  --foreground: 200 17.6% 96.7%;
+  --border: 206 12.7% 21.6%;
+  --card: 207 17.5% 12.4%;
+  --card-foreground: 200 17.6% 96.7%;
+  --sidebar: 207 20.9% 8.4%;
+  --sidebar-foreground: 200 17.6% 96.7%;
+  --sidebar-border: 206 12.7% 21.6%;
+  --sidebar-primary: 194 58.9% 58%;
+  --sidebar-primary-foreground: 207 20.9% 8.4%;
+  --sidebar-accent: 206 15.9% 17.3%;
+  --sidebar-accent-foreground: 200 17.6% 96.7%;
+  --sidebar-ring: 194 58.9% 58%;
+  --popover: 207 17.5% 12.4%;
+  --popover-foreground: 200 17.6% 96.7%;
+  --primary: 194 58.9% 58%;
+  --primary-foreground: 207 20.9% 8.4%;
+  --secondary: 206 15.9% 17.3%;
+  --secondary-foreground: 200 17.6% 96.7%;
+  --muted: 206 17.1% 16.1%;
+  --muted-foreground: 203 8.1% 68.4%;
+  --accent: 206 15.9% 17.3%;
+  --accent-foreground: 200 17.6% 96.7%;
+  --destructive: 206 15.9% 17.3%;
+  --destructive-foreground: 200 17.6% 96.7%;
+  --positive: 153 52% 55.9%;
+  --positive-background: 152 27% 12.4%;
+  --negative: 358 100% 74.1%;
+  --negative-background: 351 25.6% 15.3%;
+  --warning: 28 83.3% 64.7%;
+  --warning-background: 26 32.5% 15.1%;
+  --support: 194 58.9% 58%;
+  --support-hover: 194 60% 65.7%;
+  --support-foreground: 207 20.9% 8.4%;
+  --disabled: 205 7.6% 44.1%;
+  --surface-hover: 206 15.9% 17.3%;
+  --input: 205 10.2% 50.2%;
+  --ring: 194 58.9% 58%;
+  --chart-1: 153 52% 55.9%;
+  --chart-2: 358 100% 74.1%;
+  --chart-3: 194 58.9% 58%;
+  --chart-4: 28 83.3% 64.7%;
+  --chart-5: 185 27.4% 56.3%;
+
+  /*
+   * Legacy palette utility normalization.
+   * Components should prefer semantic utilities, but these central aliases
+   * keep older direct palette classes calm until they are migrated.
+   */
+  :is(
+    [class*="text-green-"],
+    [class*="text-emerald-"],
+    [class*="text-lime-"],
+    [class*="text-teal-"]
+  ) {
+    color: hsl(var(--positive)) !important;
+  }
+
+  :is(
+    [class*="bg-green-"],
+    [class*="bg-emerald-"],
+    [class*="bg-lime-"],
+    [class*="bg-teal-"]
+  ) {
+    background-color: hsl(var(--positive-background)) !important;
+  }
+
+  :is(
+    [class*="border-green-"],
+    [class*="border-emerald-"],
+    [class*="border-lime-"],
+    [class*="border-teal-"]
+  ) {
+    border-color: hsl(var(--positive) / 0.32) !important;
+  }
+
+  :is(
+    [class*="text-red-"],
+    [class*="text-rose-"]
+  ) {
+    color: hsl(var(--negative)) !important;
+  }
+
+  :is(
+    [class*="bg-red-"],
+    [class*="bg-rose-"]
+  ) {
+    background-color: hsl(var(--negative-background)) !important;
+  }
+
+  :is(
+    [class*="border-red-"],
+    [class*="border-rose-"]
+  ) {
+    border-color: hsl(var(--negative) / 0.32) !important;
+  }
+
+  :is(
+    [class*="text-amber-"],
+    [class*="text-yellow-"],
+    [class*="text-orange-"]
+  ) {
+    color: hsl(var(--warning)) !important;
+  }
+
+  :is(
+    [class*="bg-amber-"],
+    [class*="bg-yellow-"],
+    [class*="bg-orange-"]
+  ) {
+    background-color: hsl(var(--warning-background)) !important;
+  }
+
+  :is(
+    [class*="border-amber-"],
+    [class*="border-yellow-"],
+    [class*="border-orange-"]
+  ) {
+    border-color: hsl(var(--warning) / 0.32) !important;
+  }
+
+  :is(
+    [class*="text-blue-"],
+    [class*="text-cyan-"]
+  ) {
+    color: hsl(var(--chart-3)) !important;
+  }
+
+  :is(
+    [class*="bg-blue-"],
+    [class*="bg-cyan-"]
+  ) {
+    background-color: hsl(var(--muted)) !important;
+  }
+
+  :is(
+    [class*="border-blue-"],
+    [class*="border-cyan-"]
+  ) {
+    border-color: hsl(var(--chart-3) / 0.3) !important;
+  }
+
+  :is(
+    [class*="text-violet-"],
+    [class*="text-purple-"]
+  ) {
+    color: hsl(var(--chart-4)) !important;
+  }
+
+  :is(
+    [class*="bg-violet-"],
+    [class*="bg-purple-"],
+    [class*="bg-pink-"]
+  ) {
+    background-color: hsl(var(--muted)) !important;
+  }
+
+  [class*="text-pink-"] {
+    color: hsl(var(--chart-5)) !important;
+  }
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -240,11 +444,63 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply bg-background font-sans text-foreground antialiased;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1 {
+    font-family: var(--font-heading);
+    font-size: var(--type-h1-size);
+    font-weight: 600;
+    line-height: var(--type-h1-leading);
+    letter-spacing: -0.5px;
+  }
+
+  h2 {
+    font-size: var(--type-h2-size);
+    font-weight: 600;
+    line-height: var(--type-h2-leading);
+    letter-spacing: -0.3px;
+  }
+
+  h3 {
+    font-size: var(--type-h3-size);
+    font-weight: 600;
+    line-height: var(--type-h3-leading);
+    letter-spacing: -0.2px;
+  }
+
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: var(--type-h4-leading);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
 @layer utilities {
+  .amount,
+  .currency,
+  .financial-number,
+  [data-type="money"] {
+    font-family: var(--font-body);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
@@ -315,5 +571,35 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --type-h1-size: 32px;
+    --type-h1-leading: 40px;
+    --type-h2-size: 24px;
+    --type-h2-leading: 32px;
+    --type-h3-size: 20px;
+    --type-h3-leading: 28px;
+    --type-h4-leading: 24px;
+    --type-body-size: 14px;
+    --type-body-leading: 22px;
+    --type-tiny-size: 10px;
+    --type-tiny-leading: 14px;
+  }
+}
+
+/* Legacy compact utilities may not bypass EzyRetire's readability floors. */
+.text-\[8px\],
+.text-\[9px\] {
+  font-size: 10px;
+}
+
+@media (max-width: 1023px) {
+  .text-\[8px\],
+  .text-\[9px\],
+  .text-\[10px\] {
+    font-size: 11px;
   }
 }

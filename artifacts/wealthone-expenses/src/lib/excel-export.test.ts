@@ -9,9 +9,12 @@ import {
   sanitizeSheetName,
 } from "./excel-export.ts";
 import {
+  buildBudgetReportSheets,
+  buildCompleteFinancialPlanSheets,
   buildIncomeReportSheets,
   buildInvestmentReportSheets,
   buildLoanReportSheets,
+  buildPlannedExpenseReportSheets,
   buildTransactionReportSheets,
 } from "./excel-report-builders.ts";
 import { investmentProjectedValue } from "./retirement-projection.ts";
@@ -46,12 +49,57 @@ test("transaction report preserves filtered input order and local UI dates", () 
   assertDateCell(workbook.Sheets.Transactions.A3, 2026, 1, 2);
 });
 
-test("income report preserves order, status, and typed optional dates", () => {
+test("budget report covers legacy monthly budgets and new cadence due details", () => {
+  const workbook = buildExcelWorkbook(buildBudgetReportSheets([
+    { category: "Groceries", monthlyLimit: 6000 },
+    { category: "Insurance", monthlyLimit: 0, windows: [
+      { id: "annual", monthlyLimit: 12000, cadence: "yearly", annualMonth: 2, endMode: "lifelong" },
+      { id: "future", monthlyLimit: 9000, cadence: "one-time", startDate: "2027-08-09", endMode: "custom", endDate: "2027-08-09" },
+    ] },
+  ]));
+  const sheet = workbook.Sheets["Budget Plan"];
+  assert.equal(sheet.B2.v, "Monthly");
+  assert.equal(sheet.D2.v, 6000);
+  assert.equal(sheet.B3.v, "Yearly");
+  assert.equal(sheet.D3.v, 1000);
+  assert.equal(sheet.E3.v, "March");
+  assert.equal(sheet.D4.v, 0);
+  assertDateCell(sheet.F4, 2027, 8, 9);
+  assertDateCell(sheet.G4, 2027, 8, 9);
+  assertDateCell(sheet.I4, 2027, 8, 9);
+});
+
+test("planned future expense report uses typed dates and explicit inflation assumptions", () => {
+  const workbook = buildExcelWorkbook(buildPlannedExpenseReportSheets([
+    { id: "default", name: "College", category: "Education", amount: 100000, expectedDate: "2027-01-01", createdAt: "" },
+    { id: "custom", name: "Car", category: "Vehicle", amount: 200000, expectedDate: "2028-01-01", customInflationRate: 4, createdAt: "" },
+  ], { asOf: new Date(2026, 0, 1) }));
+  const sheet = workbook.Sheets["Planned Future Expenses"];
+  assert.equal(sheet.C2.t, "n");
+  assertDateCell(sheet.D2, 2027, 1, 1);
+  assert.equal(sheet.E2.v, 8);
+  assert.equal(sheet.F2.v, "Category default");
+  assert.equal(sheet.G2.v, 108000);
+  assert.equal(sheet.E3.v, 4);
+  assert.equal(sheet.F3.v, "Custom");
+});
+
+test("income report preserves source details and exports received income separately", () => {
   const sources = [
     { id: "future", name: "Future", type: "Other", frequency: "One-time", amount: 50, date: "2030-03-04", recurring: false, createdAt: "" },
     { id: "ended", name: "Ended", type: "Rental", frequency: "Monthly", amount: 100, date: "2020-01-02", recurring: true, incomeEndMode: "custom", incomeEndDate: "2024-06-30", createdAt: "" },
   ] as any;
-  const workbook = buildExcelWorkbook(buildIncomeReportSheets(sources, { now: new Date(2026, 0, 1) }));
+  const workbook = buildExcelWorkbook(buildIncomeReportSheets(sources, {
+    now: new Date(2026, 0, 1),
+    receipts: [{
+      id: "receipt-1",
+      incomeSourceId: "ended",
+      receivedDate: "2024-06-03",
+      amount: 75,
+      note: "Partial rent",
+      createdAt: "2024-06-03T12:00:00.000Z",
+    }],
+  }));
   const sheet = workbook.Sheets["Income Sources"];
   assert.equal(sheet.A2.v, "Future");
   assert.equal(sheet.A3.v, "Ended");
@@ -60,6 +108,11 @@ test("income report preserves order, status, and typed optional dates", () => {
   assertDateCell(sheet.J2, 2030, 3, 4);
   assert.equal(sheet.L2.v, "");
   assertDateCell(sheet.L3, 2024, 6, 30);
+  const receipts = workbook.Sheets["Income Receipts"];
+  assert.equal(receipts.A2.v, "Ended");
+  assertDateCell(receipts.B2, 2024, 6, 3);
+  assert.equal(receipts.C2.v, 75);
+  assert.equal(receipts.D2.v, "Partial rent");
 });
 
 test("investment report preserves holdings and typed schedule/fund dates", () => {
@@ -147,9 +200,24 @@ test("loan report preserves order and typed start, payoff, and retirement dates"
   const sheet = workbook.Sheets.Loans;
   assert.equal(sheet.A2.v, "B");
   assert.equal(sheet.A3.v, "A");
-  assertDateCell(sheet.H2, 2025, 2, 3);
-  assert.equal(sheet.M2.t, "d");
-  assertDateCell(sheet.O2, 2035, 6, 7);
+  assert.equal(sheet.D2.v, "EMI (amortizing)");
+  assertDateCell(sheet.I2, 2025, 2, 3);
+  assert.equal(sheet.O2.t, "d");
+  assertDateCell(sheet.Q2, 2035, 6, 7);
+});
+
+test("loan report identifies bullet structures and principal due at maturity", () => {
+  const loans = [
+    { id: "bullet", name: "Bullet", type: "Other", sanctionedPrincipal: 120000, outstandingPrincipal: 120000, annualInterestRate: 12, interestType: "Fixed", totalTenureMonths: 12, startDate: "2026-01-01", emi: 0, repaymentType: "bullet", prepayments: 0, createdAt: "" },
+    { id: "interest", name: "Interest only", type: "Other", sanctionedPrincipal: 120000, outstandingPrincipal: 90000, annualInterestRate: 12, interestType: "Fixed", totalTenureMonths: 12, startDate: "2026-01-01", emi: 0, repaymentType: "interest-only-plus-bullet", prepayments: 0, createdAt: "" },
+  ] as any;
+  const sheet = buildExcelWorkbook(buildLoanReportSheets(loans, { now: new Date(2026, 0, 1) })).Sheets.Loans;
+  assert.equal(sheet.D2.v, "Bullet");
+  assert.equal(sheet.J2.v, 0);
+  assert.equal(sheet.K2.v, 120000);
+  assert.equal(sheet.D3.v, "Interest-only + principal bullet");
+  assert.equal(sheet.J3.v, 900);
+  assert.equal(sheet.K3.v, 90000);
 });
 
 test("filename and worksheet names are safe and bounded", () => {
@@ -183,4 +251,57 @@ test("workbook construction rejects an export with no rows", () => {
     () => buildExcelWorkbook([{ name: "Empty", rows: [], columns: [] }]),
     /no rows/i,
   );
+});
+
+test("complete financial plan keeps stable sheet order, skips empty sections, and represents legacy and current records", () => {
+  const data = {
+    expenses: [
+      { id: "transaction", merchant: "Store", date: "2026-01-02", amount: 25, category: "Other", paymentMethod: "Cash", reimbursable: false, recurring: false, createdAt: "" },
+    ],
+    budgets: [
+      { category: "Legacy monthly", monthlyLimit: 500 },
+      { category: "Current yearly", monthlyLimit: 0, windows: [{ id: "yearly", monthlyLimit: 1200, cadence: "yearly", annualMonth: 0, endMode: "lifelong" }] },
+    ],
+    incomeSources: [
+      { id: "legacy-income", name: "Legacy salary", type: "Salary", frequency: "Monthly", amount: 1000, date: "2020-01-01", recurring: true, createdAt: "" },
+      { id: "current-income", name: "Current bonus", type: "Bonus", frequency: "One-time", amount: 200, date: "2027-02-03", recurring: false, createdAt: "" },
+    ],
+    investments: [
+      { id: "holding", name: "Index fund", assetClass: "Equity", investedAmount: 100, currentValue: 110, monthlyContribution: 0, expectedReturn: 8, createdAt: "" },
+    ],
+    loans: [
+      { id: "loan", name: "Home loan", type: "Home", sanctionedPrincipal: 1000, outstandingPrincipal: 500, annualInterestRate: 8, interestType: "Fixed", totalTenureMonths: 12, startDate: "2025-01-01", emi: 50, prepayments: 0, createdAt: "" },
+    ],
+    plannedExpenses: [],
+    netWorthSnapshots: [],
+    emergencyFund: { targetMonths: 6, reserveBalance: 0, monthlyContribution: 0 },
+    retirementInputs: {
+      dateOfBirth: "1990-01-01", targetRetirementAge: 60, lifeExpectancy: 85,
+      generalInflation: 6, salaryGrowth: 8, monthlyContributionOverride: 0, investSurplus: false,
+    },
+    profileInputs: {},
+    uiPreferences: {},
+  } as any;
+
+  const workbook = buildExcelWorkbook(
+    buildCompleteFinancialPlanSheets(data, { asOf: new Date(2026, 0, 1) }),
+  );
+
+  assert.deepEqual(workbook.SheetNames, [
+    "Income Sources",
+    "Budget Plan",
+    "Holdings",
+    "Annual Funds",
+    "Yearly Outlook",
+    "Loans",
+    "Transactions",
+  ]);
+  assert.equal(workbook.Sheets["Income Sources"].A2.v, "Legacy salary");
+  assert.equal(workbook.Sheets["Income Sources"].A3.v, "Current bonus");
+  assert.equal(workbook.Sheets["Budget Plan"].A2.v, "Legacy monthly");
+  assert.equal(workbook.Sheets["Budget Plan"].A3.v, "Current yearly");
+  assert.equal(workbook.Sheets.Holdings.A2.v, "Index fund");
+  assert.equal(workbook.Sheets.Loans.A2.v, "Home loan");
+  assert.equal(workbook.Sheets.Transactions.B2.v, "Store");
+  assert.equal(workbook.Sheets["Planned Future Expenses"], undefined);
 });

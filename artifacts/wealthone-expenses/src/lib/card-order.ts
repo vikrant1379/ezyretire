@@ -20,6 +20,7 @@ export type InvestmentSchedulingContext = {
 };
 
 export type UiPreferences = {
+  dashboardTourDismissed: boolean;
   investmentOrder: string[];
   loanOrder: string[];
   incomeOrder: string[];
@@ -80,6 +81,7 @@ function asSortChoice<By extends string>(
 
 export function defaultUiPreferences(): UiPreferences {
   return {
+    dashboardTourDismissed: false,
     investmentOrder: [],
     loanOrder: [],
     incomeOrder: [],
@@ -93,6 +95,7 @@ export function defaultUiPreferences(): UiPreferences {
 export function normalizeUiPreferences(value: unknown): UiPreferences {
   const record = isRecord(value) ? value : {};
   return {
+    dashboardTourDismissed: record.dashboardTourDismissed === true,
     investmentOrder: asIdList(record.investmentOrder),
     loanOrder: asIdList(record.loanOrder),
     incomeOrder: asIdList(record.incomeOrder),

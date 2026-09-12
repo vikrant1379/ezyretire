@@ -1,8 +1,6 @@
 import { useBudgets } from "@/hooks/use-budgets";
 import { useExpenses } from "@/hooks/use-expenses";
-import { useQuery } from "@tanstack/react-query";
-import { fetchFinancialData } from "@/lib/financial-api";
-import { FINANCIAL_DATA_KEY } from "@/hooks/use-financial-write";
+import { useUiPreferences } from "@/hooks/use-ui-preferences";
 import {
   CORE_CATEGORIES,
   getBudgetCategories,
@@ -38,13 +36,10 @@ export function useAllCategories() {
 export function useBudgetCategories() {
   const { data: budgets = [] } = useBudgets();
   const { data: expenses = [] } = useExpenses();
-  const { data } = useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
-  });
+  const { data: uiPreferences } = useUiPreferences();
   return getBudgetCategories(
     budgets,
     expenses,
-    data?.uiPreferences.archivedPlanningCategories ?? [],
+    uiPreferences?.archivedPlanningCategories ?? [],
   );
 }

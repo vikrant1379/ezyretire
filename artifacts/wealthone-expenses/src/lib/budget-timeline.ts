@@ -21,9 +21,22 @@ function parseMonth(dateStr: string | undefined): Date | null {
 
 export function analyzeBudgetTimeline(windows: UIBudgetWindow[], retirementEndDate?: string) {
   const issues: TimelineIssue[] = [];
+  windows.forEach((window) => {
+    if (window.cadence === "yearly"
+      && (!Number.isInteger(window.annualMonth) || (window.annualMonth ?? -1) < 0 || (window.annualMonth ?? 12) > 11)) {
+      issues.push({
+        type: "invalid-date",
+        windowId: window.id,
+        reason: "Choose the month when this yearly expense is due.",
+      });
+    }
+  });
+  // The change story describes recurring monthly limits. Yearly charges are
+  // intentionally presented as upcoming occurrences instead.
+  const recurringWindows = windows.filter((window) => window.cadence !== "yearly");
   
   // Resolve dates for each window
-  const resolvedWindows = windows.map(w => {
+  const resolvedWindows = recurringWindows.map(w => {
     let start = parseMonth(w.startDate) || startOfMonth(new Date());
     let end: Date | null = null;
     

@@ -13,7 +13,21 @@ export type Expense = {
   createdAt: string;
 };
 
+export type IncomeReceipt = {
+  id: string;
+  incomeSourceId: string;
+  receivedDate: string;
+  amount: number;
+  note?: string;
+  createdAt: string;
+};
+
+export function isBudgetExpense(expense: Pick<Expense, "reimbursable">) {
+  return !expense.reimbursable;
+}
+
 export type BudgetWindowEndMode = "lifelong" | "retirement" | "custom";
+export type BudgetCadence = "monthly" | "quarterly" | "half-yearly" | "yearly" | "one-time";
 
 /**
  * A monthly amount that is effective for an inclusive range of calendar
@@ -23,6 +37,9 @@ export type BudgetWindowEndMode = "lifelong" | "retirement" | "custom";
 export type BudgetWindow = {
   id: string;
   monthlyLimit: number;
+  cadence?: BudgetCadence;
+  /** Zero-based calendar month in which a yearly amount is due. */
+  annualMonth?: number;
   startDate?: string;
   endMode: BudgetWindowEndMode;
   endDate?: string;
@@ -35,6 +52,21 @@ export type Budget = {
   monthlyLimit: number;
   windows?: BudgetWindow[];
 };
+
+export const BUDGET_CADENCES: Array<{ value: BudgetCadence; label: string; months: number | null }> = [
+  { value: "monthly", label: "Monthly", months: 1 },
+  { value: "quarterly", label: "Quarterly", months: 3 },
+  { value: "half-yearly", label: "Half-yearly", months: 6 },
+  { value: "yearly", label: "Yearly", months: 12 },
+  { value: "one-time", label: "Dated one-time", months: null },
+];
+
+export function budgetMonthlyEquivalent(window: Pick<BudgetWindow, "monthlyLimit" | "cadence">) {
+  const amount = normalizedBudgetAmount(window.monthlyLimit);
+  const cadence = window.cadence ?? "monthly";
+  const months = BUDGET_CADENCES.find((item) => item.value === cadence)?.months;
+  return months ? amount / months : 0;
+}
 
 const budgetMonth = (date: Date) => date.getFullYear() * 12 + date.getMonth();
 
@@ -84,6 +116,18 @@ export function normalizeBudget(budget: Budget, budgetIndex = 0): Budget {
     return [{
       id: rawId || `budget-${budgetIndex + 1}-window-${windowIndex + 1}`,
       monthlyLimit: normalizedBudgetAmount(raw.monthlyLimit ?? raw.amount),
+      cadence: raw.cadence === "quarterly"
+        || raw.cadence === "half-yearly"
+        || raw.cadence === "yearly"
+        || raw.cadence === "one-time"
+        ? raw.cadence
+        : "monthly",
+      ...(raw.cadence === "yearly"
+        && Number.isInteger(Number(raw.annualMonth))
+        && Number(raw.annualMonth) >= 0
+        && Number(raw.annualMonth) <= 11
+        ? { annualMonth: Number(raw.annualMonth) }
+        : {}),
       ...(startDate ? { startDate } : {}),
       endMode: requestedEndMode,
       ...(endDate ? { endDate } : {}),
@@ -137,6 +181,14 @@ export function effectiveBudgetWindowAmount(
   retirementDate?: Date,
 ) {
   if (!isBudgetWindowActive(window, asOf, retirementDate)) return 0;
+  const cadence = window.cadence ?? "monthly";
+  if (cadence === "yearly" && window.annualMonth !== asOf.getMonth()) return 0;
+  if (cadence === "quarterly" || cadence === "half-yearly" || cadence === "one-time") {
+    const start = window.startDate ? parseDateOnly(window.startDate) : undatedAnchor;
+    const elapsed = budgetMonth(asOf) - budgetMonth(start);
+    const interval = cadence === "quarterly" ? 3 : cadence === "half-yearly" ? 6 : 0;
+    if (elapsed < 0 || (cadence === "one-time" ? elapsed !== 0 : elapsed % interval !== 0)) return 0;
+  }
   const amount = normalizedBudgetAmount(window.monthlyLimit);
   const rate = Math.min(0.25, normalizedBudgetAmount(annualInflationPercent) / 100);
   const start = window.startDate ? parseDateOnly(window.startDate) : undatedAnchor;
@@ -166,6 +218,26 @@ export function budgetTotalForMonth(
   );
 }
 
+export function nextYearlyBudgetOccurrence(
+  window: BudgetWindow,
+  from = new Date(),
+  retirementDate?: Date,
+) {
+  const annualMonth = window.annualMonth;
+  if (window.cadence !== "yearly" || !Number.isInteger(annualMonth)) return undefined;
+  const fromMonth = new Date(from.getFullYear(), from.getMonth(), 1);
+  let occurrence = new Date(fromMonth.getFullYear(), annualMonth!, 1);
+  if (occurrence < fromMonth) occurrence = new Date(fromMonth.getFullYear() + 1, annualMonth!, 1);
+  const lastPossibleYear = window.endMode === "custom" && window.endDate
+    ? parseDateOnly(window.endDate).getFullYear()
+    : occurrence.getFullYear() + 200;
+  while (occurrence.getFullYear() <= lastPossibleYear) {
+    if (isBudgetWindowActive(window, occurrence, retirementDate)) return occurrence;
+    occurrence = new Date(occurrence.getFullYear() + 1, annualMonth!, 1);
+  }
+  return undefined;
+}
+
 export function hasEffectiveBudgetPlan(budgets: Budget[]) {
   return normalizeBudgets(budgets).some((budget) =>
     (budget.windows ?? []).some((window) => normalizedBudgetAmount(window.monthlyLimit) > 0)
@@ -187,7 +259,14 @@ export function validateBudgetSchedule(budgets: Budget[]) {
           errors.push(`${label} ends before it starts.`);
         }
         if (!Number.isFinite(Number(window.monthlyLimit)) || Number(window.monthlyLimit) < 0) {
-          errors.push(`${label} has an invalid monthly amount.`);
+          errors.push(`${label} has an invalid amount.`);
+        }
+        if (window.cadence === "yearly"
+          && (!Number.isInteger(window.annualMonth) || (window.annualMonth ?? -1) < 0 || (window.annualMonth ?? 12) > 11)) {
+          errors.push(`${label} needs the month when its yearly expense is due.`);
+        }
+        if (window.cadence === "one-time" && !validBudgetDate(window.startDate)) {
+          errors.push(`${label} needs the date when its one-time expense is due.`);
         }
       });
     }
@@ -341,6 +420,7 @@ export type Investment = {
 
 export type LoanType = 'Home' | 'Auto' | 'Personal' | 'Education' | 'Other';
 export type InterestType = 'Fixed' | 'Floating';
+export type LoanRepaymentType = "emi" | "bullet" | "interest-only-plus-bullet";
 
 export type Loan = {
   id: string;
@@ -353,6 +433,8 @@ export type Loan = {
   totalTenureMonths: number;
   startDate: string;
   emi: number;
+  /** Missing on legacy records means a standard amortizing EMI. */
+  repaymentType?: LoanRepaymentType;
   prepayments: number;
   notes?: string;
   createdAt: string;
@@ -379,32 +461,54 @@ export function isLoanStarted(loan: Pick<Loan, "startDate">, asOf = new Date()) 
 export function isCurrentLoan(loan: Loan, asOf = new Date()) {
   return Number.isFinite(Number(loan.outstandingPrincipal))
     && Number(loan.outstandingPrincipal) > 0
-    && Number.isFinite(Number(loan.emi))
-    && Number(loan.emi) > 0
+    && (
+      loan.repaymentType === "bullet"
+      || loan.repaymentType === "interest-only-plus-bullet"
+      || (Number.isFinite(Number(loan.emi)) && Number(loan.emi) > 0)
+    )
     && isLoanStarted(loan, asOf);
 }
 
 /** Active means currently due today, not merely a future loan with an EMI. */
-export function isActiveLoan(loan: Loan) {
-  return isCurrentLoan(loan);
+export function isActiveLoan(loan: Loan, asOf = new Date()) {
+  return isCurrentLoan(loan, asOf);
+}
+
+/** Current monthly cash burden; principal bullets are handled at maturity. */
+export function loanMonthlyPayment(
+  loan: Pick<Loan, "repaymentType" | "outstandingPrincipal" | "annualInterestRate" | "emi">,
+) {
+  const principal = Number(loan.outstandingPrincipal);
+  if (!Number.isFinite(principal) || principal <= 0) return 0;
+  const repaymentType = loan.repaymentType ?? "emi";
+  if (repaymentType === "bullet") return 0;
+  if (repaymentType === "interest-only-plus-bullet") {
+    const annualRate = Number(loan.annualInterestRate);
+    return Number.isFinite(annualRate) && annualRate > 0
+      ? principal * annualRate / 1200
+      : 0;
+  }
+  const emi = Number(loan.emi);
+  return Number.isFinite(emi) ? Math.max(0, emi) : 0;
 }
 
 export function findMatchingEmiLoan(
   expense: Pick<Expense, "amount" | "merchant" | "note" | "linkedLoanId">,
   loans: Loan[],
   requireLoanText = true,
+  asOf = new Date(),
 ) {
   if (expense.linkedLoanId) {
     return loans.find((loan) => loan.id === expense.linkedLoanId);
   }
 
-  const activeLoans = loans.filter(isActiveLoan);
+  const activeLoans = loans.filter((loan) => isActiveLoan(loan, asOf));
   const amount = Number(expense.amount);
   if (!Number.isFinite(amount) || amount <= 0) return undefined;
   const text = normalizeLoanText(`${expense.merchant} ${expense.note ?? ""}`);
 
   return activeLoans.find((loan) => {
-    const emi = Number(loan.emi);
+    const emi = loanMonthlyPayment(loan);
     const amountMatches = Math.abs(amount - emi) <= Math.max(1, emi * 0.01);
     if (!amountMatches) return false;
     if (!requireLoanText) return true;
@@ -417,12 +521,12 @@ export function findMatchingEmiLoan(
   });
 }
 
-export function isLivingExpense(expense: Expense, loans: Loan[] = []) {
+export function isLivingExpense(expense: Expense, loans: Loan[] = [], asOf = new Date()) {
   return !expense.reimbursable
     && Number.isFinite(Number(expense.amount))
     && Number(expense.amount) > 0
     && !expense.linkedLoanId
-    && !findMatchingEmiLoan(expense, loans);
+    && !findMatchingEmiLoan(expense, loans, true, asOf);
 }
 
 export function getLinkedLoanName(
@@ -442,6 +546,41 @@ export type RetirementInputs = {
   salaryGrowth: number;
   monthlyContributionOverride?: number;
   investSurplus?: boolean;
+  /** Optional for plans saved before lifestyle presets were introduced. */
+  lifestyleChoice?: RetirementLifestyle;
+  /** Current monthly expense used only when lifestyleChoice is Custom. */
+  customLifestyleExpense?: number;
+  /** Percentage applied to the saved retirement spending schedule. */
+  retirementSpendingAdjustmentPercent?: number;
+  pensionSources?: PensionSource[];
+};
+
+export type RetirementLifestyle = "Basic" | "Comfortable" | "Premium" | "Custom";
+
+export type PensionSource = {
+  id: string;
+  name: string;
+  monthlyAmount: number;
+  /** Age at which this income starts. Undefined means the target retirement age. */
+  startAge?: number;
+  /** Percentage by which the monthly pension rises each year. */
+  annualEscalationRate: number;
+};
+
+export type NetWorthSnapshot = {
+  /** Calendar month represented by this immutable snapshot. */
+  month: string;
+  assets: number;
+  liabilities: number;
+  netWorth: number;
+  /** Optional so snapshots recorded before financial-health scoring remain valid. */
+  healthScore?: number;
+};
+
+export type EmergencyFundPlan = {
+  targetMonths: number;
+  reserveBalance: number;
+  monthlyContribution: number;
 };
 
 export type RiskPreference = "Conservative" | "Balanced" | "Growth";
@@ -450,13 +589,417 @@ export type ProfileInputs = {
   fullName?: string;
   gender?: string;
   email?: string;
-  phone?: string;
+  phone?: string | null;
   onboardingCompleted?: boolean;
+  onboardingProgress?: OnboardingProgress;
   dateOfBirth: string;
   targetRetirementAge: number;
   lifeExpectancy: number;
   riskPreference: RiskPreference;
 };
+
+export type OnboardingProgress = {
+  currentStep: number;
+  completedSteps: number[];
+  skippedSteps: number[];
+  firstProjectionSaved?: boolean;
+  dismissed?: boolean;
+  rerunInProgress?: boolean;
+};
+
+export type PlannedExpense = {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  expectedDate: string;
+  /** Undefined uses the category default. */
+  customInflationRate?: number;
+  createdAt: string;
+};
+
+export type FinancialGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string;
+  priority: number;
+  annualInflationRate: number;
+  /** Maximum monthly surplus the user has committed to this goal. */
+  monthlyAllocation: number;
+  createdAt: string;
+};
+
+export type ReminderRecurrence = "none" | "monthly" | "yearly";
+
+export type FinancialReminder = {
+  id: string;
+  title: string;
+  date: string;
+  amount?: number;
+  recurrence: ReminderRecurrence;
+  enabled: boolean;
+  notes?: string;
+  createdAt: string;
+};
+
+export type NotificationType =
+  | "budget"
+  | "goal"
+  | "upcoming"
+  | "milestone"
+  | "retirement"
+  | "tax"
+  | "anomaly";
+
+export type NotificationPreferences = {
+  enabled: boolean;
+  types: Record<NotificationType, boolean>;
+  inApp: boolean;
+  push: boolean;
+  weeklyDigest: boolean;
+  monthlyReportEmail: boolean;
+  digestDay: number;
+  quietHours: { start: string; end: string };
+  timeZone: string;
+};
+
+export type NotificationItem = {
+  id: string;
+  dedupeKey: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  createdAt: string;
+  deliverAfter: string;
+  channels: Array<"in-app" | "push">;
+  readAt?: string;
+};
+
+export type MonthlyReportSectionId =
+  | "income-vs-expected"
+  | "expenses-vs-budget-category"
+  | "savings-amount-rate"
+  | "portfolio-value-returns-change"
+  | "net-worth-change"
+  | "retirement-date-movement"
+  | "health-score-change"
+  | "top-next-month-actions";
+
+/** Formatting is data, not an inference from a metric's numeric value. */
+export type MonthlyReportMetricFormat = "currency" | "percent" | "count" | "number";
+
+export type MonthlyReportSnapshot = {
+  id: string;
+  month: string;
+  generatedAt: string;
+  retirementForecast?: {
+    modelVersion?: number;
+    projectedRetirementMonth: string | null;
+    projectedRetirementAge: number | null;
+    asOfDate: string;
+    assumptions: {
+      targetRetirementAge: number;
+      lifeExpectancy: number;
+      generalInflation: number;
+      salaryGrowth: number;
+      monthlyContribution: number;
+      monthlySpending: number;
+      portfolioValue: number;
+      investedPrincipal?: number;
+      portfolioReturnAmount?: number;
+      expectedReturn: number;
+    };
+    projectionInputs?: {
+      expenses: Expense[];
+      budgets: Budget[];
+      incomes: IncomeSource[];
+      investments: Investment[];
+      loans: Loan[];
+      plannedExpenses: PlannedExpense[];
+      emergencyFund: EmergencyFundPlan;
+      assumptions: RetirementInputs;
+    };
+    drivers: string[];
+  };
+  sections: Array<{
+    id: MonthlyReportSectionId;
+    title: string;
+    metrics: Record<string, number>;
+    metricFormats: Record<string, MonthlyReportMetricFormat>;
+    unavailableMetrics?: string[];
+    actions: string[];
+  }>;
+};
+
+const notificationTypes: NotificationType[] = [
+  "budget", "goal", "upcoming", "milestone", "retirement", "tax", "anomaly",
+];
+
+export function defaultNotificationPreferences(): NotificationPreferences {
+  const types: Record<NotificationType, boolean> = {
+    budget: true,
+    goal: true,
+    upcoming: true,
+    milestone: true,
+    retirement: true,
+    tax: true,
+    anomaly: true,
+  };
+  return {
+    enabled: true,
+    types,
+    inApp: true,
+    push: false,
+    weeklyDigest: false,
+    monthlyReportEmail: false,
+    digestDay: 1,
+    quietHours: { start: "22:00", end: "07:00" },
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  };
+}
+
+export function normalizeGoals(value: unknown): FinancialGoal[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).flatMap((goal, index) => {
+    const name = typeof goal.name === "string" ? goal.name.trim() : "";
+    const targetDate = validCalendarDate(goal.targetDate);
+    const targetAmount = optionalFiniteAmount(goal.targetAmount);
+    if (!name || !targetDate || targetAmount === undefined || targetAmount <= 0) return [];
+    return [{
+      id: typeof goal.id === "string" && goal.id.trim() ? goal.id.trim() : `goal-${index + 1}`,
+      name,
+      targetAmount,
+      currentAmount: optionalFiniteAmount(goal.currentAmount) ?? 0,
+      targetDate,
+      priority: Math.max(1, Math.round(optionalFiniteAmount(goal.priority) ?? index + 1)),
+      annualInflationRate: Math.min(25, optionalFiniteAmount(goal.annualInflationRate) ?? 0),
+      monthlyAllocation: optionalFiniteAmount(goal.monthlyAllocation) ?? 0,
+      createdAt: typeof goal.createdAt === "string"
+        && Number.isFinite(new Date(goal.createdAt).getTime())
+        ? goal.createdAt
+        : `${targetDate}T00:00:00.000Z`,
+    }];
+  }).sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
+}
+
+export function normalizeReminders(value: unknown): FinancialReminder[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).flatMap((reminder, index) => {
+    const title = typeof reminder.title === "string" ? reminder.title.trim() : "";
+    const date = validCalendarDate(reminder.date);
+    if (!title || !date) return [];
+    const recurrence: ReminderRecurrence =
+      reminder.recurrence === "monthly" || reminder.recurrence === "yearly"
+        ? reminder.recurrence
+        : "none";
+    const amount = optionalFiniteAmount(reminder.amount);
+    return [{
+      id: typeof reminder.id === "string" && reminder.id.trim()
+        ? reminder.id.trim()
+        : `reminder-${index + 1}`,
+      title,
+      date,
+      ...(amount !== undefined ? { amount } : {}),
+      recurrence,
+      enabled: reminder.enabled !== false,
+      ...(typeof reminder.notes === "string" && reminder.notes.trim()
+        ? { notes: reminder.notes.trim() }
+        : {}),
+      createdAt: typeof reminder.createdAt === "string"
+        && Number.isFinite(new Date(reminder.createdAt).getTime())
+        ? reminder.createdAt
+        : `${date}T00:00:00.000Z`,
+    }];
+  });
+}
+
+export function normalizeNotificationPreferences(value: unknown): NotificationPreferences {
+  const defaults = defaultNotificationPreferences();
+  if (!isRecord(value)) return defaults;
+  const rawTypes = isRecord(value.types) ? value.types : {};
+  const clock = (clockValue: unknown, fallback: string) =>
+    typeof clockValue === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(clockValue)
+      ? clockValue
+      : fallback;
+  const quiet = isRecord(value.quietHours) ? value.quietHours : {};
+  let timeZone = typeof value.timeZone === "string" ? value.timeZone : defaults.timeZone;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format();
+  } catch {
+    timeZone = "UTC";
+  }
+  return {
+    enabled: value.enabled !== false,
+    types: Object.fromEntries(notificationTypes.map((type) => [
+      type,
+      typeof rawTypes[type] === "boolean" ? rawTypes[type] : defaults.types[type],
+    ])) as Record<NotificationType, boolean>,
+    inApp: value.inApp !== false,
+    push: value.push === true,
+    weeklyDigest: value.weeklyDigest === true,
+    monthlyReportEmail: value.monthlyReportEmail === true,
+    digestDay: Math.max(0, Math.min(6, Math.round(optionalFiniteAmount(value.digestDay) ?? 1))),
+    quietHours: {
+      start: clock(quiet.start, defaults.quietHours.start),
+      end: clock(quiet.end, defaults.quietHours.end),
+    },
+    timeZone,
+  };
+}
+
+export function normalizeNotificationItems(value: unknown): NotificationItem[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.filter(isRecord).flatMap((item) => {
+    const type = notificationTypes.includes(item.type as NotificationType)
+      ? item.type as NotificationType
+      : undefined;
+    const dedupeKey = typeof item.dedupeKey === "string" ? item.dedupeKey.trim() : "";
+    const createdAt = typeof item.createdAt === "string" ? item.createdAt : "";
+    if (!type || !dedupeKey || seen.has(dedupeKey) || !Number.isFinite(new Date(createdAt).getTime())) return [];
+    seen.add(dedupeKey);
+    const deliverAfter = typeof item.deliverAfter === "string"
+      && Number.isFinite(new Date(item.deliverAfter).getTime())
+      ? item.deliverAfter
+      : createdAt;
+    return [{
+      id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : dedupeKey,
+      dedupeKey,
+      type,
+      title: typeof item.title === "string" ? item.title.trim() : "",
+      message: typeof item.message === "string" ? item.message.trim() : "",
+      createdAt,
+      deliverAfter,
+      channels: Array.isArray(item.channels)
+        ? item.channels.filter((channel): channel is "in-app" | "push" =>
+            channel === "in-app" || channel === "push")
+        : [],
+      ...(typeof item.readAt === "string" && Number.isFinite(new Date(item.readAt).getTime())
+        ? { readAt: item.readAt }
+        : {}),
+    }];
+  });
+}
+
+export function normalizeMonthlyReports(value: unknown): MonthlyReportSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  const sectionIds: MonthlyReportSectionId[] = [
+    "income-vs-expected", "expenses-vs-budget-category", "savings-amount-rate",
+    "portfolio-value-returns-change", "net-worth-change", "retirement-date-movement",
+    "health-score-change", "top-next-month-actions",
+  ];
+  const byMonth = new Map<string, MonthlyReportSnapshot>();
+  value.filter(isRecord).forEach((report) => {
+    const month = typeof report.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(report.month)
+      ? report.month
+      : undefined;
+    const generatedAt = typeof report.generatedAt === "string" ? report.generatedAt : "";
+    if (!month || !Number.isFinite(new Date(generatedAt).getTime()) || !Array.isArray(report.sections)) return;
+    const sections = report.sections.filter(isRecord).flatMap((section) => {
+      if (!sectionIds.includes(section.id as MonthlyReportSectionId)) return [];
+      const metrics = isRecord(section.metrics)
+        ? Object.fromEntries(Object.entries(section.metrics).flatMap(([key, metric]) =>
+            Number.isFinite(Number(metric)) ? [[key, Number(metric)]] : []))
+        : {};
+      const metricFormats = isRecord(section.metricFormats)
+        ? Object.fromEntries(Object.entries(section.metricFormats).flatMap(([key, format]) =>
+            (format === "currency" || format === "percent" || format === "count" || format === "number")
+              && key in metrics
+              ? [[key, format]]
+              : []))
+        : {};
+      if (Object.keys(metrics).some((key) => !(key in metricFormats))) return [];
+      const unavailableMetrics = Array.isArray(section.unavailableMetrics)
+        ? [...new Set(section.unavailableMetrics.filter(
+            (metric): metric is string => typeof metric === "string" && !(metric in metrics),
+          ).map((metric) => metric.slice(0, 120)))]
+        : [];
+      return [{
+        id: section.id as MonthlyReportSectionId,
+        title: typeof section.title === "string" ? section.title : "",
+        metrics,
+        metricFormats: metricFormats as Record<string, MonthlyReportMetricFormat>,
+        ...(unavailableMetrics.length > 0 ? { unavailableMetrics } : {}),
+        actions: Array.isArray(section.actions)
+          ? section.actions.filter((action): action is string => typeof action === "string")
+          : [],
+      }];
+    });
+    if (sections.length !== 8 || new Set(sections.map((section) => section.id)).size !== 8) return;
+    const rawForecast = isRecord(report.retirementForecast) ? report.retirementForecast : undefined;
+    const assumptions = rawForecast && isRecord(rawForecast.assumptions) ? rawForecast.assumptions : undefined;
+    const validNumber = (value: unknown) => typeof value === "number" && Number.isFinite(value);
+    const forecast = rawForecast && assumptions
+      && (rawForecast.projectedRetirementMonth === null || typeof rawForecast.projectedRetirementMonth === "string")
+      && (rawForecast.projectedRetirementAge === null || validNumber(rawForecast.projectedRetirementAge))
+      && typeof rawForecast.asOfDate === "string"
+      && ["targetRetirementAge", "lifeExpectancy", "generalInflation", "salaryGrowth", "monthlyContribution", "monthlySpending", "portfolioValue", "expectedReturn"]
+        .every((key) => validNumber(assumptions[key]))
+      && Array.isArray(rawForecast.drivers)
+      ? {
+        ...(validNumber(rawForecast.modelVersion) ? { modelVersion: Number(rawForecast.modelVersion) } : {}),
+        projectedRetirementMonth: rawForecast.projectedRetirementMonth,
+        projectedRetirementAge: rawForecast.projectedRetirementAge === null ? null : Number(rawForecast.projectedRetirementAge),
+        asOfDate: rawForecast.asOfDate,
+        assumptions: {
+          targetRetirementAge: Number(assumptions.targetRetirementAge),
+          lifeExpectancy: Number(assumptions.lifeExpectancy),
+          generalInflation: Number(assumptions.generalInflation),
+          salaryGrowth: Number(assumptions.salaryGrowth),
+          monthlyContribution: Number(assumptions.monthlyContribution),
+          monthlySpending: Number(assumptions.monthlySpending),
+          portfolioValue: Number(assumptions.portfolioValue),
+          ...(validNumber(assumptions.investedPrincipal) ? { investedPrincipal: Number(assumptions.investedPrincipal) } : {}),
+          ...(validNumber(assumptions.portfolioReturnAmount) ? { portfolioReturnAmount: Number(assumptions.portfolioReturnAmount) } : {}),
+          expectedReturn: Number(assumptions.expectedReturn),
+        },
+        ...(isRecord(rawForecast.projectionInputs)
+          && Array.isArray(rawForecast.projectionInputs.expenses)
+          && Array.isArray(rawForecast.projectionInputs.budgets)
+          && Array.isArray(rawForecast.projectionInputs.incomes)
+          && Array.isArray(rawForecast.projectionInputs.investments)
+          && Array.isArray(rawForecast.projectionInputs.loans)
+          && Array.isArray(rawForecast.projectionInputs.plannedExpenses)
+          && isRecord(rawForecast.projectionInputs.emergencyFund)
+          && isRecord(rawForecast.projectionInputs.assumptions)
+          ? { projectionInputs: rawForecast.projectionInputs as MonthlyReportSnapshot["retirementForecast"] extends { projectionInputs?: infer Inputs } ? Inputs : never }
+          : {}),
+        drivers: rawForecast.drivers.filter((driver): driver is string => typeof driver === "string").slice(0, 50),
+      } satisfies MonthlyReportSnapshot["retirementForecast"]
+      : undefined;
+    byMonth.set(month, {
+      id: typeof report.id === "string" && report.id.trim() ? report.id : `monthly-report-${month}`,
+      month,
+      generatedAt,
+      sections,
+      ...(forecast ? { retirementForecast: forecast } : {}),
+    });
+  });
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export const PLANNED_EXPENSE_CATEGORY_INFLATION: Record<string, number> = {
+  Education: 8,
+  Healthcare: 8,
+  Travel: 6,
+  Home: 6,
+  Vehicle: 5,
+  Wedding: 6,
+  Other: 6,
+};
+
+export function plannedExpenseInflatedValue(expense: PlannedExpense, asOf = new Date()) {
+  const amount = normalizedBudgetAmount(expense.amount);
+  const date = parseDateOnly(expense.expectedDate);
+  if (!Number.isFinite(date.getTime())) return 0;
+  const years = Math.max(0, (budgetMonth(date) - budgetMonth(asOf)) / 12);
+  const categoryRate = PLANNED_EXPENSE_CATEGORY_INFLATION[expense.category]
+    ?? PLANNED_EXPENSE_CATEGORY_INFLATION.Other;
+  const rate = Math.min(0.25, normalizedBudgetAmount(expense.customInflationRate ?? categoryRate) / 100);
+  return amount * Math.pow(1 + rate, years);
+}
 
 const EXPENSES_KEY = "ezyretire_expenses";
 const BUDGETS_KEY = "ezyretire_budgets";

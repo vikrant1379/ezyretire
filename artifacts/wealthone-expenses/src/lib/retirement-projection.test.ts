@@ -67,6 +67,33 @@ test("portfolio allocation is zero when the total current value is zero", () => 
   assert.equal(portfolioAllocationPercent(25, 100), 25);
 });
 
+test("a what-if return override changes contribution growth even without investments", () => {
+  const args = baseArgs();
+  args.investments = [];
+  args.assumptions = { ...args.assumptions, monthlyContributionOverride: 10_000 };
+  const withoutReturn = calculateRetirementProjection({ ...args, portfolioReturnOverride: 0 });
+  const withReturn = calculateRetirementProjection({ ...args, portfolioReturnOverride: 12 });
+  assert.equal(withoutReturn.averageExpectedReturn, 0);
+  assert.equal(withReturn.averageExpectedReturn, 0.12);
+  assert.ok(withReturn.projectedCorpus > withoutReturn.projectedCorpus);
+});
+
+test("a positive SIP with zero override still exposes the additional retirement contribution gap", () => {
+  const args = baseArgs();
+  args.investments = [{
+    ...args.investments[0],
+    monthlyContribution: 1_000,
+  }];
+  args.assumptions = { ...args.assumptions, monthlyContributionOverride: 0 };
+  const projection = calculateRetirementProjection(args);
+  assert.equal(projection.modeledMonthlyContribution, 1_000);
+  assert.ok(projection.extraSipRequired > 0);
+  assert.ok(
+    projection.modeledMonthlyContribution + projection.extraSipRequired
+      > projection.modeledMonthlyContribution,
+  );
+});
+
 const loan = (overrides: Partial<Loan> = {}): Loan => ({
   id: "loan",
   type: "Home",
@@ -105,6 +132,242 @@ test("changing a budget changes the required retirement corpus", () => {
   assert.ok(higher.requiredCorpus > lower.requiredCorpus);
   assert.equal(lower.livingCostBaseline, 50_000);
   assert.equal(higher.livingCostBaseline, 75_000);
+});
+
+test("retirement lifestyle changes drawdown costs without changing pre-retirement cash flow", () => {
+  const projectionFor = (
+    lifestyleChoice: "Basic" | "Comfortable" | "Premium" | "Custom",
+    customLifestyleExpense?: number,
+  ) => calculateRetirementProjection({
+    ...baseArgs(),
+    assumptions: {
+      ...baseArgs().assumptions,
+      generalInflation: 0,
+      lifestyleChoice,
+      customLifestyleExpense,
+    },
+  });
+  const basic = projectionFor("Basic");
+  const comfortable = projectionFor("Comfortable");
+  const premium = projectionFor("Premium");
+  const custom = projectionFor("Custom", 62_500);
+
+  assert.equal(basic.cashFlowCostBaseline, 50_000);
+  assert.equal(premium.cashFlowCostBaseline, 50_000);
+  assert.equal(custom.cashFlowCostBaseline, 50_000);
+  assert.equal(basic.expenseAtRetirement, 37_500);
+  assert.equal(comfortable.expenseAtRetirement, 50_000);
+  assert.equal(premium.expenseAtRetirement, 75_000);
+  assert.equal(custom.expenseAtRetirement, 62_500);
+  assert.ok(Math.abs(basic.requiredCorpus / comfortable.requiredCorpus - 0.75) < 1e-10);
+  assert.ok(Math.abs(premium.requiredCorpus / comfortable.requiredCorpus - 1.5) < 1e-10);
+  assert.ok(Math.abs(custom.requiredCorpus / comfortable.requiredCorpus - 1.25) < 1e-10);
+});
+
+test("retirement spending adjustments preserve and scale scheduled future budgets", () => {
+  const args = baseArgs();
+  const retirementDate = new Date(
+    AS_OF.getFullYear() + args.assumptions.targetRetirementAge - 36,
+    AS_OF.getMonth(),
+    1,
+  );
+  const futureBudget = {
+    category: "Living",
+    monthlyLimit: 50_000,
+    windows: [{
+      id: "retirement-spending",
+      monthlyLimit: 100_000,
+      startDate: `${retirementDate.getFullYear()}-${String(retirementDate.getMonth() + 1).padStart(2, "0")}-01`,
+      endMode: "lifelong" as const,
+    }],
+  };
+  const saved = calculateRetirementProjection({
+    ...args,
+    budgets: [futureBudget],
+    assumptions: { ...args.assumptions, generalInflation: 0 },
+  });
+  const increased = calculateRetirementProjection({
+    ...args,
+    budgets: [futureBudget],
+    assumptions: {
+      ...args.assumptions,
+      generalInflation: 0,
+      retirementSpendingAdjustmentPercent: 10,
+    },
+  });
+  const savedRetirementExpense = saved.chartData.find((point) => point.phase === "drawdown")?.["Monthly Lifestyle Expense"];
+  const increasedRetirementExpense = increased.chartData.find((point) => point.phase === "drawdown")?.["Monthly Lifestyle Expense"];
+  assert.equal(savedRetirementExpense, 100_000);
+  assert.ok(Math.abs((increasedRetirementExpense ?? 0) - 110_000) < 0.001);
+});
+
+test("pensions start at the configured age, escalate annually, and only offset outflow", () => {
+  const assumptions = {
+    ...baseArgs().assumptions,
+    targetRetirementAge: 36,
+    lifeExpectancy: 39,
+    generalInflation: 0,
+    lifestyleChoice: "Comfortable" as const,
+  };
+  const withoutPension = calculateRetirementProjection({
+    ...baseArgs(),
+    assumptions,
+  });
+  const withPension = calculateRetirementProjection({
+    ...baseArgs(),
+    assumptions: {
+      ...assumptions,
+      pensionSources: [{
+        id: "pension",
+        name: "Employer pension",
+        monthlyAmount: 10_000,
+        startAge: 37,
+        annualEscalationRate: 10,
+      }],
+    },
+  });
+
+  const drawdown = withPension.chartData.filter((point) => point.phase === "drawdown");
+  assert.deepEqual(
+    drawdown.slice(0, 3).map((point) => Number(point["Monthly Pension Income"])),
+    [0, 10_000, 11_000],
+  );
+  assert.deepEqual(
+    drawdown.slice(0, 3).map((point) => Number(point["Net Retirement Outflow"])),
+    [50_000, 40_000, 39_000],
+  );
+  assert.ok(withPension.requiredCorpus < withoutPension.requiredCorpus);
+  assert.equal(withPension.projectedCorpus, withoutPension.projectedCorpus);
+  assert.equal(withPension.currentCorpus, withoutPension.currentCorpus);
+});
+
+test("pensions entered in today's rupees are inflated through their start date", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    assumptions: {
+      ...baseArgs().assumptions,
+      targetRetirementAge: 36,
+      lifeExpectancy: 38,
+      generalInflation: 6,
+      pensionSources: [{
+        id: "future-pension",
+        name: "Future pension",
+        monthlyAmount: 10_000,
+        startAge: 37,
+        annualEscalationRate: 0,
+      }],
+    },
+  });
+
+  const drawdown = projection.chartData.filter((point) => point.phase === "drawdown");
+  assert.deepEqual(
+    drawdown.slice(0, 2).map((point) => Math.round(Number(point["Monthly Pension Income"]))),
+    [0, 10_600],
+  );
+});
+
+test("pension escalation earned before retirement is retained", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    assumptions: {
+      ...baseArgs().assumptions,
+      targetRetirementAge: 60,
+      lifeExpectancy: 61,
+      generalInflation: 0,
+      pensionSources: [{
+        id: "early-pension",
+        name: "Early pension",
+        monthlyAmount: 10_000,
+        startAge: 55,
+        annualEscalationRate: 10,
+      }],
+    },
+  });
+
+  const retirementStart = projection.chartData.find((point) => point.phase === "drawdown");
+  assert.ok(retirementStart);
+  assert.ok(Math.abs(Number(retirementStart["Monthly Pension Income"]) - 16_105.1) < 0.01);
+});
+
+test("pension offsets never create negative drawdown or inflate the corpus", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    assumptions: {
+      ...baseArgs().assumptions,
+      targetRetirementAge: 36,
+      lifeExpectancy: 37,
+      generalInflation: 0,
+      pensionSources: [{
+        id: "large-pension",
+        name: "Large pension",
+        monthlyAmount: 100_000,
+        annualEscalationRate: 0,
+      }],
+    },
+  });
+
+  assert.equal(projection.requiredCorpus, 0);
+  assert.equal(projection.chartData[0]["Net Retirement Outflow"], 0);
+  assert.equal(projection.projectedCorpus, projection.currentCorpus);
+});
+
+test("a separate emergency reserve never becomes retirement corpus", () => {
+  const withoutReserve = calculateRetirementProjection(baseArgs());
+  const withReserve = calculateRetirementProjection({
+    ...baseArgs(),
+    emergencyFund: {
+      reserveBalance: 1_000_000,
+      targetMonths: 6,
+      monthlyContribution: 10_000,
+    },
+  });
+
+  assert.equal(withReserve.currentCorpus, withoutReserve.currentCorpus);
+  assert.equal(withReserve.projectedCorpus, withoutReserve.projectedCorpus);
+  assert.equal(withReserve.currentEmergencyFundContribution, 0);
+});
+
+test("active emergency contributions reduce available cash flow but not retirement corpus", () => {
+  const withoutFund = calculateRetirementProjection(baseArgs());
+  const withFund = calculateRetirementProjection({
+    ...baseArgs(),
+    emergencyFund: {
+      reserveBalance: 0,
+      targetMonths: 6,
+      monthlyContribution: 5_000,
+    },
+  });
+
+  assert.equal(withFund.currentEmergencyFundContribution, 5_000);
+  assert.equal(withFund.availableSurplus, withoutFund.availableSurplus - 5_000);
+  assert.equal(withFund.monthlyCashFlowTimeline[0].emergencyFundContribution, 5_000);
+  assert.equal(withFund.monthlyCashFlowTimeline[0].surplus, withoutFund.monthlyCashFlowTimeline[0].surplus - 5_000);
+  assert.equal(withFund.projectedCorpus, withoutFund.projectedCorpus);
+});
+
+test("emergency contribution is capped and stops after the target is reached", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    emergencyFund: {
+      reserveBalance: 110_000,
+      targetMonths: 3,
+      monthlyContribution: 30_000,
+    },
+  });
+
+  assert.deepEqual(
+    projection.emergencyFundContributionTimeline.slice(0, 4).map((entry) => [
+      entry.contribution,
+      entry.reserveBalance,
+      entry.targetAmount,
+    ]),
+    [
+      [30_000, 140_000, 150_000],
+      [10_000, 150_000, 150_000],
+      [0, 150_000, 150_000],
+      [0, 150_000, 150_000],
+    ],
+  );
 });
 
 test("completed expense history changes retirement costs when no budget is set", () => {
@@ -156,6 +419,67 @@ test("scheduled budget gaps do not fall back to actual spend", () => {
   assert.equal(projection.monthlyCashFlowTimeline[0].living, 0);
   assert.equal(projection.monthlyCashFlowTimeline[1].living, 0);
   assert.equal(projection.monthlyCashFlowTimeline[2].living, 40_000);
+});
+
+test("yearly budgets affect cash flow and retirement costs only in their due month", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    asOf: new Date(2026, 8, 1),
+    assumptions: { ...baseArgs().assumptions, generalInflation: 0 },
+    budgets: [{
+      category: "Insurance",
+      monthlyLimit: 0,
+      windows: [{
+        id: "premium",
+        monthlyLimit: 80_000,
+        cadence: "yearly",
+        annualMonth: 10,
+        endMode: "lifelong",
+      }],
+    }],
+  });
+  assert.equal(projection.monthlyCashFlowTimeline[0].living, 0);
+  assert.equal(projection.monthlyCashFlowTimeline[1].living, 0);
+  assert.equal(projection.monthlyCashFlowTimeline[2].living, 80_000);
+  assert.equal(projection.monthlyCashFlowTimeline[3].living, 0);
+  assert.ok(projection.requiredCorpus > 0);
+});
+
+test("bullet and interest-only loans schedule principal at maturity", () => {
+  const bullet = loanPayoffDetails({
+    id: "bullet", type: "Other", name: "Bullet", sanctionedPrincipal: 120_000,
+    outstandingPrincipal: 120_000, annualInterestRate: 12, interestType: "Fixed",
+    totalTenureMonths: 12, startDate: "2026-09-01", emi: 0, prepayments: 0,
+    repaymentType: "bullet", createdAt: "2026-09-01",
+  }, new Date(2026, 8, 1));
+  assert.equal(bullet.remainingMonths, 12);
+  assert.equal(bullet.totalInterestLeft, 14_400);
+
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    loans: [{
+      id: "io", type: "Other", name: "Interest only", sanctionedPrincipal: 120_000,
+      outstandingPrincipal: 120_000, annualInterestRate: 12, interestType: "Fixed",
+      totalTenureMonths: 2, startDate: "2026-09-01", emi: 1_200, prepayments: 0,
+      repaymentType: "interest-only-plus-bullet", createdAt: "2026-09-01",
+    }],
+  });
+  assert.equal(projection.monthlyCashFlowTimeline[0].loanEmi, 1_200);
+  assert.equal(projection.monthlyCashFlowTimeline[1].loanEmi, 121_200);
+});
+
+test("a planned future expense increases the retirement shortfall impact", () => {
+  const baseline = calculateRetirementProjection(baseArgs());
+  const planned = calculateRetirementProjection({
+    ...baseArgs(),
+    plannedExpenses: [{
+      id: "home", name: "Home", category: "Home", amount: 500_000,
+      expectedDate: "2030-09-01", customInflationRate: 0, createdAt: "2026-09-01",
+    }],
+  });
+  assert.ok(planned.plannedExpenseCorpusImpact > 0);
+  assert.ok(planned.projectedCorpus < baseline.projectedCorpus);
+  assert.ok(planned.gap > baseline.gap);
 });
 
 test("pre- and post-retirement windows affect only their active months", () => {
@@ -799,6 +1123,43 @@ test("allocated lump sums use the target investment return in card and corpus pr
   assert.ok(Math.abs(projection.projectedCorpus - cardProjection) < 0.01);
 });
 
+test("what-if return overrides also apply to allocated future lump sums", () => {
+  const incomes = [income({
+    id: "scenario-bonus",
+    amount: 100_000,
+    frequency: "One-time",
+    recurring: false,
+    date: "2027-01-15",
+  })];
+  const investment = {
+    ...baseArgs().investments[0],
+    currentValue: 0,
+    monthlyContribution: 0,
+    expectedReturn: 20,
+    fundAllocations: [{
+      id: "scenario-allocation",
+      sourceId: "scenario-bonus",
+      opportunityDate: "2027-01-15",
+      investmentDate: "2027-01-15",
+      amount: 100_000,
+      createdAt: "2026-09-02T00:00:00.000Z",
+    }],
+  };
+  const args = {
+    ...baseArgs(),
+    incomes,
+    investments: [investment],
+  };
+
+  const savedReturn = calculateRetirementProjection(args);
+  const zeroReturn = calculateRetirementProjection({ ...args, portfolioReturnOverride: 0 });
+  const scenarioReturn = calculateRetirementProjection({ ...args, portfolioReturnOverride: 12 });
+
+  assert.ok(Math.abs(zeroReturn.projectedCorpus - 100_000) < 0.01);
+  assert.ok(scenarioReturn.projectedCorpus > zeroReturn.projectedCorpus);
+  assert.ok(savedReturn.projectedCorpus > scenarioReturn.projectedCorpus);
+});
+
 test("orphaned and over-allocated dated funds cannot inflate the projection", () => {
   const args = baseArgs();
   const invalidInvestment = {
@@ -1219,6 +1580,15 @@ test("legacy loan EMI text is excluded when its amount matches an active loan", 
   assert.equal(result.average, 30_000);
 });
 
+test("historical spending replay classifies loans using the saved as-of date", () => {
+  const historicalAsOf = new Date("2025-03-31T12:00:00.000Z");
+  const result = calculateActualMonthlyAverage([
+    { ...expense("2025-03-12", 10_000), note: "Monthly loan EMI" },
+  ], historicalAsOf, [loan({ startDate: "2026-01-01" })]);
+
+  assert.equal(result.average, 10_000);
+});
+
 test("a legitimate expense matching an EMI amount remains in living expenses", () => {
   const result = calculateActualMonthlyAverage([
     expense("2026-08-10", 30_000),
@@ -1413,6 +1783,98 @@ test("invalid dates, ages, and numeric values never produce NaN or Infinity", ()
   }
 });
 
+const assertAllNumbersFinite = (value: unknown, path = "result"): void => {
+  if (typeof value === "number") {
+    assert.ok(Number.isFinite(value), `${path} must be finite`);
+    return;
+  }
+  if (!value || typeof value !== "object" || value instanceof Date) return;
+  Object.entries(value).forEach(([key, item]) => assertAllNumbersFinite(item, `${path}.${key}`));
+};
+
+test("empty and partial retirement data returns a bounded finite projection", () => {
+  const empty = calculateRetirementProjection({
+    expenses: [],
+    budgets: [],
+    incomes: [],
+    investments: [],
+    loans: [],
+    assumptions: {} as RetirementProjectionArgs["assumptions"],
+    asOf: AS_OF,
+  });
+  const partial = calculateRetirementProjection({
+    ...baseArgs(),
+    expenses: undefined,
+    budgets: undefined,
+    incomes: undefined,
+    investments: undefined,
+    loans: undefined,
+    assumptions: undefined,
+  } as unknown as RetirementProjectionArgs);
+
+  assertAllNumbersFinite(empty);
+  assertAllNumbersFinite(partial);
+  assert.ok(empty.monthlyCashFlowTimeline.length <= 125 * 12);
+  assert.ok(partial.chartData.length <= 126);
+});
+
+test("malformed records and invalid planning date do not crash the projection", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    asOf: new Date(Number.NaN),
+    expenses: [null],
+    budgets: [null],
+    incomes: [null],
+    investments: [null],
+    loans: [null],
+  } as unknown as RetirementProjectionArgs);
+
+  assertAllNumbersFinite(projection);
+  assert.ok(projection.monthlyCashFlowTimeline.length <= 125 * 12);
+});
+
+test("Infinity, NaN, and extreme finite values produce finite bounded results", () => {
+  const huge = Number.MAX_VALUE;
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    budgets: [{ category: "Living", monthlyLimit: huge }],
+    incomes: [income({ amount: huge, annualGrowthRate: huge })],
+    investments: [{
+      ...baseArgs().investments[0],
+      investedAmount: huge,
+      currentValue: huge,
+      monthlyContribution: huge,
+      expectedReturn: huge,
+    }],
+    loans: [loan({
+      sanctionedPrincipal: huge,
+      outstandingPrincipal: huge,
+      emi: huge,
+      annualInterestRate: huge,
+      totalTenureMonths: huge,
+    })],
+    assumptions: {
+      dateOfBirth: "0001-01-01",
+      targetRetirementAge: Number.POSITIVE_INFINITY,
+      lifeExpectancy: huge,
+      generalInflation: huge,
+      salaryGrowth: Number.NaN,
+      monthlyContributionOverride: huge,
+      investSurplus: true,
+    },
+  });
+
+  assertAllNumbersFinite(projection);
+  assert.ok(projection.monthlyCashFlowTimeline.length <= 125 * 12);
+  assert.ok(projection.chartData.length <= 126);
+  assert.ok(Number.isFinite(investmentProjectedValue(
+    { ...baseArgs().investments[0], currentValue: huge, monthlyContribution: huge, expectedReturn: huge },
+    Number.POSITIVE_INFINITY,
+    { monthsToRetirement: Number.POSITIVE_INFINITY },
+  )));
+  assert.ok(Number.isFinite(portfolioAllocationPercent(huge, Number.POSITIVE_INFINITY)));
+});
+
 test("scheduled SIPs start in their calendar month and remain feasible after a loan payoff", () => {
   const projection = calculateRetirementProjection({
     ...baseArgs(),
@@ -1498,6 +1960,21 @@ test("a loan starting later this month is not due today and starts next modeled 
     sanctionedPrincipal: 20_000,
     emi: 10_000,
   }), AS_OF).remainingMonths, 2);
+});
+
+test("a SIP starting later this month does not reduce today's goal surplus", () => {
+  const projection = calculateRetirementProjection({
+    ...baseArgs(),
+    investments: [{
+      ...baseArgs().investments[0],
+      contributionStartDate: "2026-09-28",
+      monthlyContribution: 20_000,
+    }],
+  });
+  assert.equal(projection.monthlyCashFlowTimeline[0].scheduledInvestments, 0);
+  assert.equal(projection.nonLinkedSipCommitments, 0);
+  assert.equal(projection.unallocatedSurplus, 50_000);
+  assert.equal(projection.monthlyCashFlowTimeline[1].scheduledInvestments, 20_000);
 });
 
 test("date-only schedule boundaries retain their local calendar day", () => {

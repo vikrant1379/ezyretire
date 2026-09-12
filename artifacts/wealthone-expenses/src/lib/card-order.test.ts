@@ -91,6 +91,12 @@ test("drops unknown preference keys and invalid sort values", () => {
   assert.deepEqual(normalized.incomeSort, { by: "annual", direction: "asc" });
 });
 
+test("dashboard tour dismissal is account preference data and defaults to visible", () => {
+  assert.equal(defaultUiPreferences().dashboardTourDismissed, false);
+  assert.equal(normalizeUiPreferences({ dashboardTourDismissed: true }).dashboardTourDismissed, true);
+  assert.equal(normalizeUiPreferences({ dashboardTourDismissed: "true" }).dashboardTourDismissed, false);
+});
+
 test("places new items first and ignores deleted ids", () => {
   const items = [
     investment("old", { createdAt: "2026-01-01T00:00:00.000Z" }),

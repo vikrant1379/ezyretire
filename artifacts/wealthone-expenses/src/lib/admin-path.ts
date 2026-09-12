@@ -1,11 +1,4 @@
-/**
- * Helpers for building admin auth redirect URLs.
- *
- * The admin sign-in flow is OIDC redirect-based: the browser is sent to
- * `/api/admin/login?returnTo=<encoded app /admin path>` and comes back
- * authenticated. We compute the returnTo against the artifact's deployed base
- * path so the redirect lands back inside the app rather than the API root.
- */
+/** Helpers for building admin paths inside the artifact's deployed base path. */
 
 /** The artifact base path (e.g. "/" or "/some-base"), always without a trailing slash. */
 function getBase(): string {
@@ -23,8 +16,8 @@ export function adminAppPath(route: string = "/admin"): string {
 }
 
 /**
- * Full admin sign-in URL. Sends the browser through the server OIDC redirect and
- * returns to the given in-app admin path once authenticated.
+ * Starts a fresh admin OIDC sign-in and returns to the requested in-app route.
+ * This is also the account-switch path for an authenticated non-admin.
  */
 export function adminLoginUrl(returnRoute: string = "/admin"): string {
   const returnTo = adminAppPath(returnRoute);

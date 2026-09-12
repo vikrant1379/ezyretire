@@ -1,10 +1,34 @@
-import { datedFundNetAmount, finiteNonNegative, recurringMonthlyNetIncome } from "./financial-metrics.ts";
-import { budgetTotalForMonth, calculatePlanningTimeline, calculateTargetRetirementMonth, hasEffectiveBudgetPlan, isLivingExpense, parseDateOnly, type Budget, type Expense, type IncomeSource, type Investment, type Loan, type RetirementInputs } from "./storage.ts";
+import {
+  datedFundNetAmount,
+  finiteNonNegative,
+  lifestyleMonthlyExpense,
+  recurringMonthlyNetIncome,
+} from "./financial-metrics.ts";
+import { budgetTotalForMonth, calculatePlanningTimeline, calculateTargetRetirementMonth, hasEffectiveBudgetPlan, isLivingExpense, parseDateOnly, plannedExpenseInflatedValue, type Budget, type EmergencyFundPlan, type Expense, type IncomeSource, type Investment, type Loan, type PlannedExpense, type RetirementInputs } from "./storage.ts";
 
 const MONTH_MS = 30.4375 * 24 * 60 * 60 * 1000;
+const MAX_PROJECTION_MONTHS = 125 * 12;
+const MAX_ANNUAL_OCCURRENCES = 126;
+const MAX_FINANCIAL_VALUE = Number.MAX_SAFE_INTEGER;
+
+function finiteResult(value: number, fallback = 0) {
+  if (Number.isNaN(value)) return fallback;
+  if (value === Number.POSITIVE_INFINITY) return MAX_FINANCIAL_VALUE;
+  if (value === Number.NEGATIVE_INFINITY) return -MAX_FINANCIAL_VALUE;
+  return Math.max(-MAX_FINANCIAL_VALUE, Math.min(MAX_FINANCIAL_VALUE, value));
+}
+
+function finiteResults<T>(value: T): T {
+  if (typeof value === "number") return finiteResult(value) as T;
+  if (value instanceof Date || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((item) => finiteResults(item)) as T;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, finiteResults(item)]),
+  ) as T;
+}
 
 export function portfolioAllocationPercent(value: number, totalCurrentValue: number) {
-  return totalCurrentValue > 0 ? (value / totalCurrentValue) * 100 : 0;
+  return finiteResult(totalCurrentValue > 0 ? (value / totalCurrentValue) * 100 : 0);
 }
 
 const annualIncomeGrowth = (source: IncomeSource, legacySalaryGrowth: number) => {
@@ -95,7 +119,11 @@ function annualFundOccurrences(
 
   const annualGrowth = annualIncomeGrowth(source, legacySalaryGrowth);
   const customEnd = source.incomeEndMode === "custom" ? validDatedFundMonth(source.incomeEndDate) : null;
-  const firstYear = Math.max(anchor.getFullYear(), from.getFullYear());
+  const firstYear = Math.max(
+    anchor.getFullYear(),
+    from.getFullYear(),
+    through.getFullYear() - MAX_ANNUAL_OCCURRENCES + 1,
+  );
   const lastYear = through.getFullYear();
   const occurrences: AnnualFundOccurrence[] = [];
 
@@ -265,8 +293,11 @@ function incomeIsScheduled(income: IncomeSource, month: number, asOf: Date, mont
  * spend-to-date is normalized by elapsed days (and never reduced).
  */
 export function calculateActualMonthlyAverage(expenses: Expense[], asOf = new Date(), loans: Loan[] = []) {
+  expenses = Array.isArray(expenses) ? expenses.filter(Boolean) : [];
+  loans = Array.isArray(loans) ? loans.filter(Boolean) : [];
+  if (!(asOf instanceof Date) || !Number.isFinite(asOf.getTime())) asOf = new Date(0);
   const ordinary = expenses
-    .filter((expense) => isLivingExpense(expense, loans))
+    .filter((expense) => isLivingExpense(expense, loans, asOf))
     .map((expense) => ({ ...expense, parsedDate: new Date(expense.date) }))
     .filter((expense) => Number.isFinite(expense.parsedDate.getTime()) && expense.parsedDate <= asOf);
 
@@ -286,11 +317,11 @@ export function calculateActualMonthlyAverage(expenses: Expense[], asOf = new Da
   }
 
   if (completedTotals.length > 0) {
-    return {
+    return finiteResults({
       average: completedTotals.reduce((sum, total) => sum + total, 0) / completedTotals.length,
       monthsUsed: completedTotals.length,
       method: `${completedTotals.length}-month completed average`,
-    };
+    });
   }
 
   const currentTotal = ordinary
@@ -298,14 +329,18 @@ export function calculateActualMonthlyAverage(expenses: Expense[], asOf = new Da
     .reduce((sum, expense) => sum + finiteNonNegative(expense.amount), 0);
   const daysInMonth = new Date(asOf.getFullYear(), asOf.getMonth() + 1, 0).getDate();
   const elapsedDays = Math.max(1, Math.min(daysInMonth, asOf.getDate()));
-  return {
+  return finiteResults({
     average: Math.max(currentTotal, currentTotal * daysInMonth / elapsedDays),
     monthsUsed: currentTotal > 0 ? 1 : 0,
     method: currentTotal > 0 ? "current spend normalized to a full month" : "no ledger history",
-  };
+  });
 }
 
 export function loanPayoffDetails(loan: Loan, asOf = new Date()) {
+  if (!loan || typeof loan !== "object") {
+    return { remainingPrincipal: 0, remainingMonths: 0, totalInterestLeft: 0 };
+  }
+  if (!(asOf instanceof Date) || !Number.isFinite(asOf.getTime())) asOf = new Date(0);
   // outstandingPrincipal is the lender's current balance. Prepayments are
   // retained as history and have already been reflected in that balance.
   const start = validDate(loan.startDate);
@@ -314,39 +349,53 @@ export function loanPayoffDetails(loan: Loan, asOf = new Date()) {
     ? finiteNonNegative(loan.outstandingPrincipal) || finiteNonNegative(loan.sanctionedPrincipal)
     : finiteNonNegative(loan.outstandingPrincipal);
   const emi = finiteNonNegative(loan.emi);
-  if (principal <= 0 || emi <= 0) {
+  const repaymentType = loan.repaymentType ?? "emi";
+  if (principal <= 0 || (repaymentType === "emi" && emi <= 0)) {
     return { remainingPrincipal: principal, remainingMonths: 0, totalInterestLeft: 0 };
   }
 
   const monthlyRate = finiteNonNegative(loan.annualInterestRate) / 1200;
+  if (repaymentType !== "emi") {
+    const loanStart = validDate(loan.startDate);
+    const elapsed = loanStart ? Math.max(0, Math.floor((asOf.getTime() - loanStart.getTime()) / MONTH_MS)) : 0;
+    const remainingMonths = Math.max(1, Math.min(1200, Math.ceil(finiteNonNegative(loan.totalTenureMonths, 1) - elapsed)));
+    const totalInterestLeft = repaymentType === "bullet"
+      ? principal * monthlyRate * remainingMonths
+      : principal * monthlyRate * remainingMonths;
+    return finiteResults({
+      remainingPrincipal: principal,
+      remainingMonths,
+      totalInterestLeft,
+    });
+  }
   if (monthlyRate === 0) {
     const remainingMonths = Math.max(1, Math.ceil(principal / emi));
-    return {
+    return finiteResults({
       remainingPrincipal: principal,
       remainingMonths,
       totalInterestLeft: Math.max(0, remainingMonths * emi - principal),
-    };
+    });
   }
   if (emi > principal * monthlyRate) {
     const calculated = Math.ceil(-Math.log(1 - principal * monthlyRate / emi) / Math.log(1 + monthlyRate));
     if (Number.isFinite(calculated) && calculated > 0) {
       const remainingMonths = Math.min(calculated, 1200);
-      return {
+      return finiteResults({
         remainingPrincipal: principal,
         remainingMonths,
         totalInterestLeft: Math.max(0, remainingMonths * emi - principal),
-      };
+      });
     }
   }
 
   const loanStart = validDate(loan.startDate);
   const elapsed = loanStart ? Math.max(0, Math.floor((asOf.getTime() - loanStart.getTime()) / MONTH_MS)) : 0;
   const remainingMonths = Math.max(1, Math.min(1200, Math.ceil(finiteNonNegative(loan.totalTenureMonths, 1) - elapsed)));
-  return {
+  return finiteResults({
     remainingPrincipal: principal,
     remainingMonths,
     totalInterestLeft: Math.max(0, remainingMonths * emi - principal),
-  };
+  });
 }
 
 export function remainingLoanMonths(loan: Loan, asOf = new Date()) {
@@ -363,13 +412,19 @@ export function investmentProjectedValue(
     legacySalaryGrowth?: number;
   },
 ) {
-  if (yearsToRetirement <= 0) return investment.currentValue;
-  const r = investment.expectedReturn / 100;
-  const fvCorpus = investment.currentValue * Math.pow(1 + r, yearsToRetirement);
-  const pmt = investment.monthlyContribution || 0;
+  if (!investment || typeof investment !== "object") return 0;
+  const safeYears = Math.min(125, finiteNonNegative(yearsToRetirement));
+  if (safeYears <= 0) return finiteNonNegative(investment.currentValue);
+  const r = Math.min(0.5, finiteNonNegative(investment.expectedReturn) / 100);
+  const fvCorpus = finiteNonNegative(investment.currentValue) * Math.pow(1 + r, safeYears);
+  const pmt = finiteNonNegative(investment.monthlyContribution);
   const monthlyRate = r / 12;
-  const months = options?.monthsToRetirement ?? yearsToRetirement * 12;
-  const asOf = options?.asOf ?? new Date();
+  const requestedMonths = options?.monthsToRetirement ?? safeYears * 12;
+  const months = Math.min(MAX_PROJECTION_MONTHS, Math.floor(finiteNonNegative(requestedMonths)));
+  const requestedAsOf = options?.asOf ?? new Date();
+  const asOf = requestedAsOf instanceof Date && Number.isFinite(requestedAsOf.getTime())
+    ? requestedAsOf
+    : new Date(0);
   const validAllocations = options?.incomes
     ? validatedFundAllocations(
         [investment],
@@ -402,13 +457,13 @@ export function investmentProjectedValue(
       ))
         * (1 + monthlyRate);
     }
-    return fvCorpus + fvSip + fvAllocatedLumpSums;
+    return finiteResult(fvCorpus + fvSip + fvAllocatedLumpSums);
   }
   const fvSip =
     monthlyRate > 0
       ? pmt * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) * (1 + monthlyRate)
       : pmt * months;
-  return fvCorpus + fvSip + fvAllocatedLumpSums;
+  return finiteResult(fvCorpus + fvSip + fvAllocatedLumpSums);
 }
 
 export type RetirementProjectionArgs = {
@@ -417,7 +472,12 @@ export type RetirementProjectionArgs = {
   incomes: IncomeSource[];
   investments: Investment[];
   loans: Loan[];
+  plannedExpenses?: PlannedExpense[];
+  /** Separate reserve cash; never included in the investable retirement corpus. */
+  emergencyFund?: EmergencyFundPlan;
   assumptions: RetirementInputs;
+  /** Scenario-only override; never persists or rewrites investment records. */
+  portfolioReturnOverride?: number;
   asOf?: Date;
 };
 
@@ -427,9 +487,26 @@ export function calculateRetirementProjection({
   incomes,
   investments,
   loans,
+  plannedExpenses = [],
+  emergencyFund,
   assumptions,
+  portfolioReturnOverride,
   asOf = new Date(),
 }: RetirementProjectionArgs) {
+  expenses = Array.isArray(expenses) ? expenses.filter(Boolean) : [];
+  budgets = Array.isArray(budgets) ? budgets.filter(Boolean) : [];
+  incomes = Array.isArray(incomes) ? incomes.filter(Boolean) : [];
+  investments = Array.isArray(investments) ? investments.filter(Boolean) : [];
+  loans = Array.isArray(loans) ? loans.filter(Boolean) : [];
+  plannedExpenses = Array.isArray(plannedExpenses) ? plannedExpenses.filter(Boolean) : [];
+  assumptions = assumptions && typeof assumptions === "object"
+    ? assumptions
+    : {} as RetirementInputs;
+  assumptions = {
+    ...assumptions,
+    dateOfBirth: typeof assumptions.dateOfBirth === "string" ? assumptions.dateOfBirth : "",
+  };
+  if (!(asOf instanceof Date) || !Number.isFinite(asOf.getTime())) asOf = new Date(0);
   const planningTimeline = calculatePlanningTimeline({
     dateOfBirth: assumptions.dateOfBirth,
     targetRetirementAge: finiteNonNegative(assumptions.targetRetirementAge),
@@ -448,10 +525,16 @@ export function calculateRetirementProjection({
   const retirementDate = requestedRetirementDate && requestedRetirementDate > asOfMonth
     ? requestedRetirementDate
     : asOfMonth;
-  const monthsToRetirement = Math.max(0, calendarMonthOffset(asOfMonth, retirementDate));
+  const monthsToRetirement = Math.min(
+    MAX_PROJECTION_MONTHS,
+    Math.max(0, finiteResult(calendarMonthOffset(asOfMonth, retirementDate))),
+  );
   const yearsToRetirement = monthsToRetirement / 12;
   const yearsInRetirement = Math.max(0, lifeExpectancy - targetAge);
-  const retirementMonths = Math.max(0, Math.round(yearsInRetirement * 12));
+  const retirementMonths = Math.min(
+    MAX_PROJECTION_MONTHS,
+    Math.max(0, Math.round(yearsInRetirement * 12)),
+  );
   const inflation = Math.min(0.25, finiteNonNegative(assumptions.generalInflation) / 100);
   const salaryGrowth = Math.min(50, finiteNonNegative(assumptions.salaryGrowth));
   const actual = calculateActualMonthlyAverage(expenses, asOf, loans);
@@ -561,15 +644,68 @@ export function calculateRetirementProjection({
       { ...loan, outstandingPrincipal: principal },
       future ? addMonths(asOf, startMonth) : asOf,
     );
-    return { emi: finiteNonNegative(loan.emi), startMonth, remainingMonths: details.remainingMonths };
-  }).filter((loan) => loan.emi > 0 && loan.remainingMonths > 0);
-  const activeEmi = loanSchedules.reduce((sum, loan) => sum + (loan.startMonth === 0 ? loan.emi : 0), 0);
+    return {
+      payment: finiteNonNegative(loan.emi),
+      principal,
+      monthlyRate: finiteNonNegative(loan.annualInterestRate) / 1200,
+      repaymentType: loan.repaymentType ?? "emi",
+      startMonth,
+      remainingMonths: details.remainingMonths,
+    };
+  }).filter((loan) => loan.remainingMonths > 0);
+  const loanPaymentAt = (loan: typeof loanSchedules[number], relativeMonth: number) => {
+    if (relativeMonth < 0 || relativeMonth >= loan.remainingMonths) return 0;
+    if (loan.repaymentType === "bullet") {
+      return relativeMonth === loan.remainingMonths - 1
+        ? loan.principal + loan.principal * loan.monthlyRate * loan.remainingMonths
+        : 0;
+    }
+    if (loan.repaymentType === "interest-only-plus-bullet") {
+      return loan.principal * loan.monthlyRate
+        + (relativeMonth === loan.remainingMonths - 1 ? loan.principal : 0);
+    }
+    return loan.payment;
+  };
+  const activeEmi = loanSchedules.reduce((sum, loan) => sum + loanPaymentAt(loan, -loan.startMonth), 0);
   const emiAtMonth = (month: number) => loanSchedules.reduce(
-    (sum, loan) => sum + (month >= loan.startMonth && month < loan.startMonth + loan.remainingMonths ? loan.emi : 0),
+    (sum, loan) => sum + loanPaymentAt(loan, month - loan.startMonth),
     0,
   );
+  const plannedExpenseAtMonth = (month: number) => {
+    const projectedDate = addMonths(asOf, month);
+    return plannedExpenses.reduce((sum, expense) => {
+      const due = validMonth(expense.expectedDate);
+      return sum + (due && calendarMonthOffset(asOf, due) === month
+        ? plannedExpenseInflatedValue(expense, asOf)
+        : 0);
+    }, 0);
+  };
 
-  const availableSurplus = Math.max(0, netMonthlyIncome - cashFlowCostBaseline - activeEmi);
+  const normalizedEmergencyFund = emergencyFund && typeof emergencyFund === "object"
+    ? emergencyFund
+    : undefined;
+  const emergencyReserveBalance = finiteNonNegative(normalizedEmergencyFund?.reserveBalance);
+  const emergencyTargetMonths = Math.min(24, finiteNonNegative(normalizedEmergencyFund?.targetMonths, 6));
+  const emergencyTargetAmount = cashFlowCostBaseline * emergencyTargetMonths;
+  const requestedEmergencyContribution = finiteNonNegative(normalizedEmergencyFund?.monthlyContribution);
+  const emergencyFundContributionAtMonth = (month: number) => {
+    if (month < 0 || emergencyReserveBalance >= emergencyTargetAmount || requestedEmergencyContribution <= 0) return 0;
+    const remainingBeforeMonth = Math.max(
+      0,
+      emergencyTargetAmount - emergencyReserveBalance - requestedEmergencyContribution * month,
+    );
+    return Math.min(requestedEmergencyContribution, remainingBeforeMonth);
+  };
+  const emergencyFundBalanceAtMonth = (month: number) =>
+    emergencyReserveBalance + Math.min(
+      Math.max(0, emergencyTargetAmount - emergencyReserveBalance),
+      requestedEmergencyContribution * Math.max(0, month),
+    );
+  const currentEmergencyFundContribution = emergencyFundContributionAtMonth(0);
+  const availableSurplus = Math.max(
+    0,
+    netMonthlyIncome - cashFlowCostBaseline - activeEmi - currentEmergencyFundContribution,
+  );
   const incomesById = new Map(incomes.map((income) => [income.id, income]));
   const linkedPFContributions = investments
     .filter((investment) => investment.autoManagedContribution && investment.linkedIncomeSourceId)
@@ -623,11 +759,15 @@ export function calculateRetirementProjection({
   const currentRoundedAffordabilityGap = Math.round(currentAffordabilityGap);
   const currentCorpus = investments.reduce((sum, investment) => sum + finiteNonNegative(investment.currentValue), 0);
   const returnWeight = investments.reduce((sum, investment) => sum + finiteNonNegative(investment.currentValue), 0);
-  const averageExpectedReturn = Math.min(0.5, Math.max(0, returnWeight > 0
-    ? investments.reduce((sum, investment) => sum + finiteNonNegative(investment.currentValue) * finiteNonNegative(investment.expectedReturn), 0) / returnWeight / 100
-    : investments.length > 0
-      ? investments.reduce((sum, investment) => sum + finiteNonNegative(investment.expectedReturn), 0) / investments.length / 100
-      : 0.12));
+  const averageExpectedReturn = Math.min(0.5, Math.max(0,
+    Number.isFinite(portfolioReturnOverride)
+      ? finiteNonNegative(portfolioReturnOverride) / 100
+      : returnWeight > 0
+        ? investments.reduce((sum, investment) => sum + finiteNonNegative(investment.currentValue) * finiteNonNegative(investment.expectedReturn), 0) / returnWeight / 100
+        : investments.length > 0
+          ? investments.reduce((sum, investment) => sum + finiteNonNegative(investment.expectedReturn), 0) / investments.length / 100
+          : 0.12,
+  ));
   const accumulationMonthlyReturn = Math.pow(1 + averageExpectedReturn, 1 / 12) - 1;
   const lumpSumAllocations = investments.flatMap((investment) =>
     (validAllocations.get(investment.id) ?? []).flatMap((allocation) => {
@@ -638,7 +778,9 @@ export function calculateRetirementProjection({
       if (month >= monthsToRetirement) return [];
       const expectedReturn = Math.min(
         0.5,
-        finiteNonNegative(investment.expectedReturn) / 100,
+        Number.isFinite(portfolioReturnOverride)
+          ? finiteNonNegative(portfolioReturnOverride) / 100
+          : finiteNonNegative(investment.expectedReturn) / 100,
       );
       return [{
         month,
@@ -659,7 +801,7 @@ export function calculateRetirementProjection({
       ),
       0,
     );
-    const living = projectedLivingCostAtMonth(month);
+    const living = projectedLivingCostAtMonth(month) + plannedExpenseAtMonth(month);
     const loanEmi = emiAtMonth(month);
     const scheduledInvestments = investments.reduce((sum, investment) => {
       if (!investmentIsScheduled(investment, month, asOf, monthsToRetirement)) return sum;
@@ -674,7 +816,8 @@ export function calculateRetirementProjection({
       return sum + finiteNonNegative(investment.monthlyContribution);
     }, 0);
     const planningInvestment = selectedTakeHomeInvestment;
-    const surplus = income - living - loanEmi - scheduledInvestments - planningInvestment;
+    const emergencyFundContribution = emergencyFundContributionAtMonth(month);
+    const surplus = income - living - loanEmi - scheduledInvestments - planningInvestment - emergencyFundContribution;
     return {
       month,
       date: addMonths(asOf, month),
@@ -683,6 +826,8 @@ export function calculateRetirementProjection({
       loanEmi,
       scheduledInvestments,
       planningInvestment,
+      emergencyFundContribution,
+      emergencyFundBalance: emergencyFundBalanceAtMonth(month) + emergencyFundContribution,
       surplus,
       deficit: Math.max(0, -surplus),
     };
@@ -726,7 +871,10 @@ export function calculateRetirementProjection({
       },
       0,
     );
-    const legacyCapacity = Math.max(0, entry.income - entry.living - entry.loanEmi);
+    const legacyCapacity = Math.max(
+      0,
+      entry.income - entry.living - entry.loanEmi - entry.emergencyFundContribution,
+    );
     return linkedScheduled + nonLegacyScheduled + Math.min(legacyNonLinkedCommitments, legacyCapacity) + entry.planningInvestment;
   };
   const surplusOpportunities: Array<{ startDate: Date; endDate: Date; monthlyAmount: number; reason: string }> = [];
@@ -776,16 +924,18 @@ export function calculateRetirementProjection({
       }
       return sum + finiteNonNegative(investment.monthlyContribution);
     }, 0);
-    const living = projectedLivingCostAtMonth(month);
+    const living = projectedLivingCostAtMonth(month) + plannedExpenseAtMonth(month);
     const loanEmi = emiAtMonth(month);
     const planningInvestment = selectedTakeHomeInvestment;
+    const emergencyFundContribution = emergencyFundContributionAtMonth(month);
     return {
       income,
       living,
       loanEmi,
       scheduledInvestments,
       planningInvestment,
-      surplus: income - living - loanEmi - scheduledInvestments - planningInvestment,
+      emergencyFundContribution,
+      surplus: income - living - loanEmi - scheduledInvestments - planningInvestment - emergencyFundContribution,
     };
   };
   const projectedYearlySurplusOutlook = Array.from(
@@ -809,6 +959,15 @@ export function calculateRetirementProjection({
     projectedCorpus = projectedCorpus * (1 + accumulationMonthlyReturn)
       + contributionAtMonth(month);
   }
+  const plannedExpenseCorpusImpact = plannedExpenses.reduce((sum, expense) => {
+    const due = validMonth(expense.expectedDate);
+    if (!due) return sum;
+    const month = calendarMonthOffset(asOf, due);
+    if (month < 0 || month >= monthsToRetirement) return sum;
+    return sum + plannedExpenseInflatedValue(expense, asOf)
+      * Math.pow(1 + accumulationMonthlyReturn, Math.max(0, monthsToRetirement - month - 1));
+  }, 0);
+  projectedCorpus = Math.max(0, projectedCorpus - plannedExpenseCorpusImpact);
   projectedCorpus += lumpSumAllocations.reduce(
     (sum, allocation) =>
       sum + allocation.amount * Math.pow(
@@ -818,13 +977,64 @@ export function calculateRetirementProjection({
     0,
   );
 
-  const expenseAtRetirement = projectedLivingCostAtMonth(monthsToRetirement);
+  const lifestyleChoice = assumptions.lifestyleChoice ?? "Comfortable";
+  const spendingAdjustment = Number.isFinite(assumptions.retirementSpendingAdjustmentPercent)
+    ? Math.min(300, Math.max(-90, Number(assumptions.retirementSpendingAdjustmentPercent)))
+    : 0;
+  const spendingAdjustmentFactor = 1 + spendingAdjustment / 100;
+  const retirementLivingCostAtMonth = (retirementMonth: number) => {
+    const absoluteMonth = monthsToRetirement + Math.max(0, retirementMonth);
+    if (lifestyleChoice === "Custom") {
+      const currentCustomExpense = lifestyleMonthlyExpense(
+        "Custom",
+        livingCostBaseline,
+        assumptions.customLifestyleExpense,
+      );
+      return currentCustomExpense
+        * Math.pow(1 + inflation, Math.floor(absoluteMonth / 12))
+        * spendingAdjustmentFactor;
+    }
+    return lifestyleMonthlyExpense(
+      lifestyleChoice,
+      projectedLivingCostAtMonth(absoluteMonth),
+    ) * spendingAdjustmentFactor;
+  };
+  const pensionIncomeAtMonth = (retirementMonth: number) =>
+    (assumptions.pensionSources ?? []).reduce((total, source) => {
+      if (!source || typeof source !== "object") return total;
+      const monthlyAmount = finiteNonNegative(source.monthlyAmount);
+      const requestedStartAge = Number(source.startAge);
+      const startAge = Number.isFinite(requestedStartAge) ? requestedStartAge : targetAge;
+      const configuredStartMonth = Math.ceil((startAge - targetAge) * 12 - 1e-9);
+      const startMonth = Math.max(0, configuredStartMonth);
+      if (retirementMonth < startMonth || monthlyAmount <= 0) return total;
+      const escalation = Math.min(0.5, finiteNonNegative(source.annualEscalationRate) / 100);
+      const completedEscalations = Math.max(0, Math.floor((retirementMonth - configuredStartMonth) / 12));
+      const startMonthInflation = Math.max(0, Math.floor((monthsToRetirement + configuredStartMonth) / 12));
+      const amountAtStart = monthlyAmount * Math.pow(1 + inflation, startMonthInflation);
+      return total + amountAtStart * Math.pow(1 + escalation, completedEscalations);
+    }, 0);
+  const effectivePensionStartAges = [...new Set(
+    (assumptions.pensionSources ?? [])
+      .filter((source) => finiteNonNegative(source?.monthlyAmount) > 0)
+      .map((source) => {
+        const requestedStartAge = Number(source.startAge);
+        return Math.max(Number.isFinite(requestedStartAge) ? requestedStartAge : targetAge, targetAge);
+      }),
+  )].sort((left, right) => left - right);
+  const retirementOutflowAtMonth = (retirementMonth: number) => {
+    const absoluteMonth = monthsToRetirement + retirementMonth;
+    const grossOutflow = retirementLivingCostAtMonth(retirementMonth)
+      + plannedExpenseAtMonth(absoluteMonth)
+      + emiAtMonth(absoluteMonth);
+    return Math.max(0, grossOutflow - pensionIncomeAtMonth(retirementMonth));
+  };
+  const expenseAtRetirement = retirementLivingCostAtMonth(0);
   const postRetirementMonthlyReturn = Math.pow(1.08, 1 / 12) - 1;
   let requiredCorpus = 0;
   for (let month = 0; month < retirementMonths; month += 1) {
-    const living = projectedLivingCostAtMonth(monthsToRetirement + month);
-    const loanEmi = emiAtMonth(monthsToRetirement + month);
-    requiredCorpus += (living + loanEmi) / Math.pow(1 + postRetirementMonthlyReturn, month + 1);
+    requiredCorpus += retirementOutflowAtMonth(month)
+      / Math.pow(1 + postRetirementMonthlyReturn, month + 1);
   }
 
   const requiredLifestyleCorpusAtMonth = (month: number) => {
@@ -835,9 +1045,7 @@ export function calculateRetirementProjection({
     let remainingRequiredCorpus = 0;
     for (let futureMonth = month; futureMonth < monthsToRetirement + retirementMonths; futureMonth += 1) {
       const retirementMonth = futureMonth - monthsToRetirement;
-      const living = projectedLivingCostAtMonth(monthsToRetirement + retirementMonth);
-      const loanEmi = emiAtMonth(futureMonth);
-      remainingRequiredCorpus += (living + loanEmi)
+      remainingRequiredCorpus += retirementOutflowAtMonth(retirementMonth)
         / Math.pow(1 + postRetirementMonthlyReturn, futureMonth - month + 1);
     }
     return remainingRequiredCorpus;
@@ -866,6 +1074,11 @@ export function calculateRetirementProjection({
     const allocatedBase = allocationBalances.reduce((sum, allocation) => sum + allocation.base, 0);
     const allocatedOptimistic = allocationBalances.reduce((sum, allocation) => sum + allocation.optimistic, 0);
     const allocatedPessimistic = allocationBalances.reduce((sum, allocation) => sum + allocation.pessimistic, 0);
+    const retirementMonth = Math.max(0, month - monthsToRetirement);
+    const monthlyLifestyleExpense = month < monthsToRetirement
+      ? projectedLivingCostAtMonth(month)
+      : retirementLivingCostAtMonth(retirementMonth);
+    const monthlyPensionIncome = month < monthsToRetirement ? 0 : pensionIncomeAtMonth(retirementMonth);
     if (month % 12 === 0 || month === totalMonths) {
       chartData.push({
         age: Math.round((currentAge + month / 12) * 10) / 10,
@@ -873,7 +1086,9 @@ export function calculateRetirementProjection({
         "Base Scenario": Math.max(0, base + allocatedBase),
         "Optimistic (+2% ret)": Math.max(0, optimistic + allocatedOptimistic),
         "Pessimistic (-2% ret)": Math.max(0, pessimistic + allocatedPessimistic),
-        "Monthly Lifestyle Expense": projectedLivingCostAtMonth(month),
+        "Monthly Lifestyle Expense": monthlyLifestyleExpense,
+        "Monthly Pension Income": monthlyPensionIncome,
+        "Net Retirement Outflow": month < monthsToRetirement ? 0 : retirementOutflowAtMonth(retirementMonth),
         "Lifestyle Corpus Needed": requiredLifestyleCorpusAtMonth(month),
       });
     }
@@ -892,8 +1107,7 @@ export function calculateRetirementProjection({
           + (allocation.month === month ? allocation.amount : 0);
       });
     } else {
-      const retirementMonth = month - monthsToRetirement;
-      const outflow = projectedLivingCostAtMonth(month) + emiAtMonth(month);
+      const outflow = retirementOutflowAtMonth(retirementMonth);
       base = Math.max(0, (base + allocatedBase) * (1 + postRetirementMonthlyReturn) - outflow);
       optimistic = Math.max(0, (optimistic + allocatedOptimistic) * (1 + Math.pow(1.09, 1 / 12) - 1) - outflow);
       pessimistic = Math.max(0, (pessimistic + allocatedPessimistic) * (1 + Math.pow(1.07, 1 / 12) - 1) - outflow * 1.02);
@@ -906,7 +1120,7 @@ export function calculateRetirementProjection({
     }
   }
 
-  return {
+  return finiteResults({
     currentAge,
     targetAge,
     lifeExpectancy,
@@ -929,6 +1143,14 @@ export function calculateRetirementProjection({
     datedFundOpportunities,
     activeEmi,
     availableSurplus,
+    currentEmergencyFundContribution,
+    emergencyFundContributionTimeline: monthlyCashFlowTimeline.map((entry) => ({
+      month: entry.month,
+      date: entry.date,
+      contribution: entry.emergencyFundContribution,
+      reserveBalance: entry.emergencyFundBalance,
+      targetAmount: emergencyTargetAmount,
+    })),
     unallocatedSurplus,
     currentSipCommitments,
     linkedPFContribution,
@@ -948,6 +1170,9 @@ export function calculateRetirementProjection({
     currentCorpus,
     averageExpectedReturn,
     expenseAtRetirement,
+    lifestyleChoice,
+    pensionIncomeAtRetirement: pensionIncomeAtMonth(0),
+    plannedExpenseCorpusImpact,
     requiredCorpus,
     projectedCorpus,
     gap,
@@ -955,12 +1180,19 @@ export function calculateRetirementProjection({
     requiredLumpSumToday,
     chartData,
     depletionAge,
+    milestones: {
+      retirementAge: targetAge,
+      projectedCorpusAtRetirement: projectedCorpus,
+      requiredCorpusAtRetirement: requiredCorpus,
+      depletionAge,
+      effectivePensionStartAges,
+    },
     assumptionsValid: validBirthDate
       && Number.isFinite(assumptions.targetRetirementAge)
       && Number.isFinite(assumptions.lifeExpectancy)
       && assumptions.targetRetirementAge >= currentAge
       && assumptions.lifeExpectancy >= assumptions.targetRetirementAge,
-  };
+  });
 }
 
 export function calculateRetirementReadiness(args: RetirementProjectionArgs) {

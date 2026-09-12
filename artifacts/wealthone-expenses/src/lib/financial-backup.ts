@@ -1,6 +1,6 @@
 import type { FinancialData } from "./financial-api.ts";
 
-export const CURRENT_FINANCIAL_BACKUP_VERSION = 1;
+export const CURRENT_FINANCIAL_BACKUP_VERSION = 2;
 
 type VersionedFinancialBackup = {
   formatVersion: number;
@@ -18,13 +18,13 @@ export function parseFinancialBackup(contents: string): FinancialData {
   const parsed: unknown = JSON.parse(contents);
 
   if (isVersionedBackup(parsed)) {
-    if (parsed.formatVersion !== CURRENT_FINANCIAL_BACKUP_VERSION) {
+    if (parsed.formatVersion !== 1 && parsed.formatVersion !== CURRENT_FINANCIAL_BACKUP_VERSION) {
       throw new Error(
         `This backup uses unsupported format version ${parsed.formatVersion}. `
         + `This version of ezyRetire supports backup format version ${CURRENT_FINANCIAL_BACKUP_VERSION}.`,
       );
     }
-    return validateFinancialData(parsed.data);
+    return validateFinancialData(parsed.data, parsed.formatVersion);
   }
 
   return migrateLegacyBackup(parsed);
@@ -40,10 +40,10 @@ function isVersionedBackup(value: unknown): value is VersionedFinancialBackup {
 
 function migrateLegacyBackup(value: unknown): FinancialData {
   // Backups created before format versioning are the supported version 0 format.
-  return validateFinancialData(value);
+  return validateFinancialData(value, 0);
 }
 
-function validateFinancialData(value: unknown): FinancialData {
+function validateFinancialData(value: unknown, version: number): FinancialData {
   if (typeof value !== "object" || value === null) {
     throw new Error("This is not a valid ezyRetire backup.");
   }
@@ -60,5 +60,10 @@ function validateFinancialData(value: unknown): FinancialData {
   ) {
     throw new Error("This is not a valid ezyRetire backup.");
   }
-  return parsed as FinancialData;
+  return {
+    ...parsed,
+    incomeReceipts: version >= 2 && Array.isArray(parsed.incomeReceipts)
+      ? parsed.incomeReceipts
+      : [],
+  } as FinancialData;
 }

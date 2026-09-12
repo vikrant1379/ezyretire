@@ -65,3 +65,24 @@ test("retirement-ended periods warn until retirement timing is available", () =>
       && issue.reason.includes("retirement date"),
   ));
 });
+
+test("yearly periods require a due month and stay out of monthly limit stories", () => {
+  const invalid = analyzeBudgetTimeline([{
+    id: "insurance",
+    monthlyLimit: 60_000,
+    cadence: "yearly",
+    endMode: "lifelong",
+  }]);
+  assert.ok(invalid.issues.some((issue) =>
+    issue.type === "invalid-date" && issue.reason.includes("yearly expense")
+  ));
+
+  const valid = analyzeBudgetTimeline([{
+    id: "insurance",
+    monthlyLimit: 60_000,
+    cadence: "yearly",
+    annualMonth: 10,
+    endMode: "lifelong",
+  }]);
+  assert.equal(valid.timeline.length, 0);
+});

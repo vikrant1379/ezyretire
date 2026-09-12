@@ -3,18 +3,74 @@ import test from "node:test";
 import {
   formatDateOnly,
   budgetTotalForMonth,
+  budgetMonthlyEquivalent,
+  effectiveBudgetWindowAmount,
   hasEffectiveBudgetPlan,
   isCurrentLoan,
+  loanMonthlyPayment,
   isLoanStarted,
   normalizeInvestmentContributionSchedule,
   normalizeInvestmentDisposals,
   normalizeIncomeSchedule,
   normalizeBudgets,
+  normalizeMonthlyReports,
+  nextYearlyBudgetOccurrence,
+  validateBudgetSchedule,
   parseDateOnly,
+  plannedExpenseInflatedValue,
   storage,
   type IncomeSource,
   type Loan,
 } from "./storage.ts";
+
+test("monthly report normalization preserves retirement forecast for reports rendering", () => {
+  const ids = ["income-vs-expected", "expenses-vs-budget-category", "savings-amount-rate", "portfolio-value-returns-change", "net-worth-change", "retirement-date-movement", "health-score-change", "top-next-month-actions"];
+  const reports = normalizeMonthlyReports([{
+    id: "r1", month: "2026-01", generatedAt: "2026-02-01T00:00:00.000Z",
+    sections: ids.map((id) => ({ id, title: id, metrics: { value: 1 }, metricFormats: { value: "number" }, actions: [] })),
+    retirementForecast: {
+      projectedRetirementMonth: "2048-06", projectedRetirementAge: 62, asOfDate: "2026-01-31",
+      assumptions: { targetRetirementAge: 62, lifeExpectancy: 85, generalInflation: 6, salaryGrowth: 8, monthlyContribution: 50000, monthlySpending: 100000, portfolioValue: 1000000, expectedReturn: 10 },
+      drivers: ["steady contributions"],
+    },
+  }]);
+  assert.equal(reports[0]?.retirementForecast?.projectedRetirementMonth, "2048-06");
+  assert.equal(reports[0]?.retirementForecast?.projectedRetirementAge, 62);
+});
+
+test("all expense frequencies normalize to monthly equivalents and scheduled months", () => {
+  const quarterly = { id: "q", monthlyLimit: 12_000, cadence: "quarterly" as const, startDate: "2026-01-01", endMode: "lifelong" as const };
+  const halfYearly = { ...quarterly, id: "h", monthlyLimit: 60_000, cadence: "half-yearly" as const };
+  const oneTime = { ...quarterly, id: "o", monthlyLimit: 90_000, cadence: "one-time" as const };
+  assert.equal(budgetMonthlyEquivalent(quarterly), 4_000);
+  assert.equal(budgetMonthlyEquivalent(halfYearly), 10_000);
+  assert.equal(effectiveBudgetWindowAmount(quarterly, new Date(2026, 3, 1)), 12_000);
+  assert.equal(effectiveBudgetWindowAmount(quarterly, new Date(2026, 4, 1)), 0);
+  assert.equal(effectiveBudgetWindowAmount(halfYearly, new Date(2026, 6, 1)), 60_000);
+  assert.equal(effectiveBudgetWindowAmount(oneTime, new Date(2026, 0, 1)), 90_000);
+  assert.equal(effectiveBudgetWindowAmount(oneTime, new Date(2026, 1, 1)), 0);
+});
+
+test("planned expenses use category or custom inflation", () => {
+  const expense = { id: "goal", name: "Degree", category: "Education", amount: 100_000, expectedDate: "2027-01-01", createdAt: "2026-01-01" };
+  assert.equal(Math.round(plannedExpenseInflatedValue(expense, new Date(2026, 0, 1))), 108_000);
+  assert.equal(Math.round(plannedExpenseInflatedValue({ ...expense, customInflationRate: 10 }, new Date(2026, 0, 1))), 110_000);
+});
+
+test("loan monthly burden uses outstanding principal for interest-only repayments", () => {
+  const base = {
+    sanctionedPrincipal: 1_000_000,
+    outstandingPrincipal: 600_000,
+    annualInterestRate: 12,
+    emi: 25_000,
+  };
+  assert.equal(loanMonthlyPayment({ ...base, repaymentType: "emi" }), 25_000);
+  assert.equal(loanMonthlyPayment({ ...base, repaymentType: "bullet" }), 0);
+  assert.equal(
+    loanMonthlyPayment({ ...base, repaymentType: "interest-only-plus-bullet" }),
+    6_000,
+  );
+});
 import { calculateIncomeMetrics } from "./financial-metrics.ts";
 
 class MemoryStorage {
@@ -169,7 +225,7 @@ test("legacy monthly budgets migrate deterministically to lifelong windows", () 
   assert.deepEqual(migrated, [{
     category: "Living",
     monthlyLimit: 25_000,
-    windows: [{ id: "legacy", monthlyLimit: 25_000, endMode: "lifelong" }],
+    windows: [{ id: "legacy", monthlyLimit: 25_000, cadence: "monthly", endMode: "lifelong" }],
   }]);
   assert.deepEqual(normalizeBudgets(migrated), migrated);
 });
@@ -201,6 +257,63 @@ test("budget inflation is independently anchored to each window start", () => {
   assert.equal(budgetTotalForMonth(budgets, new Date(2026, 3, 1), 10), 11_000);
   assert.equal(budgetTotalForMonth(budgets, new Date(2026, 9, 1), 10), 16_000);
   assert.equal(budgetTotalForMonth(budgets, new Date(2027, 9, 1), 10), 17_600);
+});
+
+test("yearly budgets apply once in their due month and preserve inclusive boundaries", () => {
+  const budgets = normalizeBudgets([{
+    category: "Insurance",
+    monthlyLimit: 0,
+    windows: [{
+      id: "premium",
+      monthlyLimit: 120_000,
+      cadence: "yearly",
+      annualMonth: 2,
+      startDate: "2026-04-01",
+      endMode: "custom",
+      endDate: "2029-03-01",
+    }],
+  }]);
+  assert.equal(budgetTotalForMonth(budgets, new Date(2026, 2, 1)), 0);
+  assert.equal(budgetTotalForMonth(budgets, new Date(2027, 1, 1)), 0);
+  assert.equal(budgetTotalForMonth(budgets, new Date(2027, 2, 1)), 120_000);
+  assert.equal(budgetTotalForMonth(budgets, new Date(2029, 2, 1)), 120_000);
+  assert.equal(budgetTotalForMonth(budgets, new Date(2030, 2, 1)), 0);
+});
+
+test("yearly budgets inflate on schedule anniversaries and find their next occurrence", () => {
+  const [budget] = normalizeBudgets([{
+    category: "Insurance",
+    monthlyLimit: 0,
+    windows: [{
+      id: "premium",
+      monthlyLimit: 100_000,
+      cadence: "yearly",
+      annualMonth: 0,
+      startDate: "2026-07-01",
+      endMode: "lifelong",
+    }],
+  }]);
+  const window = budget.windows![0];
+  assert.equal(budgetTotalForMonth([budget], new Date(2027, 0, 1), 10), 100_000);
+  assert.ok(Math.abs(budgetTotalForMonth([budget], new Date(2028, 0, 1), 10) - 110_000) < 0.01);
+  assert.deepEqual(nextYearlyBudgetOccurrence(window, new Date(2027, 1, 1)), new Date(2028, 0, 1));
+});
+
+test("incomplete yearly schedules are rejected instead of becoming monthly", () => {
+  const yearly = {
+    category: "Insurance",
+    monthlyLimit: 0,
+    windows: [{
+      id: "premium",
+      monthlyLimit: 50_000,
+      cadence: "yearly" as const,
+      endMode: "lifelong" as const,
+    }],
+  };
+  assert.match(validateBudgetSchedule([yearly])[0], /needs the month/);
+  const normalized = normalizeBudgets([yearly]);
+  assert.equal(normalized[0].windows?.[0].cadence, "yearly");
+  assert.equal(budgetTotalForMonth(normalized, new Date(2027, 0, 1)), 0);
 });
 
 test("retirement-ended budget windows preserve notes and stop before retirement month", () => {

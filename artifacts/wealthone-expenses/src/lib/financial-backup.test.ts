@@ -21,6 +21,14 @@ test("a complete backup preserves partial fund allocations and their occurrence 
       recurring: true,
       createdAt: "2025-01-01T00:00:00.000Z",
     }],
+    incomeReceipts: [{
+      id: "receipt-1",
+      incomeSourceId: "bonus-1",
+      receivedDate: "2026-04-15",
+      amount: 90_000,
+      note: "Net bonus received",
+      createdAt: "2026-04-15T12:00:00.000Z",
+    }],
     investments: [{
       id: "fund-1",
       name: "Index fund",
@@ -72,6 +80,7 @@ test("a complete backup preserves partial fund allocations and their occurrence 
     amount: 40000,
     createdAt: "2026-04-15T00:00:00.000Z",
   }]);
+  assert.deepEqual(restored.incomeReceipts, backup.incomeReceipts);
 });
 
 test("new backups declare their format version", () => {
@@ -101,6 +110,26 @@ test("lifetime budget windows round trip through backups", () => {
       id: "retirement-home",
       monthlyLimit: 75_000,
       startDate: "2045-06-01",
+      endMode: "lifelong",
+    }],
+  }];
+  assert.deepEqual(
+    parseFinancialBackup(serializeFinancialBackup(data)).budgets,
+    data.budgets,
+  );
+});
+
+test("yearly budget cadence and due month round trip through backups", () => {
+  const data = createMinimalFinancialData();
+  data.budgets = [{
+    category: "Insurance",
+    monthlyLimit: 0,
+    windows: [{
+      id: "annual-premium",
+      monthlyLimit: 120_000,
+      cadence: "yearly",
+      annualMonth: 2,
+      startDate: "2026-03-01",
       endMode: "lifelong",
     }],
   }];
@@ -194,7 +223,7 @@ test("unsupported backup versions are rejected with a compatibility message", ()
 
   assert.throws(
     () => parseFinancialBackup(JSON.stringify(unsupportedBackup)),
-    /unsupported format version 2.*supports backup format version 1/,
+    /unsupported format version 3.*supports backup format version 2/,
   );
 });
 
@@ -210,6 +239,7 @@ function createMinimalFinancialData(): FinancialData {
     expenses: [],
     budgets: [],
     incomeSources: [],
+    incomeReceipts: [],
     investments: [],
     loans: [],
     retirementInputs: {},

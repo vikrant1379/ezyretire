@@ -1,0 +1,66 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 557 >>
+stream
+BT
+/F1 10 Tf
+1 0 0 1 72 750 Tm
+(ICICI Bank) Tj
+1 0 0 1 72 720 Tm
+(Transaction Date) Tj
+1 0 0 1 180 720 Tm
+(Transaction Remarks) Tj
+1 0 0 1 350 720 Tm
+(Amount) Tj
+1 0 0 1 420 720 Tm
+(Dr/Cr) Tj
+1 0 0 1 480 720 Tm
+(Balance) Tj
+1 0 0 1 72 700 Tm
+(26/01/2026) Tj
+1 0 0 1 180 700 Tm
+(MEDICAL STORE) Tj
+1 0 0 1 350 700 Tm
+(302.50) Tj
+1 0 0 1 420 700 Tm
+(DR) Tj
+1 0 0 1 480 700 Tm
+(9697.50) Tj
+1 0 0 1 72 680 Tm
+(27/01/2026) Tj
+1 0 0 1 180 680 Tm
+(EQUAL WIDTH CREDIT) Tj
+1 0 0 1 350 680 Tm
+(302.50) Tj
+1 0 0 1 420 680 Tm
+(CR) Tj
+1 0 0 1 480 680 Tm
+(10000.00) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000848 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+918
+%%EOF

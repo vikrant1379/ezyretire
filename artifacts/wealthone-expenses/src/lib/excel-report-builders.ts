@@ -1,17 +1,29 @@
 import { calculateIncomeMetrics, datedFundNetAmount } from "./financial-metrics.ts";
 import { addMonths } from "date-fns";
 import {
+  BUDGET_CADENCES,
+  PLANNED_EXPENSE_CATEGORY_INFLATION,
+  budgetMonthlyEquivalent,
+  calculateTargetRetirementMonth,
+  getLinkedLoanName,
   isRecurringIncomeActive,
+  normalizeBudget,
   parseDateOnly,
+  plannedExpenseInflatedValue,
+  type Budget,
   type Expense,
+  type IncomeReceipt,
   type IncomeSource,
   type Investment,
   type Loan,
+  type PlannedExpense,
 } from "./storage.ts";
 import {
   investmentProjectedValue,
+  calculateRetirementProjection,
   loanPayoffDetails,
 } from "./retirement-projection.ts";
+import type { FinancialData } from "./financial-api.ts";
 import {
   toLocalDateCell,
   type ExcelSheet,
@@ -36,9 +48,77 @@ export const buildTransactionReportSheets = (
   ],
 }];
 
+export const buildBudgetReportSheets = (
+  budgets: readonly Budget[],
+): ExcelSheet<any>[] => [{
+  name: "Budget Plan",
+  rows: budgets.flatMap((budget, budgetIndex) => {
+    const normalized = normalizeBudget(budget, budgetIndex);
+    return (normalized.windows ?? []).map((window) => ({
+      category: normalized.category,
+      recurrence: BUDGET_CADENCES.find((cadence) => cadence.value === (window.cadence ?? "monthly"))?.label
+        ?? "Monthly",
+      scheduledAmount: window.monthlyLimit,
+      monthlyEquivalent: budgetMonthlyEquivalent(window),
+      dueMonth: window.cadence === "yearly" && window.annualMonth !== undefined
+        ? new Date(2000, window.annualMonth, 1).toLocaleString("en", { month: "long" })
+        : "",
+      dueDate: toLocalDateCell(window.cadence === "one-time" ? window.startDate : undefined),
+      startDate: toLocalDateCell(window.startDate),
+      endMode: window.endMode === "custom"
+        ? "Custom date"
+        : window.endMode === "retirement" ? "Retirement" : "Lifelong",
+      endDate: toLocalDateCell(window.endDate),
+      note: window.note ?? "",
+    }));
+  }),
+  columns: [
+    { header: "Category", value: "category" },
+    { header: "Recurrence", value: "recurrence" },
+    { header: "Scheduled Amount", value: "scheduledAmount" },
+    { header: "Monthly Equivalent", value: "monthlyEquivalent" },
+    { header: "Due Month", value: "dueMonth" },
+    { header: "Due Date", value: "dueDate" },
+    { header: "Start Date", value: "startDate" },
+    { header: "End Mode", value: "endMode" },
+    { header: "End Date", value: "endDate" },
+    { header: "Note", value: "note" },
+  ],
+}];
+
+export const buildPlannedExpenseReportSheets = (
+  expenses: readonly PlannedExpense[],
+  options: { asOf?: Date } = {},
+): ExcelSheet<any>[] => {
+  const asOf = options.asOf ?? new Date();
+  return [{
+    name: "Planned Future Expenses",
+    rows: expenses.map((expense) => ({
+      name: expense.name,
+      category: expense.category,
+      presentValue: expense.amount,
+      expectedDate: toLocalDateCell(expense.expectedDate),
+      inflationRate: expense.customInflationRate
+        ?? PLANNED_EXPENSE_CATEGORY_INFLATION[expense.category]
+        ?? PLANNED_EXPENSE_CATEGORY_INFLATION.Other,
+      inflationAssumption: expense.customInflationRate === undefined ? "Category default" : "Custom",
+      inflatedValue: plannedExpenseInflatedValue(expense, asOf),
+    })),
+    columns: [
+      { header: "Expense", value: "name" },
+      { header: "Category", value: "category" },
+      { header: "Present Value", value: "presentValue" },
+      { header: "Expected Date", value: "expectedDate" },
+      { header: "Inflation (%)", value: "inflationRate" },
+      { header: "Inflation Assumption", value: "inflationAssumption" },
+      { header: "Inflated Value", value: "inflatedValue" },
+    ],
+  }];
+};
+
 export const buildIncomeReportSheets = (
   sources: readonly IncomeSource[],
-  options: { now?: Date; salaryGrowth?: number } = {},
+  options: { now?: Date; salaryGrowth?: number; receipts?: readonly IncomeReceipt[] } = {},
 ): ExcelSheet<any>[] => {
   const now = options.now ?? new Date();
   const rows = sources.map((source) => {
@@ -77,6 +157,7 @@ export const buildIncomeReportSheets = (
       otherDeductions: source.salaryDetails?.otherDeductions ?? 0,
     };
   });
+  const sourceNames = new Map(sources.map((source) => [source.id, source.name]));
   return [{
     name: "Income Sources",
     rows,
@@ -92,6 +173,22 @@ export const buildIncomeReportSheets = (
       { header: "Allowances", value: "allowances" }, { header: "Employee PF", value: "employeePF" },
       { header: "Professional Tax", value: "professionalTax" }, { header: "TDS", value: "tds" },
       { header: "Other Deductions", value: "otherDeductions" },
+    ],
+  }, {
+    name: "Income Receipts",
+    rows: (options.receipts ?? []).map((receipt) => ({
+      source: sourceNames.get(receipt.incomeSourceId) ?? "Deleted income source",
+      receivedDate: toLocalDateCell(receipt.receivedDate),
+      amount: receipt.amount,
+      note: receipt.note ?? "",
+      recordedAt: toLocalDateCell(receipt.createdAt),
+    })),
+    columns: [
+      { header: "Income Source", value: "source" },
+      { header: "Received Date", value: "receivedDate" },
+      { header: "Amount Received", value: "amount" },
+      { header: "Note", value: "note" },
+      { header: "Recorded At", value: "recordedAt" },
     ],
   }];
 };
@@ -191,10 +288,23 @@ export const buildLoanReportSheets = (
     const payoffDate = addMonths(now, payoff.remainingMonths);
     return {
       name: loan.name, type: loan.type, status: completed ? "Completed" : future ? "Planned" : "Active",
+      repaymentStructure: loan.repaymentType === "bullet"
+        ? "Bullet"
+        : loan.repaymentType === "interest-only-plus-bullet"
+          ? "Interest-only + principal bullet"
+          : "EMI (amortizing)",
       annualInterestRate: loan.annualInterestRate, interestType: loan.interestType,
       sanctionedPrincipal: loan.sanctionedPrincipal,
       outstandingPrincipal: future && loan.outstandingPrincipal === 0 ? loan.sanctionedPrincipal : loan.outstandingPrincipal,
-      startDate: toLocalDateCell(loan.startDate), emi: loan.emi, totalTenureMonths: loan.totalTenureMonths,
+      startDate: toLocalDateCell(loan.startDate), monthlyPayment: loan.repaymentType === "bullet"
+        ? 0
+        : loan.repaymentType === "interest-only-plus-bullet"
+          ? payoff.remainingPrincipal * loan.annualInterestRate / 1200
+          : loan.emi,
+      maturityObligation: loan.repaymentType === "bullet" || loan.repaymentType === "interest-only-plus-bullet"
+        ? payoff.remainingPrincipal
+        : 0,
+      totalTenureMonths: loan.totalTenureMonths,
       remainingTenureMonths: payoff.remainingMonths, futureInterest: payoff.totalInterestLeft,
       estimatedPayoffDate: toLocalDateCell(payoffDate),
       overlapsRetirement: Boolean(options.retirementDate && !completed && payoffDate > options.retirementDate),
@@ -203,12 +313,59 @@ export const buildLoanReportSheets = (
   });
   return [{ name: "Loans", rows, columns: [
     { header: "Name", value: "name" }, { header: "Type", value: "type" }, { header: "Status", value: "status" },
+    { header: "Repayment Structure", value: "repaymentStructure" },
     { header: "Interest Rate (%)", value: "annualInterestRate" }, { header: "Interest Type", value: "interestType" },
     { header: "Sanctioned Principal", value: "sanctionedPrincipal" }, { header: "Outstanding Principal", value: "outstandingPrincipal" },
-    { header: "Start Date", value: "startDate" }, { header: "EMI", value: "emi" },
+    { header: "Start Date", value: "startDate" }, { header: "Monthly Payment", value: "monthlyPayment" },
+    { header: "Principal Due at Maturity", value: "maturityObligation" },
     { header: "Total Tenure (Months)", value: "totalTenureMonths" }, { header: "Remaining Tenure (Months)", value: "remainingTenureMonths" },
     { header: "Future Interest", value: "futureInterest" }, { header: "Estimated Payoff Date", value: "estimatedPayoffDate" },
     { header: "Continues Into Retirement", value: "overlapsRetirement" }, { header: "Retirement Date", value: "retirementDate" },
     { header: "Recorded Prepayments", value: "prepayments" },
   ] }];
+};
+
+export const buildCompleteFinancialPlanSheets = (
+  data: FinancialData,
+  options: { asOf?: Date } = {},
+): ExcelSheet<any>[] => {
+  const asOf = options.asOf ?? new Date();
+  const projection = calculateRetirementProjection({
+    expenses: data.expenses,
+    budgets: data.budgets,
+    incomes: data.incomeSources,
+    investments: data.investments,
+    loans: data.loans,
+    plannedExpenses: data.plannedExpenses,
+    emergencyFund: data.emergencyFund,
+    assumptions: data.retirementInputs,
+    asOf,
+  });
+
+  return [
+    ...buildIncomeReportSheets(data.incomeSources, {
+      now: asOf,
+      salaryGrowth: data.retirementInputs.salaryGrowth,
+      receipts: data.incomeReceipts,
+    }),
+    ...buildBudgetReportSheets(data.budgets),
+    ...buildPlannedExpenseReportSheets(data.plannedExpenses, { asOf }),
+    ...buildInvestmentReportSheets({
+      holdings: data.investments,
+      incomes: data.incomeSources,
+      asOf,
+      yearsToRetirement: projection.yearsToRetirement,
+      monthsToRetirement: projection.monthsToRetirement,
+      annualFunds: projection.datedFundOpportunities,
+      yearlyOutlook: projection.projectedYearlySurplusOutlook,
+    }),
+    ...buildLoanReportSheets(data.loans, {
+      now: asOf,
+      retirementDate: calculateTargetRetirementMonth(data.retirementInputs),
+    }),
+    ...buildTransactionReportSheets(
+      data.expenses,
+      (expense) => getLinkedLoanName(expense, data.loans),
+    ),
+  ];
 };

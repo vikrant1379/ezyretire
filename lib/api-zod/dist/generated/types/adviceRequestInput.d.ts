@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdviceRequestInputTopic } from './adviceRequestInputTopic.js';
+import type { AdviceRequestInputTopic } from './adviceRequestInputTopic';
 export interface AdviceRequestInput {
     /** @minLength 2 */
     userName: string;

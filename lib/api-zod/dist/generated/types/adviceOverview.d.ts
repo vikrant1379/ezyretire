@@ -5,9 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdviceRequest } from './adviceRequest.js';
-import type { AdviceSettings } from './adviceSettings.js';
-import type { Advisor } from './advisor.js';
+import type { AdviceRequest } from './adviceRequest';
+import type { AdviceSettings } from './adviceSettings';
+import type { Advisor } from './advisor';
 export interface AdviceOverview {
     request: AdviceRequest | null;
     advisor: Advisor | null;

@@ -5,8 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdviceRequestUpdatePaymentStatus } from './adviceRequestUpdatePaymentStatus.js';
-import type { AdviceRequestUpdateStatus } from './adviceRequestUpdateStatus.js';
+import type { AdviceRequestUpdatePaymentStatus } from './adviceRequestUpdatePaymentStatus';
+import type { AdviceRequestUpdateStatus } from './adviceRequestUpdateStatus';
 export interface AdviceRequestUpdate {
     paymentStatus?: AdviceRequestUpdatePaymentStatus;
     status?: AdviceRequestUpdateStatus;

@@ -10,5 +10,7 @@ export declare const AdviceRequestTopic: {
     readonly financial: "financial";
     readonly investment: "investment";
     readonly retirement: "retirement";
+    readonly tax_planning: "tax_planning";
+    readonly tax_compliance: "tax_compliance";
 };
 //# sourceMappingURL=adviceRequestTopic.d.ts.map

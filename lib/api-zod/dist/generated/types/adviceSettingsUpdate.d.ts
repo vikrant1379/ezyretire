@@ -8,6 +8,7 @@
 export interface AdviceSettingsUpdate {
     /** @minimum 0 */
     consultationFee?: number;
+    /** International-format WhatsApp Business number, or blank to disable support */
     businessWhatsapp?: string;
     upiId?: string;
 }

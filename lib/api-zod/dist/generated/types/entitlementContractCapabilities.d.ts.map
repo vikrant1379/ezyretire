@@ -1,0 +1,1 @@
+{"version":3,"file":"entitlementContractCapabilities.d.ts","sourceRoot":"","sources":["../../../src/generated/types/entitlementContractCapabilities.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,MAAM,+BAA+B,GAAG;IAC5C,UAAU,EAAE,OAAO,CAAC;IACpB,mBAAmB,EAAE,OAAO,CAAC;IAC7B,aAAa,EAAE,OAAO,CAAC;IACvB,cAAc,EAAE,OAAO,CAAC;IACxB,cAAc,EAAE,OAAO,CAAC;CACzB,CAAC"}

@@ -5,6 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdvisorInput } from './advisorInput.js';
+import type { AdvisorInput } from './advisorInput';
 export type AdvisorUpdate = AdvisorInput;
 //# sourceMappingURL=advisorUpdate.d.ts.map

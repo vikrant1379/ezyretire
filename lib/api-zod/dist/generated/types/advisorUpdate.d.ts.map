@@ -1,1 +1,1 @@
-{"version":3,"file":"advisorUpdate.d.ts","sourceRoot":"","sources":["../../../src/generated/types/advisorUpdate.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,mBAAmB,CAAC;AAEtD,MAAM,MAAM,aAAa,GAAG,YAAY,CAAC"}
+{"version":3,"file":"advisorUpdate.d.ts","sourceRoot":"","sources":["../../../src/generated/types/advisorUpdate.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,gBAAgB,CAAC;AAEnD,MAAM,MAAM,aAAa,GAAG,YAAY,CAAC"}

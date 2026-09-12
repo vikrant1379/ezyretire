@@ -4,14 +4,14 @@ import { Button } from "@workspace/wealthone-design-system/components/ui/button"
 import { Card, CardContent } from "@workspace/wealthone-design-system/components/ui/card";
 import { Skeleton } from "@workspace/wealthone-design-system/components/ui/skeleton";
 import { ShieldAlert, ShieldCheck, LogIn, ArrowUpRight } from "lucide-react";
-import { adminLoginUrl, adminAppPath } from "@/lib/admin-path";
+import { adminAppPath, adminLoginUrl } from "@/lib/admin-path";
 import { AdminShell } from "./admin-shell";
 
 /**
  * Guards every admin surface.
  *
  * - loading: branded skeleton so the panel never flashes blank.
- * - not signed in: redirect to the dedicated /admin/login entry point.
+ * - not signed in: redirect to the standard app login and return to /admin.
  * - signed in without admin rights: a clear, on-brand denial with the option to
  *   continue with a different admin account (re-runs the OIDC redirect).
  * - admin: renders children inside the AdminShell.
@@ -29,7 +29,9 @@ export function AdminGuard({
   // Not signed in at all: send them to the dedicated admin sign-in screen.
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      window.location.replace(adminAppPath("/admin/login"));
+      window.location.replace(
+        adminAppPath(`/login?returnTo=${encodeURIComponent(returnRoute)}`),
+      );
     }
   }, [isLoading, isAuthenticated]);
 
@@ -96,13 +98,13 @@ export function AdminGuard({
                 </a>
               </Button>
               <Button variant="ghost" asChild data-testid="link-return-app">
-                <a href={adminAppPath("/")}>
-                  Return to ezyRetire
+                <a href={adminAppPath("/profile")}>
+                  Return to your profile
                   <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
                 </a>
               </Button>
             </div>
-            <p className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <p className="mt-6 flex items-center justify-center gap-1.5 text-tiny text-muted-foreground">
               <ShieldCheck className="h-3 w-3" />
               Access is restricted to verified administrators
             </p>

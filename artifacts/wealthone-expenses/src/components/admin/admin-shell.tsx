@@ -35,12 +35,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 </span>
                 <Badge
                   variant="outline"
-                  className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] uppercase tracking-wider"
+                  className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-tiny uppercase tracking-wider"
                 >
                   Admin
                 </Badge>
               </div>
-              <p className="hidden text-[11px] text-primary-foreground/70 sm:block">
+              <p className="hidden text-tiny text-primary-foreground/70 sm:block">
                 Operations panel
               </p>
             </div>
@@ -69,7 +69,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               </Avatar>
               <div className="max-w-[9rem] truncate text-xs">
                 <p className="truncate font-medium leading-tight">{displayName}</p>
-                <p className="flex items-center gap-1 text-[10px] text-primary-foreground/70 leading-tight">
+                <p className="flex items-center gap-1 text-tiny text-primary-foreground/70 leading-tight">
                   <Lock className="h-2.5 w-2.5" /> Verified admin
                 </p>
               </div>
@@ -142,7 +142,7 @@ export function AdminPageHeader({
     >
       <div className="flex items-start gap-3">
         {Icon ? (
-          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground">
             <Icon className="h-5 w-5" />
           </div>
         ) : null}

@@ -53,6 +53,14 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { AdminPageHeader } from "./admin-shell";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  addAdminAdvisor,
+  replaceAdminAdviceRequest,
+  replaceAdminAdvisor,
+  setAdminAdviceSettings,
+} from "@/lib/advice-query-cache";
+import { capturePrivateQueryGeneration } from "@/lib/query-policy";
 
 const guidanceTopics = {
   financial: {
@@ -117,6 +125,7 @@ function getPaymentStatusOptions(status: string) {
  * so this component assumes an authenticated admin and focuses on the work.
  */
 export function AdminAdvicePanel() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [guidanceFilter, setGuidanceFilter] = useState<GuidanceFilter>("all");
 
@@ -196,6 +205,7 @@ export function AdminAdvicePanel() {
   }, [dashboard?.requests, guidanceFilter]);
 
   const handleSaveSettings = () => {
+    const queryGeneration = capturePrivateQueryGeneration(queryClient);
     updateSettings.mutate(
       {
         data: {
@@ -205,9 +215,9 @@ export function AdminAdvicePanel() {
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: (settings) => {
+          setAdminAdviceSettings(queryClient, queryGeneration, settings);
           toast({ title: "Settings updated successfully" });
-          refetch();
         },
         onError: (error) => {
           toast({
@@ -258,6 +268,7 @@ export function AdminAdvicePanel() {
   };
 
   const handleSaveAdvisor = () => {
+    const queryGeneration = capturePrivateQueryGeneration(queryClient);
     const payload = {
       name: advisorForm.name,
       credentials: advisorForm.credentials,
@@ -282,10 +293,10 @@ export function AdminAdvicePanel() {
       updateAdvisor.mutate(
         { id: editingAdvisorId, data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (advisor) => {
+            replaceAdminAdvisor(queryClient, queryGeneration, advisor);
             toast({ title: "Advisor updated" });
             setIsAdvisorDialogOpen(false);
-            refetch();
           },
         },
       );
@@ -293,10 +304,10 @@ export function AdminAdvicePanel() {
       createAdvisor.mutate(
         { data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (advisor) => {
+            addAdminAdvisor(queryClient, queryGeneration, advisor);
             toast({ title: "Advisor created" });
             setIsAdvisorDialogOpen(false);
-            refetch();
           },
         },
       );
@@ -307,12 +318,13 @@ export function AdminAdvicePanel() {
     id: number,
     updates: Parameters<typeof updateRequest.mutate>[0]["data"],
   ) => {
+    const queryGeneration = capturePrivateQueryGeneration(queryClient);
     updateRequest.mutate(
       { id, data: updates },
       {
-        onSuccess: () => {
+        onSuccess: (request) => {
+          replaceAdminAdviceRequest(queryClient, queryGeneration, request);
           toast({ title: "Request updated" });
-          refetch();
         },
       },
     );
@@ -386,7 +398,6 @@ export function AdminAdvicePanel() {
         }
       />
 
-      {/* Operational snapshot */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map(({ label, value, icon: Icon }) => (
           <Card key={label} className="border-border">
@@ -418,7 +429,6 @@ export function AdminAdvicePanel() {
           </TabsTrigger>
         </TabsList>
 
-        {/* REQUESTS TAB */}
         <TabsContent value="requests" className="mt-6 space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -624,7 +634,6 @@ export function AdminAdvicePanel() {
           )}
         </TabsContent>
 
-        {/* ADVISORS TAB */}
         <TabsContent value="advisors" className="mt-6 space-y-6">
           <div className="flex justify-end">
             <Button onClick={openNewAdvisorDialog} data-testid="button-add-advisor">
@@ -679,7 +688,7 @@ export function AdminAdvicePanel() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Badge
                           variant="secondary"
-                          className="bg-secondary/15 text-[10px] text-secondary-foreground"
+                          className="bg-secondary/15 text-tiny text-secondary-foreground"
                         >
                           {adv.specialties.length} specialt
                           {adv.specialties.length === 1 ? "y" : "ies"}
@@ -687,14 +696,14 @@ export function AdminAdvicePanel() {
                         {adv.active ? (
                           <Badge
                             variant="outline"
-                            className="border-primary/30 bg-primary/5 text-[10px] text-primary"
+                            className="border-primary/30 bg-primary/5 text-tiny text-primary"
                           >
                             Active
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
-                            className="border-destructive/40 text-[10px] text-destructive"
+                            className="border-destructive/40 text-tiny text-destructive"
                           >
                             Inactive
                           </Badge>
@@ -725,7 +734,6 @@ export function AdminAdvicePanel() {
           </div>
         </TabsContent>
 
-        {/* SETTINGS TAB */}
         <TabsContent value="settings" className="mt-6">
           <Card className="max-w-2xl">
             <CardHeader>
@@ -809,7 +817,6 @@ export function AdminAdvicePanel() {
         </TabsContent>
       </Tabs>
 
-      {/* ADVISOR DIALOG */}
       <Dialog open={isAdvisorDialogOpen} onOpenChange={setIsAdvisorDialogOpen}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>

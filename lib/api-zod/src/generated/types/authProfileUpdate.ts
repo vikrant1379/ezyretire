@@ -10,6 +10,7 @@ export interface AuthProfileUpdate {
   fullName: string;
   dateOfBirth: string;
   gender: string;
-  phone: string;
+  /** @nullable */
+  phone?: string | null;
   onboardingCompleted: boolean;
 }

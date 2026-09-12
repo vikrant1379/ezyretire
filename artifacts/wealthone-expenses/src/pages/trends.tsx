@@ -17,9 +17,11 @@ import { TrendingUp, TrendingDown, Activity, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@workspace/wealthone-design-system/components/ui/button";
 import { QuickAddExpense } from "@/components/quick-add-expense";
+import { QueryErrorState } from "@/components/query-error-state";
+import { isValidTrendExpense } from "@/lib/trend-data";
 
 export default function Trends() {
-  const { data: expenses = [], isLoading } = useExpenses();
+  const { data: expenses = [], isLoading, isError, refetch } = useExpenses();
 
   const trendData = useMemo(() => {
     // Generate last 6 months data
@@ -33,9 +35,12 @@ export default function Trends() {
     });
 
     const data = months.map(m => {
-      const monthExpenses = expenses.filter(e => 
-        isWithinInterval(new Date(e.date), { start: m.start, end: m.end }) && !e.reimbursable
-      );
+      const monthExpenses = expenses.filter((e) => {
+        const date = new Date(e.date);
+        return isValidTrendExpense(e)
+          && isWithinInterval(date, { start: m.start, end: m.end })
+          && !e.reimbursable;
+      });
       
       const total = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
       
@@ -69,6 +74,10 @@ export default function Trends() {
     );
   }
 
+  if (isError) {
+    return <QueryErrorState onRetry={refetch} />;
+  }
+
   const currentMonth = trendData[trendData.length - 1];
   const previousMonth = trendData[trendData.length - 2];
   
@@ -87,9 +96,8 @@ export default function Trends() {
           Analyze your spending habits over time.
         </p>
       </div>
-
       {!hasSpendingHistory ? (
-        <Card className="border-0 shadow-sm bg-white">
+        <Card className="border-0 shadow-sm bg-card">
           <CardContent className="flex flex-col items-center justify-center p-6 py-12 md:px-6 md:py-16 text-center">
             <div className="mb-4 flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Activity className="h-7 w-7 md:h-8 md:w-8" />
@@ -114,31 +122,31 @@ export default function Trends() {
       ) : (
       <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-        <Card className="border-0 shadow-sm bg-white">
-          <CardContent className="flex h-full min-h-[126px] flex-col justify-between p-4 md:min-h-[176px] md:p-6">
+        <Card className="border-0 shadow-sm bg-card">
+          <CardContent className="flex h-full min-h-[126px] flex-col justify-between p-4 pt-4 md:min-h-[176px] md:p-6 md:pt-6">
             <div>
-              <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground md:text-xs">
+              <p className="truncate text-tiny font-medium uppercase tracking-wider text-muted-foreground md:text-xs">
                 Month-over-Month
               </p>
               <div className="mt-3 flex items-center gap-1.5 font-sans text-xl font-bold sm:text-2xl md:mt-4 md:gap-2 md:text-3xl">
                 {Math.abs(pctChange).toFixed(2)}%
                 {pctChange > 0 ? (
-                  <TrendingUp className="h-4 w-4 text-destructive md:h-5 md:w-5" />
+                  <TrendingUp className="h-4 w-4 text-muted-foreground md:h-5 md:w-5" />
                 ) : (
-                  <TrendingDown className="h-4 w-4 text-emerald-600 md:h-5 md:w-5" />
+                  <TrendingDown className="h-4 w-4 text-muted-foreground md:h-5 md:w-5" />
                 )}
               </div>
             </div>
-            <p className="text-[10px] md:text-sm text-muted-foreground truncate">
+            <p className="text-tiny md:text-sm text-muted-foreground truncate">
               {pctChange > 0 ? "Increase" : "Decrease"} vs last month
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-white">
-          <CardContent className="flex h-full min-h-[126px] flex-col justify-between p-4 md:min-h-[176px] md:p-6">
+        <Card className="border-0 shadow-sm bg-card">
+          <CardContent className="flex h-full min-h-[126px] flex-col justify-between p-4 pt-4 md:min-h-[176px] md:p-6 md:pt-6">
             <div>
-              <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground md:text-xs">
+              <p className="truncate text-tiny font-medium uppercase tracking-wider text-muted-foreground md:text-xs">
                 6-Month Average
               </p>
               <div className="mt-3 flex items-center gap-1.5 font-sans text-xl font-bold sm:text-2xl md:mt-4 md:gap-2 md:text-3xl">
@@ -146,30 +154,30 @@ export default function Trends() {
                 <Activity className="h-4 w-4 shrink-0 text-muted-foreground md:h-5 md:w-5" />
               </div>
             </div>
-            <p className="text-[10px] md:text-sm text-muted-foreground truncate">
+            <p className="text-tiny md:text-sm text-muted-foreground truncate">
               Avg. monthly expenditure
             </p>
           </CardContent>
         </Card>
         
-        <Card className="border-0 shadow-sm bg-primary text-primary-foreground col-span-2 md:col-span-1">
-          <CardContent className="flex h-full min-h-[126px] flex-col justify-between p-4 md:min-h-[176px] md:p-6">
+        <Card className="rounded-lg border-0 shadow-sm text-primary-foreground col-span-2 md:col-span-1 pt-[10px] bg-[color:var(--color-blue-300)]">
+          <CardContent className="flex h-full min-h-[126px] flex-col justify-between p-4 pt-4 md:min-h-[176px] md:p-6 md:pt-6">
             <div>
-              <p className="truncate text-[10px] font-medium uppercase tracking-wider text-primary-foreground/80 md:text-xs">
+              <p className="truncate text-tiny font-medium uppercase tracking-wider text-primary-foreground/80 md:text-xs">
                 Top Category
               </p>
               <p className="mt-3 truncate font-sans text-xl font-bold sm:text-2xl md:mt-4 md:text-3xl">
                 {currentMonth.topCategoryName}
               </p>
             </div>
-            <p className="text-[10px] md:text-sm text-primary-foreground/90 truncate">
+            <p className="text-tiny md:text-sm text-primary-foreground/90 truncate">
               {formatINR(currentMonth.topCategoryAmount)} spent this month
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-0 shadow-md bg-white">
+      <Card className="border-0 shadow-md bg-card">
         <CardHeader className="p-4 md:p-6 md:pb-4">
           <CardTitle className="text-base md:text-lg font-serif">Spending History (Last 6 Months)</CardTitle>
         </CardHeader>
@@ -192,7 +200,7 @@ export default function Trends() {
                   tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
                   width={45}
                 />
-                <RechartsTooltip 
+                <RechartsTooltip
                   formatter={(value: number) => [formatINR(value), "Spent"]}
                   cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}

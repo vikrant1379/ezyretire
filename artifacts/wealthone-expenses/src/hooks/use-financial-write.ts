@@ -2,6 +2,8 @@ import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   isFinancialAccountSwitchError,
+  enqueueExternalFinancialMutation,
+  UncertainExternalFinancialMutationError,
   saveFinancialData,
   updateFinancialData,
   type FinancialData,
@@ -14,8 +16,9 @@ import {
   claimAccountSwitchSaveNotice as claimSharedAccountSwitchSaveNotice,
   consumePendingSaveLogoutNotice,
 } from "@/lib/account-switch-save-coordinator";
+import { FINANCIAL_DATA_KEY } from "@/lib/query-policy";
 
-export const FINANCIAL_DATA_KEY = ["financial-data"];
+export { FINANCIAL_DATA_KEY } from "@/lib/query-policy";
 export const ACCOUNT_SWITCH_SAVE_TITLE = "Change not saved";
 export const ACCOUNT_SWITCH_SAVE_CANCELLED_EVENT = "account_switch_save_cancelled";
 
@@ -37,6 +40,11 @@ export function accountSwitchSaveDescription(error: unknown): string | undefined
   return isFinancialAccountSwitchError(error) && error instanceof Error
     ? error.message
     : undefined;
+}
+
+export function financialWriteErrorDescription(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return "Your change could not be saved. Check your connection and try again.";
 }
 
 type UpdateFinancialData = typeof updateFinancialData;
@@ -101,7 +109,15 @@ export async function performFinancialOperation(
   try {
     saved = await operation();
   } catch (error) {
-    write.finish();
+    const mayPublish = write.finish();
+    if (
+      mayPublish &&
+      error instanceof UncertainExternalFinancialMutationError &&
+      error.reconciledData
+    ) {
+      queryClient.setQueryData(FINANCIAL_DATA_KEY, error.reconciledData);
+      write.setVisibleData();
+    }
     throw error;
   }
 
@@ -110,6 +126,35 @@ export async function performFinancialOperation(
     write.setVisibleData();
   }
   return saved;
+}
+
+/** Completes a server-side financial operation while publishing its result
+ * through the same account-generation guard as ordinary financial writes. */
+export async function performFinancialCacheUpdate<Result>(
+  queryClient: QueryClient,
+  operation: () => Promise<Result>,
+  updater: (current: FinancialData, result: Result) => FinancialData,
+): Promise<Result> {
+  const write = beginFinancialWrite(queryClient);
+  let completion: { result: Result; data: FinancialData };
+  try {
+    completion = await enqueueExternalFinancialMutation(operation, updater);
+  } catch (error) {
+    const mayPublish = write.finish();
+    if (
+      mayPublish &&
+      error instanceof UncertainExternalFinancialMutationError &&
+      error.reconciledData
+    ) {
+      queryClient.setQueryData(FINANCIAL_DATA_KEY, error.reconciledData);
+      write.setVisibleData();
+    }
+    throw error;
+  }
+  if (!write.finish()) return completion.result;
+  queryClient.setQueryData(FINANCIAL_DATA_KEY, completion.data);
+  write.setVisibleData();
+  return completion.result;
 }
 
 export function performFinancialWrite(
@@ -136,6 +181,18 @@ export function useFinancialOperation() {
             description,
             variant: "destructive",
           });
+        } else if (!description) {
+          toast({
+            title: "Change not saved",
+            description: financialWriteErrorDescription(error),
+            variant: "destructive",
+          });
+        } else if (!description) {
+          toast({
+            title: "Change not saved",
+            description: financialWriteErrorDescription(error),
+            variant: "destructive",
+          });
         }
         throw error;
       }
@@ -158,7 +215,9 @@ export function useReplaceFinancialData() {
  * cache. Invalidating instead would spend another round trip re-reading the
  * document the write just returned.
  */
-export function useFinancialWrite() {
+export function useFinancialWrite(
+  { showErrorToast = true }: { showErrorToast?: boolean } = {},
+) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -175,10 +234,16 @@ export function useFinancialWrite() {
             description,
             variant: "destructive",
           });
+        } else if (!description && showErrorToast) {
+          toast({
+            title: "Change not saved",
+            description: financialWriteErrorDescription(error),
+            variant: "destructive",
+          });
         }
         throw error;
       }
     },
-    [queryClient, toast],
+    [queryClient, showErrorToast, toast],
   );
 }

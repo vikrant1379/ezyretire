@@ -42,7 +42,7 @@ function Breakdown({ summary }: { summary: TaxSummary }) {
       {rows.map(({ key, label, subtract }) => (
         <div key={key} className="flex items-center justify-between gap-4 py-3 text-sm">
           <dt className={key === "taxableIncome" ? "font-semibold" : "text-muted-foreground"}>{label}</dt>
-          <dd className="shrink-0 tabular-nums font-medium">
+           <dd className={`shrink-0 tabular-nums font-medium ${key === "grossIncome" ? "text-positive" : "text-foreground"}`}>
             {subtract && summary[key] > 0 ? "− " : ""}{formatINR(summary[key])}
           </dd>
         </div>
@@ -50,14 +50,14 @@ function Breakdown({ summary }: { summary: TaxSummary }) {
       {summary.capitalGainsTax > 0 && (
         <div className="flex items-center justify-between gap-4 py-3 text-sm">
           <dt className="text-muted-foreground">Tax on gains at special rates</dt>
-          <dd className="shrink-0 tabular-nums font-medium" data-testid="value-special-rate-tax">
+           <dd className="shrink-0 tabular-nums font-medium text-foreground" data-testid="value-special-rate-tax">
             {formatINR(summary.capitalGainsTax)}
           </dd>
         </div>
       )}
       <div className="flex items-center justify-between gap-4 pt-4 text-base font-semibold">
         <dt>Estimated annual tax</dt>
-        <dd className="tabular-nums text-primary">{formatINR(summary.totalTax)}</dd>
+         <dd className="tabular-nums text-foreground">{formatINR(summary.totalTax)}</dd>
       </div>
     </dl>
   );
@@ -74,7 +74,15 @@ export default function Tax() {
   }), [sources, investments, financialYear]);
   const selected = summaries[regime];
   const saving = Math.abs(summaries.new.totalTax - summaries.old.totalTax);
+  const tied = saving === 0;
   const lowerRegime = summaries.new.totalTax <= summaries.old.totalTax ? "New" : "Old";
+  const recommendationReason = tied
+    ? "Both regimes produce the same estimate for the currently supported saved income and deductions."
+    : lowerRegime === "Old"
+    ? `The old regime is lower because ${formatINR(summaries.old.investmentDeduction)} of supported deductions outweighs the new regime's slab and standard-deduction benefit for these saved records.`
+    : summaries.old.investmentDeduction > 0
+      ? `The new regime remains lower even after ${formatINR(summaries.old.investmentDeduction)} of supported old-regime deductions.`
+      : "The new regime is lower because no supported old-regime investment deductions are available in these saved records.";
   const capitalGainTreatments = selected.disposalTreatments;
 
   if (incomeLoading || investmentsLoading) {
@@ -131,7 +139,7 @@ export default function Tax() {
       <section aria-labelledby="regime-comparison-heading">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 id="regime-comparison-heading" className="font-serif text-lg md:text-xl">Regime comparison</h2>
-          <Badge variant="secondary">{lowerRegime} regime is lower by {formatINR(saving)}</Badge>
+          <Badge variant="secondary">{tied ? "Both regimes are equal" : `${lowerRegime} regime is lower by ${formatINR(saving)}`}</Badge>
         </div>
         <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           {(["new", "old"] as const).map((item) => {
@@ -149,7 +157,7 @@ export default function Tax() {
                   <span className="font-semibold capitalize text-sm md:text-base">{item} regime</span>
                   {active && <Badge>Selected</Badge>}
                 </span>
-                <span className="mt-3 md:mt-5 block text-2xl md:text-3xl font-bold tabular-nums">{formatINR(summary.totalTax)}</span>
+                <span className="mt-3 md:mt-5 block text-2xl md:text-3xl font-bold tabular-nums text-foreground">{formatINR(summary.totalTax)}</span>
                 <span className="mt-1 block text-xs md:text-sm text-muted-foreground">
                   {formatINR(summary.totalTax / 12)} average per month
                 </span>
@@ -157,27 +165,30 @@ export default function Tax() {
             );
           })}
         </div>
+        <p className="mt-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="text-tax-recommendation-reason">
+          <strong className="text-foreground">Why:</strong> {recommendationReason}
+        </p>
       </section>
 
       <section className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4" aria-label="Tax position summary">
         <Card className="flex flex-col">
           <CardHeader className="p-4 md:p-6 md:pb-2 pb-2"><CardDescription className="text-xs">Estimated liability</CardDescription></CardHeader>
-          <CardContent className="p-4 pt-0 md:p-6 md:pt-0 text-xl md:text-2xl font-bold tabular-nums">{formatINR(selected.totalTax)}</CardContent>
+           <CardContent className="p-4 pt-0 md:p-6 md:pt-0 text-xl md:text-2xl font-bold tabular-nums text-foreground">{formatINR(selected.totalTax)}</CardContent>
         </Card>
         <Card className="flex flex-col">
           <CardHeader className="p-4 md:p-6 md:pb-2 pb-2"><CardDescription className="text-xs">Employer TDS</CardDescription></CardHeader>
-          <CardContent className="p-4 pt-0 md:p-6 md:pt-0 text-xl md:text-2xl font-bold tabular-nums">{formatINR(selected.tdsWithheld)}</CardContent>
+           <CardContent className="p-4 pt-0 md:p-6 md:pt-0 text-xl md:text-2xl font-bold tabular-nums text-foreground">{formatINR(selected.tdsWithheld)}</CardContent>
         </Card>
         <Card className="flex flex-col">
           <CardHeader className="p-4 md:p-6 md:pb-2 pb-2"><CardDescription className="text-xs">Automatic TDS</CardDescription></CardHeader>
           <CardContent className="p-4 pt-0 md:p-6 md:pt-0">
-            <p className="text-xl md:text-2xl font-bold tabular-nums">{formatINR(selected.automaticTdsEstimate)}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground leading-tight">Not counted as already withheld</p>
+             <p className="text-xl md:text-2xl font-bold tabular-nums text-foreground">{formatINR(selected.automaticTdsEstimate)}</p>
+            <p className="mt-1 text-tiny text-muted-foreground leading-tight">Not counted as already withheld</p>
           </CardContent>
         </Card>
         <Card className="flex flex-col">
           <CardHeader className="p-4 md:p-6 md:pb-2 pb-2"><CardDescription className="text-xs truncate">{selected.balanceTax >= 0 ? "Estimated balance" : "Potential excess"}</CardDescription></CardHeader>
-          <CardContent className="p-4 pt-0 md:p-6 md:pt-0 text-xl md:text-2xl font-bold tabular-nums text-primary">{formatINR(Math.abs(selected.balanceTax))}</CardContent>
+           <CardContent className="p-4 pt-0 md:p-6 md:pt-0 text-xl md:text-2xl font-bold tabular-nums text-foreground">{formatINR(Math.abs(selected.balanceTax))}</CardContent>
         </Card>
       </section>
 
@@ -194,26 +205,26 @@ export default function Tax() {
           <CardContent className="p-4 pt-0 md:p-6 md:pt-0 space-y-4 md:space-y-5">
             <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border p-3">
-                <p className="text-[10px] md:text-xs text-muted-foreground">Realized gains included</p>
-                <p className="mt-1 text-base md:text-lg font-semibold tabular-nums" data-testid="value-realized-included-gains">
+                <p className="text-tiny md:text-xs text-muted-foreground">Realized gains included</p>
+                <p className={`mt-1 text-base md:text-lg font-semibold tabular-nums ${selected.taxableCapitalGains > 0 ? "text-positive" : "text-foreground"}`} data-testid="value-realized-included-gains">
                   {formatINR(selected.taxableCapitalGains)}
                 </p>
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">Short-term gains</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums" data-testid="value-short-term-gains">
+                <p className={`mt-1 text-lg font-semibold tabular-nums ${selected.shortTermCapitalGains > 0 ? "text-positive" : "text-foreground"}`} data-testid="value-short-term-gains">
                   {formatINR(selected.shortTermCapitalGains)}
                 </p>
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">Long-term gains</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums" data-testid="value-long-term-gains">
+                <p className={`mt-1 text-lg font-semibold tabular-nums ${selected.longTermCapitalGains > 0 ? "text-positive" : "text-foreground"}`} data-testid="value-long-term-gains">
                   {formatINR(selected.longTermCapitalGains)}
                 </p>
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">Tax at special rates</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-primary" data-testid="value-capital-gains-tax">
+                 <p className="mt-1 text-lg font-semibold tabular-nums text-foreground" data-testid="value-capital-gains-tax">
                   {formatINR(selected.capitalGainsTax)}
                 </p>
               </div>
@@ -250,7 +261,7 @@ export default function Tax() {
                           <Badge variant={excluded ? "outline" : "secondary"}>
                             {excluded ? "Excluded" : "Included"}
                           </Badge>
-                          <p className="mt-1 font-semibold tabular-nums">{formatINR(treatment.gain)}</p>
+                          <p className={`mt-1 font-semibold tabular-nums ${treatment.gain > 0 ? "text-positive" : "text-foreground"}`}>{formatINR(treatment.gain)}</p>
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-muted-foreground">
@@ -285,11 +296,11 @@ export default function Tax() {
           <CardContent className="space-y-4 text-sm">
             <div>
               <p className="text-muted-foreground">Salary income</p>
-              <p className="text-lg font-semibold tabular-nums">{formatINR(selected.salaryIncome)}</p>
+               <p className="text-lg font-semibold tabular-nums text-positive">{formatINR(selected.salaryIncome)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Other recurring income</p>
-              <p className="text-lg font-semibold tabular-nums">{formatINR(selected.otherIncome)}</p>
+               <p className="text-lg font-semibold tabular-nums text-positive">{formatINR(selected.otherIncome)}</p>
             </div>
             <div className="rounded-lg bg-muted/60 p-3 text-muted-foreground">
               Old-regime investment deductions include saved monthly EPF/PPF contributions under the shared
@@ -319,7 +330,7 @@ export default function Tax() {
                       <Badge variant={source.status === "included" ? "secondary" : "outline"}>
                         {source.status === "included" ? "Included" : "Excluded"}
                       </Badge>
-                      <p className="mt-1 font-semibold tabular-nums">{formatINR(source.amount)}</p>
+                       <p className="mt-1 font-semibold tabular-nums text-positive">{formatINR(source.amount)}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">{source.treatment}</p>

@@ -7,17 +7,22 @@ import {
   carryPendingFinancialChangeNoticeAcrossLogout,
   claimAccountSwitchSaveNotice,
   FINANCIAL_DATA_KEY,
+  financialWriteErrorDescription,
   performFinancialOperation,
   performFinancialWrite,
   trackAccountSwitchSaveCancellation,
 } from "./use-financial-write.ts";
 import {
+  activateFinancialDataAccount,
+  deleteFinancialExpense,
   FinancialAccountSwitchError,
+  restoreFinancialData,
+  UncertainExternalFinancialMutationError,
   type FinancialData,
 } from "../lib/financial-api.ts";
 
 function financialData(account: string): FinancialData {
-  return { account } as unknown as FinancialData;
+  return { account, expenses: [] } as unknown as FinancialData;
 }
 
 function controlledSave() {
@@ -41,6 +46,11 @@ test("only account-switch cancellations receive the retry description", () => {
     "Your account changed before this could be saved. Switch to the correct account and try again.",
   );
   assert.equal(accountSwitchSaveDescription(new Error("network failed")), undefined);
+});
+
+test("ordinary write failures retain an actionable message", () => {
+  assert.equal(financialWriteErrorDescription(new Error("Allocation exceeds available surplus")), "Allocation exceeds available surplus");
+  assert.equal(financialWriteErrorDescription(null), "Your change could not be saved. Check your connection and try again.");
 });
 
 test("account-switch cancellation analytics contain only the coarse save flow", () => {
@@ -177,6 +187,100 @@ test("an old direct-operation failure cannot alter a replaced account cache", as
 
   await assert.rejects(pending, /first account save failed/);
   assert.equal(client.getQueryData(FINANCIAL_DATA_KEY), secondAccount);
+  client.clear();
+});
+
+test("a committed restore with a lost response publishes reconciled data while rethrowing", async () => {
+  const client = new QueryClient();
+  const backup = financialData("backup");
+  const reconciled = {
+    ...financialData("canonical-after-restore"),
+    expenses: [{ id: "canonical-restored-expense" }],
+  } as unknown as FinancialData;
+  let document = financialData("before-restore");
+  globalThis.fetch = (async (_input, init) => {
+    if (init?.method === "POST") {
+      document = reconciled;
+      throw new Error("restore response lost");
+    }
+    return new Response(JSON.stringify(document));
+  }) as typeof fetch;
+  activateFinancialDataAccount("lost-restore-cache-publication");
+  client.setQueryData(FINANCIAL_DATA_KEY, financialData("before-restore"));
+
+  await assert.rejects(
+    performFinancialOperation(client, () => restoreFinancialData(backup)),
+    (error) =>
+      error instanceof UncertainExternalFinancialMutationError
+      && error.reconciledData?.expenses[0]?.id === "canonical-restored-expense",
+  );
+  assert.equal(
+    client.getQueryData<FinancialData>(FINANCIAL_DATA_KEY)?.expenses[0]?.id,
+    "canonical-restored-expense",
+  );
+  client.clear();
+});
+
+test("retrying a lost DELETE keeps the reconciled deletion visible after a retry error", async () => {
+  const client = new QueryClient();
+  const stale = {
+    ...financialData("delete-account"),
+    incomeSources: [],
+    expenses: [{ id: "deleted-expense" }],
+    budgets: [],
+    investments: [],
+    loans: [],
+  } as unknown as FinancialData;
+  const canonical = { ...stale, expenses: [] };
+  let deleted = false;
+  const methods: string[] = [];
+  globalThis.fetch = (async (_input, init) => {
+    const method = init?.method ?? "GET";
+    methods.push(method);
+    if (method === "DELETE") {
+      if (!deleted) {
+        deleted = true;
+        throw new Error("delete response lost");
+      }
+      throw new Error("expense not found");
+    }
+    return new Response(JSON.stringify(deleted ? canonical : stale));
+  }) as typeof fetch;
+  activateFinancialDataAccount("lost-delete-cache-publication");
+  client.setQueryData(FINANCIAL_DATA_KEY, stale);
+
+  await assert.rejects(
+    performFinancialOperation(client, () => deleteFinancialExpense("deleted-expense")),
+    UncertainExternalFinancialMutationError,
+  );
+  assert.deepEqual(client.getQueryData<FinancialData>(FINANCIAL_DATA_KEY)?.expenses, []);
+
+  await assert.rejects(
+    performFinancialOperation(client, () => deleteFinancialExpense("deleted-expense")),
+    UncertainExternalFinancialMutationError,
+  );
+  assert.deepEqual(client.getQueryData<FinancialData>(FINANCIAL_DATA_KEY)?.expenses, []);
+  assert.equal(methods.includes("PUT"), false);
+  client.clear();
+});
+
+test("an account switch prevents reconciled error data from being published", async () => {
+  const client = new QueryClient();
+  const first = financialData("first");
+  const second = financialData("second");
+  client.setQueryData(FINANCIAL_DATA_KEY, first);
+  const controlled = controlledSave();
+  const pending = performFinancialOperation(client, controlled.save);
+
+  client.removeQueries({ queryKey: FINANCIAL_DATA_KEY });
+  client.setQueryData(FINANCIAL_DATA_KEY, second);
+  controlled.reject(new UncertainExternalFinancialMutationError(
+    "restore response lost",
+    financialData("stale-reconciled-first"),
+  ));
+
+  await assert.rejects(pending, UncertainExternalFinancialMutationError);
+  assert.equal(client.getQueryData(FINANCIAL_DATA_KEY), second);
   client.clear();
 });
 

@@ -1,5 +1,11 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useIncomeSources, useAddIncomeSource, useUpdateIncomeSource, useDeleteIncomeSource, calculateIncomeMetrics } from "@/hooks/use-income";
+import {
+  useAddIncomeReceipt,
+  useDeleteIncomeReceipt,
+  useIncomeReceipts,
+  useUpdateIncomeReceipt,
+} from "@/hooks/use-income-receipts";
 import { formatCompactINR, formatINR } from "@/lib/utils";
 import { cn } from "@workspace/wealthone-design-system/lib/utils";
 import { Button } from "@workspace/wealthone-design-system/components/ui/button";
@@ -15,14 +21,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { Plus, Briefcase, Pencil, Info, Calculator, MoreVertical, Trash2 } from "lucide-react";
+import { Plus, Briefcase, Pencil, Info, Calculator, MoreVertical, Trash2, CircleDollarSign } from "lucide-react";
 import { DatePickerInput } from "@workspace/wealthone-design-system/components/ui/date-picker-input";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
-import { formatDateOnly, parseDateOnly, type IncomeType, type IncomeFrequency, type SalaryDetails, type IncomeSource } from "@/lib/storage";
+import { formatDateOnly, parseDateOnly, type IncomeType, type IncomeFrequency, type SalaryDetails, type IncomeReceipt, type IncomeSource } from "@/lib/storage";
 import { useToast } from "@workspace/wealthone-design-system/hooks/use-toast";
-import { useRetirementInputs } from "@/hooks/use-retirement";
+import { useProfileInputs, useRetirementInputs } from "@/hooks/use-retirement";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { datedFundNetAmount } from "@/lib/financial-metrics";
+import { financialHealthCompletionCallbacks } from "@/lib/financial-health-analytics";
 import {
   defaultUiPreferences,
   pendingSortAfterConfirmation,
@@ -42,21 +49,21 @@ import { CardSortControls } from "@/components/card-sort-controls";
 import { DownloadExcelButton } from "@/components/download-excel-button";
 import { buildIncomeReportSheets } from "@/lib/excel-report-builders";
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/wealthone-design-system/components/ui/popover";
+import { QueryErrorState } from "@/components/query-error-state";
 import {
   calculateIncomeTax,
   financialYearForDate,
   INDIAN_INCOME_TAX_RULES,
   type FinancialYear,
 } from "@/lib/income-tax";
+import { incomeReconciliationForMonth } from "@/lib/income-reconciliation";
 
 const CHART_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--secondary))",
-  "#10b981",
-  "#8b5cf6",
-  "#6366f1",
-  "#ec4899",
-  "#f43f5e",
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
 const incomeTypes: IncomeType[] = ['Salary', 'Bonus', 'Freelance/Consulting', 'Rental', 'Dividends', 'Interest', 'Business', 'Capital Gains', 'Other'];
@@ -158,21 +165,37 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const receiptFormSchema = z.object({
+  incomeSourceId: z.string().min(1, "Choose an income source"),
+  receivedDate: z.date(),
+  amount: z.coerce.number().positive("Enter an amount greater than zero"),
+  note: z.string().optional(),
+});
+
+type ReceiptFormValues = z.infer<typeof receiptFormSchema>;
+
 export default function Income() {
-  const { data: sources = [], isLoading } = useIncomeSources();
+  const { data: sources = [], isLoading, isError, refetch } = useIncomeSources();
+  const { data: receipts = [] } = useIncomeReceipts();
   const { data: retirementInputs } = useRetirementInputs();
+  const { data: profileInputs } = useProfileInputs();
   const { data: uiPreferences = defaultUiPreferences() } = useUiPreferences();
   const updatePreferences = useUpdateUiPreferences();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTaxBreakdownOpen, setIsTaxBreakdownOpen] = useState(false);
   const [sourceToDelete, setSourceToDelete] = useState<IncomeSource | null>(null);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
+  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null);
   const [pendingIncomeSort, setPendingIncomeSort] = useState<ListSort<IncomeSortBy> | null>(null);
   const { toast } = useToast();
 
   const addIncome = useAddIncomeSource();
   const updateIncome = useUpdateIncomeSource();
   const deleteIncome = useDeleteIncomeSource();
+  const addReceipt = useAddIncomeReceipt();
+  const updateReceipt = useUpdateIncomeReceipt();
+  const deleteReceipt = useDeleteIncomeReceipt();
   const isSaving = addIncome.isPending || updateIncome.isPending;
 
   const metrics = useMemo(() => {
@@ -263,6 +286,76 @@ export default function Income() {
       otherDeductions: 0,
     }
   });
+  const receiptForm = useForm<ReceiptFormValues>({
+    resolver: zodResolver(receiptFormSchema),
+    defaultValues: {
+      incomeSourceId: "",
+      receivedDate: new Date(),
+      amount: 0,
+      note: "",
+    },
+  });
+
+  const currentMonthReconciliation = useMemo(() => {
+    return incomeReconciliationForMonth({
+      sources,
+      receipts,
+      profileInputs,
+      retirementInputs,
+    });
+  }, [profileInputs, receipts, retirementInputs, sources]);
+
+  const sourceNames = useMemo(
+    () => new Map(sources.map((source) => [source.id, source.name])),
+    [sources],
+  );
+
+  const openReceiptDialog = (receipt?: IncomeReceipt, sourceId?: string) => {
+    if (receipt) {
+      setEditingReceiptId(receipt.id);
+      receiptForm.reset({
+        incomeSourceId: receipt.incomeSourceId,
+        receivedDate: parseDateOnly(receipt.receivedDate),
+        amount: receipt.amount,
+        note: receipt.note ?? "",
+      });
+    } else {
+      setEditingReceiptId(null);
+      receiptForm.reset({
+        incomeSourceId: sourceId ?? sources[0]?.id ?? "",
+        receivedDate: new Date(),
+        amount: 0,
+        note: "",
+      });
+    }
+    setIsReceiptDialogOpen(true);
+  };
+
+  const saveReceipt = (values: ReceiptFormValues) => {
+    const payload = {
+      incomeSourceId: values.incomeSourceId,
+      receivedDate: formatDateOnly(values.receivedDate),
+      amount: values.amount,
+      note: values.note?.trim() || undefined,
+    };
+    if (editingReceiptId) {
+      const existing = receipts.find((receipt) => receipt.id === editingReceiptId);
+      if (!existing) return;
+      updateReceipt.mutate({ ...existing, ...payload }, {
+        onSuccess: () => {
+          setIsReceiptDialogOpen(false);
+          toast({ title: "Income receipt updated" });
+        },
+      });
+      return;
+    }
+    addReceipt.mutate(payload, {
+      onSuccess: () => {
+        setIsReceiptDialogOpen(false);
+        toast({ title: "Income receipt recorded" });
+      },
+    });
+  };
 
   const watchType = form.watch("type");
   const watchFrequency = form.watch("frequency");
@@ -421,19 +514,15 @@ export default function Income() {
     };
 
     if (editingId) {
-      updateIncome.mutate({ ...payload, id: editingId, createdAt: sources.find(s => s.id === editingId)!.createdAt }, {
-        onSuccess: () => {
+      updateIncome.mutate({ ...payload, id: editingId, createdAt: sources.find(s => s.id === editingId)!.createdAt }, financialHealthCompletionCallbacks("income", "updated", () => {
           setIsDialogOpen(false);
           toast({ title: "Income source updated" });
-        }
-      });
+      }));
     } else {
-      addIncome.mutate(payload, {
-        onSuccess: () => {
+      addIncome.mutate(payload, financialHealthCompletionCallbacks("income", "created", () => {
           setIsDialogOpen(false);
           toast({ title: "Income source added" });
-        }
-      });
+      }));
     }
   };
 
@@ -486,8 +575,13 @@ export default function Income() {
     );
   }
 
+  if (isError) {
+    return <QueryErrorState onRetry={refetch} />;
+  }
+
   const incomeExportSheets = buildIncomeReportSheets(orderedSources, {
     salaryGrowth: retirementInputs?.salaryGrowth,
+    receipts,
   });
 
   return (
@@ -506,55 +600,140 @@ export default function Income() {
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-3">
         <Card className="min-w-0 border-0 shadow-md bg-card">
-          <CardContent className="p-3.5 sm:p-4 md:p-5">
-            <p className="text-[9px] font-medium uppercase leading-4 tracking-wider text-muted-foreground sm:text-[10px] md:text-xs">
+          <CardContent className="p-3.5 sm:p-4 md:p-5 lg:pt-7" data-testid="income-summary-content">
+            <p className="text-tiny font-medium uppercase leading-4 tracking-wider text-muted-foreground sm:text-tiny md:text-xs">
               Monthly Net Income
             </p>
-            <p className="financial-number mt-2 font-sans text-xl font-bold sm:text-2xl md:text-3xl">
+            <p className={cn("financial-number mt-2 font-sans text-xl font-bold sm:text-2xl md:text-3xl", metrics.totalMonthlyNet > 0 ? "text-positive" : metrics.totalMonthlyNet < 0 ? "text-negative" : "text-foreground")}>
               <span className="sm:hidden" title={formatINR(metrics.totalMonthlyNet)} aria-label={formatINR(metrics.totalMonthlyNet)}>{formatCompactINR(metrics.totalMonthlyNet)}</span>
               <span className="hidden sm:inline">{formatINR(metrics.totalMonthlyNet)}</span>
             </p>
-            <p className="mt-3 text-[10px] leading-4 text-muted-foreground sm:text-xs md:mt-4 md:text-sm">Monthly sources only</p>
+            <p className="mt-3 text-tiny leading-4 text-muted-foreground sm:text-xs md:mt-4 md:text-sm">Monthly sources only</p>
           </CardContent>
         </Card>
 
         <Card className="min-w-0 border-0 shadow-md bg-card">
-          <CardContent className="p-3.5 sm:p-4 md:p-5">
-            <p className="text-[9px] font-medium uppercase leading-4 tracking-wider text-muted-foreground sm:text-[10px] md:text-xs">
+          <CardContent className="p-3.5 sm:p-4 md:p-5 lg:pt-7" data-testid="income-summary-content">
+            <p className="text-tiny font-medium uppercase leading-4 tracking-wider text-muted-foreground sm:text-tiny md:text-xs">
               Monthly Income Annualized Gross
             </p>
-            <p className="financial-number mt-2 font-sans text-xl font-bold sm:text-2xl md:text-3xl">
+            <p className={cn("financial-number mt-2 font-sans text-xl font-bold sm:text-2xl md:text-3xl", metrics.totalAnnualGross > 0 ? "text-positive" : metrics.totalAnnualGross < 0 ? "text-negative" : "text-foreground")}>
               <span className="sm:hidden" title={formatINR(metrics.totalAnnualGross)} aria-label={formatINR(metrics.totalAnnualGross)}>{formatCompactINR(metrics.totalAnnualGross)}</span>
               <span className="hidden sm:inline">{formatINR(metrics.totalAnnualGross)}</span>
             </p>
-            <p className="mt-3 text-[10px] leading-4 text-muted-foreground sm:text-xs md:mt-4 md:text-sm">
+            <p className="mt-3 text-tiny leading-4 text-muted-foreground sm:text-xs md:mt-4 md:text-sm">
               <span className="sm:hidden">Before deductions</span>
               <span className="hidden sm:inline">Monthly sources × 12, before deductions</span>
             </p>
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 border-0 bg-gradient-to-br from-primary to-primary/90 text-primary-foreground shadow-md xl:col-span-1">
-          <CardContent className="p-4 md:p-5">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-primary-foreground/80 md:text-xs">
+        <Card className="col-span-2 border-0 bg-card shadow-md xl:col-span-1">
+          <CardContent className="p-4 md:p-5 lg:pt-7" data-testid="income-summary-content">
+            <p className="text-tiny font-medium uppercase tracking-wider text-muted-foreground md:text-xs">
               Effective Tax Rate
             </p>
-            <p className="financial-number mt-2 font-sans text-xl font-bold text-white sm:text-2xl md:text-3xl">
+            <p className="financial-number mt-2 font-sans text-xl font-bold text-foreground sm:text-2xl md:text-3xl">
               {metrics.effectiveTaxRate.toFixed(2)}%
             </p>
-            <p className="mt-3 text-xs text-primary-foreground/90 md:mt-4 md:text-sm">
+            <p className="mt-3 text-xs text-muted-foreground md:mt-4 md:text-sm">
               Estimated blend across recurring monthly sources
             </p>
           </CardContent>
         </Card>
       </div>
 
+      <Card className="border-0 shadow-sm bg-card">
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 p-4 md:p-6">
+          <div>
+            <CardTitle className="text-base font-serif md:text-lg">Received Income</CardTitle>
+            <CardDescription className="mt-1">
+              Record what actually arrived without changing your expected schedule.
+            </CardDescription>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => openReceiptDialog()}
+            disabled={sources.length === 0}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Record receipt
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4 p-4 pt-0 md:p-6 md:pt-0">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-muted/60 p-3">
+              <p className="text-xs text-muted-foreground">Expected this month</p>
+              <p className={cn("mt-1 font-semibold tabular-nums", currentMonthReconciliation.expected > 0 ? "text-positive" : "text-foreground")}>{formatINR(currentMonthReconciliation.expected)}</p>
+            </div>
+            <div className="rounded-lg bg-muted/60 p-3">
+              <p className="text-xs text-muted-foreground">Received this month</p>
+              <p className={cn("mt-1 font-semibold tabular-nums", currentMonthReconciliation.received > 0 ? "text-positive" : "text-foreground")}>{formatINR(currentMonthReconciliation.received)}</p>
+            </div>
+            <div className="rounded-lg bg-muted/60 p-3">
+              <p className="text-xs text-muted-foreground">Variance</p>
+              <p className={cn(
+                "mt-1 font-semibold tabular-nums",
+                  currentMonthReconciliation.variance < 0
+                   ? "text-negative"
+                  : currentMonthReconciliation.variance > 0
+                    ? "text-positive"
+                    : "text-foreground",
+              )}>
+                {currentMonthReconciliation.variance > 0 ? "+" : ""}
+                {formatINR(currentMonthReconciliation.variance)}
+              </p>
+            </div>
+          </div>
+          {receipts.length > 0 ? (
+            <div className="divide-y rounded-xl border">
+              {receipts.map((receipt) => (
+                <div key={receipt.id} className="flex items-center justify-between gap-3 p-3 md:p-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <CircleDollarSign className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {sourceNames.get(receipt.incomeSourceId) ?? "Income source"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(parseDateOnly(receipt.receivedDate), "MMM d, yyyy")}
+                        {receipt.note ? ` · ${receipt.note}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className={cn("mr-1 text-sm font-semibold tabular-nums", receipt.amount > 0 ? "text-positive" : "text-foreground")}>{formatINR(receipt.amount)}</span>
+                    <Button variant="ghost" size="icon" onClick={() => openReceiptDialog(receipt)} aria-label="Edit income receipt">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <ConfirmDeleteButton
+                      variant="ghost"
+                      itemName={`${sourceNames.get(receipt.incomeSourceId) ?? "income"} receipt`}
+                      entityLabel="income receipt"
+                      onConfirm={() => deleteReceipt.mutate(receipt.id, {
+                        onSuccess: () => toast({ title: "Income receipt deleted" }),
+                      })}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+              {sources.length === 0
+                ? "Add an income source before recording receipts."
+                : "No income has been marked as received yet."}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        <Card className="border-0 shadow-sm bg-white lg:col-span-2">
+        <Card className="border-0 shadow-sm bg-card lg:col-span-2">
           <CardHeader className="relative flex flex-col items-start justify-between gap-3 space-y-0 p-4 md:p-6 sm:flex-row sm:items-center">
             <CardTitle className="text-base font-serif md:text-lg">Income Sources</CardTitle>
             <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
-              {sources.length > 1 ? (
+              {sources.length > 0 ? (
                 <CardSortControls
                   value={incomeSort.by}
                   direction={incomeSort.direction}
@@ -612,7 +791,7 @@ export default function Income() {
                     <SortableCard key={source.id} id={source.id} enabled={manualOrder}>
                       <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div className="flex min-w-0 items-start gap-4 pr-9 md:pr-0">
-                        <div className="h-10 w-10 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center mt-1">
+                         <div className="h-10 w-10 shrink-0 rounded-full bg-muted text-muted-foreground flex items-center justify-center mt-1">
                           <Briefcase className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
@@ -621,7 +800,7 @@ export default function Income() {
                           <p className="mt-1 text-xs text-muted-foreground" data-testid={`status-income-${source.id}`}>
                             <span className={cn(
                               "font-semibold",
-                              status === "Active" ? "text-emerald-700 dark:text-emerald-400" : status === "Upcoming" ? "text-blue-700 dark:text-blue-400" : "text-muted-foreground",
+                               "text-muted-foreground",
                             )}>{status}</span>
                             {source.frequency === "Annual" && Number.isFinite(sourceDate.getTime())
                               ? ` · Occurs yearly on ${format(sourceDate, "MMM d")}${
@@ -645,25 +824,25 @@ export default function Income() {
                           )}
                           {source.type === 'Salary' && (
                             <div className="flex flex-wrap gap-2 mt-2">
-                              <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
-                                Gross: {formatINR(m.annualGross)}/yr
+                               <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                                 Gross: <span className="text-positive">{formatINR(m.annualGross)}</span>/yr
                               </span>
-                               <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                                <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
                                  {source.frequency === "Monthly"
-                                   ? <>Net: {formatINR(m.monthlyNet)}/mo</>
-                                   : <>Fund: {formatINR(datedFundNetAmount(source))}</>}
+                                    ? <>Net: <span className="text-positive">{formatINR(m.monthlyNet)}</span>/mo</>
+                                    : <>Fund: <span className="text-positive">{formatINR(datedFundNetAmount(source))}</span></>}
                                </span>
                                 {source.recurring && source.frequency === "Monthly" && (source.salaryDetails?.employeePF || 0) > 0 && (
-                                  <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
-                                    PF synced: {formatINR(source.salaryDetails!.employeePF)}/mo
+                                   <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                                     PF synced: <span className="text-positive">{formatINR(source.salaryDetails!.employeePF)}</span>/mo
                                  </span>
                                )}
                             </div>
                           )}
                           {source.type !== 'Salary' && (
                             <div className="flex min-w-0 gap-2 mt-2">
-                              <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
-                                 {formatINR(source.amount)} {source.frequency === 'Monthly'
+                               <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                                  <span className="text-positive">{formatINR(source.amount)}</span> {source.frequency === 'Monthly'
                                    ? '/mo'
                                     : source.frequency === 'Annual'
                                      ? 'each year'
@@ -737,7 +916,7 @@ export default function Income() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-white">
+        <Card className="border-0 shadow-sm bg-card">
           <CardHeader className="p-4 md:p-6 md:pb-4">
             <CardTitle className="text-base md:text-lg font-serif">Breakdown</CardTitle>
           </CardHeader>
@@ -778,7 +957,7 @@ export default function Income() {
                         />
                         <span className="truncate text-sm font-medium" title={entry.name}>{entry.name}</span>
                       </div>
-                      <span className="financial-number text-right text-sm text-muted-foreground">{formatINR(entry.value)}</span>
+                       <span className="financial-number text-right text-sm text-positive">{formatINR(entry.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -793,6 +972,84 @@ export default function Income() {
         </Card>
       </div>
 
+      <Dialog open={isReceiptDialogOpen} onOpenChange={setIsReceiptDialogOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-xl">
+          <DialogHeader>
+            <DialogTitle>{editingReceiptId ? "Edit income receipt" : "Record received income"}</DialogTitle>
+            <DialogDescription>
+              Enter the amount that actually arrived. Partial and extra payments do not change the source schedule.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...receiptForm}>
+            <form onSubmit={receiptForm.handleSubmit(saveReceipt)} className="space-y-4">
+              <FormField
+                control={receiptForm.control}
+                name="incomeSourceId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Income source</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Choose a source" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {sources.map((source) => (
+                          <SelectItem key={source.id} value={source.id}>{source.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={receiptForm.control}
+                name="receivedDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date received</FormLabel>
+                    <FormControl>
+                      <DatePickerInput value={field.value} onChange={field.onChange} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={receiptForm.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount received (₹)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0.01" step="0.01" formatWithCommas {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={receiptForm.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Note (optional)</FormLabel>
+                    <FormControl><Textarea placeholder="Payslip, bonus, adjustment…" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsReceiptDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={addReceipt.isPending || updateReceipt.isPending}>
+                  {editingReceiptId ? "Save changes" : "Record receipt"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog
         open={Boolean(sourceToDelete)}
         onOpenChange={(open) => {
@@ -803,7 +1060,8 @@ export default function Income() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {sourceToDelete?.name || "this income source"}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this income source. This action cannot be undone.
+              This will permanently delete this income source and its linked receipt history.
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -827,7 +1085,7 @@ export default function Income() {
       </AlertDialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[95dvh] w-[calc(100%-2rem)] max-w-3xl rounded-xl p-6 flex flex-col gap-0">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-3xl rounded-xl p-6 flex flex-col gap-0">
           <DialogHeader className="shrink-0 pb-4">
             <DialogTitle>{editingId ? 'Edit Income Source' : 'Add Income Source'}</DialogTitle>
             <DialogDescription>
@@ -846,7 +1104,7 @@ export default function Income() {
                     <FormItem>
                       <FormLabel>Source Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Tech Corp Salary" className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                        <Input placeholder="e.g. Tech Corp Salary" className="text-secondary font-medium" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -898,7 +1156,7 @@ export default function Income() {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="text-blue-600 dark:text-blue-400 font-medium">
+                          <SelectTrigger className="text-secondary font-medium">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                         </FormControl>
@@ -934,7 +1192,7 @@ export default function Income() {
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="text-blue-600 dark:text-blue-400 font-medium">
+                          <SelectTrigger className="text-secondary font-medium">
                             <SelectValue placeholder="Select frequency" />
                           </SelectTrigger>
                         </FormControl>
@@ -958,7 +1216,7 @@ export default function Income() {
                     <FormItem>
                       <FormLabel>Amount (₹)</FormLabel>
                       <FormControl>
-                        <Input type="number" formatWithCommas placeholder="0" className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                        <Input type="number" formatWithCommas placeholder="0" className="text-secondary font-medium" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1002,7 +1260,7 @@ export default function Income() {
                                <Input
                                  type="number"
                                  formatWithCommas
-                                  className="font-medium text-blue-600 dark:text-blue-400"
+                                  className="font-medium text-secondary"
                                   {...field}
                                    onChange={(event) => {
                                      field.onChange(event);
@@ -1033,7 +1291,7 @@ export default function Income() {
                               <InfoLabel info="Enter monthly gross basic pay before PF, TDS, or any other deduction.">Basic Pay</InfoLabel>
                             </FormFieldHeader>
                             <FormControl>
-                              <Input type="number" formatWithCommas className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                              <Input type="number" formatWithCommas className="text-secondary font-medium" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -1045,7 +1303,7 @@ export default function Income() {
                           <FormItem>
                              <InfoLabel info="Enter the gross monthly HRA shown under earnings, before deductions. HRA tax exemption is not inferred here.">HRA</InfoLabel>
                             <FormControl>
-                              <Input type="number" formatWithCommas className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                              <Input type="number" formatWithCommas className="text-secondary font-medium" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -1057,7 +1315,7 @@ export default function Income() {
                           <FormItem>
                              <InfoLabel info="Enter gross monthly taxable allowances before deductions. Do not enter take-home or net amounts.">Other Allowances</InfoLabel>
                             <FormControl>
-                              <Input type="number" formatWithCommas className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                              <Input type="number" formatWithCommas className="text-secondary font-medium" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -1139,7 +1397,7 @@ export default function Income() {
                                </InfoLabel>
                              </FormFieldHeader>
                             <FormControl>
-                              <Input type="number" formatWithCommas className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                              <Input type="number" formatWithCommas className="text-secondary font-medium" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -1174,7 +1432,7 @@ export default function Income() {
                                <Input
                                  type="number"
                                  formatWithCommas
-                                 className="font-medium text-blue-600 dark:text-blue-400"
+                                 className="font-medium text-secondary"
                                   {...field}
                                   onChange={(event) => {
                                     field.onChange(event);
@@ -1203,7 +1461,7 @@ export default function Income() {
                                <InfoLabel info="Enter the monthly professional-tax deduction shown on the payslip.">Professional Tax</InfoLabel>
                              </FormFieldHeader>
                             <FormControl>
-                              <Input type="number" formatWithCommas className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                              <Input type="number" formatWithCommas className="text-secondary font-medium" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -1219,7 +1477,7 @@ export default function Income() {
                                </InfoLabel>
                              </FormFieldHeader>
                             <FormControl>
-                              <Input type="number" formatWithCommas className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                              <Input type="number" formatWithCommas className="text-secondary font-medium" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -1270,7 +1528,7 @@ export default function Income() {
                           max="50"
                           step="0.1"
                           placeholder="0"
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -1332,7 +1590,7 @@ export default function Income() {
                   <FormItem>
                     <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Any details..." className="text-blue-600 dark:text-blue-400 font-medium" {...field} />
+                      <Textarea placeholder="Any details..." className="text-secondary font-medium" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1351,7 +1609,7 @@ export default function Income() {
         </DialogContent>
       </Dialog>
       <Dialog open={isTaxBreakdownOpen} onOpenChange={setIsTaxBreakdownOpen}>
-        <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Salary tax calculation</DialogTitle>
             <DialogDescription>
@@ -1373,7 +1631,7 @@ export default function Income() {
                   )}
                 >
                   <span className="text-sm font-semibold capitalize">{regime} regime</span>
-                  <span className="mt-2 block text-2xl font-bold">{formatINR(result.totalTax)}</span>
+                  <span className="mt-2 block text-2xl font-bold text-foreground">{formatINR(result.totalTax)}</span>
                   <span className="text-xs text-muted-foreground">{formatINR(Math.round(result.totalTax / 12))} average monthly TDS</span>
                 </button>
               );
@@ -1393,12 +1651,15 @@ export default function Income() {
               ].map(([label, amount]) => (
                 <div key={String(label)} className="flex items-center justify-between gap-4 py-3 text-sm">
                   <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="font-medium tabular-nums">{formatINR(Number(amount))}</dd>
+                  <dd className={cn(
+                    "font-medium tabular-nums",
+                     label === "Annualized salary" ? "text-positive" : "text-foreground",
+                  )}>{formatINR(Number(amount))}</dd>
                 </div>
               ))}
               <div className="flex items-center justify-between gap-4 py-4 font-semibold">
                 <dt>Annual liability</dt>
-                <dd className="text-primary tabular-nums">{formatINR(selectedSalaryTax.totalTax)}</dd>
+                <dd className="text-foreground tabular-nums">{formatINR(selectedSalaryTax.totalTax)}</dd>
               </div>
             </dl>
           </div>
@@ -1411,7 +1672,7 @@ export default function Income() {
                     {formatINR(line.from)}–{line.to === null ? "and above" : formatINR(line.to)}
                     <span className="ml-2 text-muted-foreground">at {(line.rate * 100).toFixed(0)}%</span>
                   </span>
-                  <span className="tabular-nums">{formatINR(line.tax)}</span>
+                    <span className="tabular-nums text-foreground">{formatINR(line.tax)}</span>
                 </div>
               ))}
             </div>
@@ -1428,4 +1689,3 @@ export default function Income() {
     </div>
   );
 }
-

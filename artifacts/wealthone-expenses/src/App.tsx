@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@workspace/wealthone-design-system/components/ui/toaster';
 import { TooltipProvider } from '@workspace/wealthone-design-system/components/ui/tooltip';
@@ -11,10 +11,7 @@ import {
 } from 'wouter';
 import { useProfileInputs } from '@/hooks/use-retirement';
 
-import { Layout } from '@/components/layout';
-import { BrandLoader, BrandLogo } from '@/components/brand-logo';
-import { Button } from '@workspace/wealthone-design-system/components/ui/button';
-import { UserPlus, LogIn } from 'lucide-react';
+import { BrandLoader } from '@/components/brand-logo';
 import { useAuth } from '@workspace/replit-auth-web';
 import { useToast } from '@workspace/wealthone-design-system/hooks/use-toast';
 import {
@@ -25,17 +22,32 @@ import {
   activateFinancialDataAccount,
   FinancialAccountSwitchError,
 } from '@/lib/financial-api';
+import {
+  createAppQueryClient,
+  synchronizeAccountQueryCache,
+} from '@/lib/query-policy';
+import { installMobileViewportBehavior } from '@/lib/mobile-viewport';
+import {
+  priorityPageLoaders,
+  schedulePriorityPagePreloads,
+} from '@/lib/route-preload';
+import { QueryErrorState } from '@/components/query-error-state';
 
-const Dashboard = lazy(() => import('@/pages/dashboard'));
+const Dashboard = lazy(priorityPageLoaders.dashboard);
+const Layout = lazy(() => import('@/components/layout').then((module) => ({ default: module.Layout })));
 const Income = lazy(() => import('@/pages/income'));
 const Tax = lazy(() => import('@/pages/tax'));
-const Transactions = lazy(() => import('@/pages/transactions'));
+const Transactions = lazy(priorityPageLoaders.transactions);
 const Budgets = lazy(() => import('@/pages/budgets'));
 const Trends = lazy(() => import('@/pages/trends'));
 const Investments = lazy(() => import('@/pages/investments'));
 const Loans = lazy(() => import('@/pages/loans'));
-const Retirement = lazy(() => import('@/pages/retirement'));
+const Retirement = lazy(priorityPageLoaders.retirement);
+const FinancialHealth = lazy(() => import('@/pages/financial-health'));
+const DecisionTools = lazy(() => import('@/pages/decision-tools'));
 const Profile = lazy(() => import('@/pages/profile'));
+
+const Settings = lazy(() => import('@/pages/settings'));
 const About = lazy(() => import('@/pages/about'));
 const Advice = lazy(() => import('@/pages/advice'));
 const Advisor = lazy(() => import('@/pages/advisor'));
@@ -43,14 +55,19 @@ const AdminAdvice = lazy(() => import('@/pages/admin-advice'));
 const Admin = lazy(() => import('@/pages/admin'));
 const AdminLogin = lazy(() => import('@/pages/admin-login'));
 const AdminLoginActivity = lazy(() => import('@/pages/admin-login-activity'));
-const Login = lazy(() => import('@/pages/login'));
+const loginModulePromise = import('@/pages/login');
+const Login = lazy(() => loginModulePromise);
 const Onboarding = lazy(() => import('@/pages/onboarding'));
 const NotFound = lazy(() => import('@/pages/not-found'));
+const Goals = lazy(() => import('@/pages/goals'));
+const Planner = lazy(() => import('@/pages/planner'));
+
+const Protection = lazy(() => import('@/pages/protection'));
 const DatePickerTestHarness = import.meta.env.DEV
   ? lazy(() => import('@/pages/date-picker-test-harness'))
   : null;
 
-const queryClient = new QueryClient();
+export const queryClient = createAppQueryClient();
 
 /**
  * Admin routes render outside the customer Layout and outside the onboarding
@@ -78,6 +95,7 @@ function CustomerRouter() {
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/dashboard" component={Dashboard} />
+            <Route path="/onboarding" component={Onboarding} />
             <Route path="/income" component={Income} />
             <Route path="/tax" component={Tax} />
             <Route path="/transactions" component={Transactions} />
@@ -85,10 +103,16 @@ function CustomerRouter() {
             <Route path="/investments" component={Investments} />
             <Route path="/loans" component={Loans} />
             <Route path="/retirement" component={Retirement} />
+            <Route path="/financial-health" component={FinancialHealth} />
+            <Route path="/decision-tools" component={DecisionTools} />
             <Route path="/trends" component={Trends} />
+            <Route path="/goals" component={Goals} />
+            <Route path="/planner" component={Planner} />
+            <Route path="/protection" component={Protection} />
             <Route path="/advice" component={Advice} />
             <Route path="/advisor" component={Advisor} />
             <Route path="/profile" component={Profile} />
+            <Route path="/settings" component={Settings} />
             <Route path="/about" component={About} />
             <Route component={NotFound} />
           </Switch>
@@ -115,7 +139,7 @@ function RouteLoadingFallback() {
         aria-live="polite"
       >
         <BrandLoader className="animate-pulse" />
-        <p className="-mt-1 animate-pulse text-sm font-medium tracking-[0.18em] text-[#D4AF37]">
+        <p className="-mt-1 animate-pulse text-sm font-medium tracking-[0.18em] text-loading-tagline">
           Track • Plan • Retire
         </p>
       </div>
@@ -135,7 +159,7 @@ function ShellLoadingFallback() {
         aria-live="polite"
       >
         <BrandLoader className="animate-pulse" />
-        <p className="-mt-1 animate-pulse text-sm font-medium tracking-[0.18em] text-[#D4AF37]">
+        <p className="-mt-1 animate-pulse text-sm font-medium tracking-[0.18em] text-loading-tagline">
           Track • Plan • Retire
         </p>
       </div>
@@ -159,7 +183,9 @@ function AppContent() {
   const [location] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
   if (!isLoading) {
-    activateFinancialDataAccount(user?.id ?? null);
+    const accountId = user?.id ?? null;
+    activateFinancialDataAccount(accountId);
+    synchronizeAccountQueryCache(queryClient, accountId);
   }
   if (location === '/__date-picker-test' && DatePickerTestHarness) {
     return <DatePickerTestHarness />;
@@ -186,7 +212,7 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <AuthenticationPrompt />;
+    return <Login />;
   }
 
   return <CustomerContent />;
@@ -203,41 +229,21 @@ function PendingFinancialChangeLogoutNotice() {
     toast({
       title: ACCOUNT_SWITCH_SAVE_TITLE,
       description: new FinancialAccountSwitchError().message,
-      variant: 'destructive',
+      variant: 'default',
     });
   }, [isAuthenticated, isLoading, toast]);
 
   return null;
 }
 
-function AuthenticationPrompt() {
-  const [, setLocation] = useLocation();
-
-  return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10">
-      <section className="w-full max-w-lg rounded-xl border border-border bg-card p-8 text-center shadow-lg sm:p-10">
-        <BrandLogo className="mx-auto mb-6 h-28 max-w-full" />
-        <h1 className="font-serif text-3xl font-semibold text-foreground">Welcome to ezyRetire</h1>
-        <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-          Sign in to continue to your personal financial workspace, or create an account to get started.
-        </p>
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <Button size="lg" onClick={() => setLocation('/login')}>
-            <LogIn className="mr-2 h-4 w-4" />
-            Sign in
-          </Button>
-          <Button size="lg" variant="outline" onClick={() => setLocation('/login?mode=register')}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Create account
-          </Button>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 function CustomerContent() {
-  const { data: profile, isLoading } = useProfileInputs();
+  const { data: profile, isLoading, isError, refetch } = useProfileInputs();
+  const canUseMainApp = profile?.onboardingCompleted || profile?.onboardingProgress?.dismissed;
+
+  useEffect(() => {
+    if (!canUseMainApp) return;
+    return schedulePriorityPagePreloads();
+  }, [canUseMainApp]);
 
   if (isLoading) {
     return (
@@ -247,24 +253,41 @@ function CustomerContent() {
     );
   }
 
-  if (!profile?.onboardingCompleted) {
+  if (isError) {
+    return (
+      <QueryErrorState
+        fullPage
+        title="We couldn't open your account"
+        description="We couldn't confirm your profile, so we won't send you to onboarding or show incomplete financial data."
+        onRetry={refetch}
+      />
+    );
+  }
+
+  if (!canUseMainApp) {
     return <Onboarding />;
   }
 
   return <CustomerRouter />;
 }
 
+import { ThemeProvider } from '@/components/theme-provider';
+
 function App() {
+  useEffect(() => installMobileViewportBehavior(), []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, '') || ''}>
-          <AppRoutes />
-          <PendingFinancialChangeLogoutNotice />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, '') || ''}>
+            <AppRoutes />
+            <PendingFinancialChangeLogoutNotice />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

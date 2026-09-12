@@ -9,7 +9,8 @@ import { useIncomeSources, calculateIncomeMetrics } from "@/hooks/use-income";
 import { useExpenses } from "@/hooks/use-expenses";
 import { useRetirementInputs } from "@/hooks/use-retirement";
 import { formatCompactINR, formatINR } from "@/lib/utils";
-import { isLivingExpense, parseDateOnly } from "@/lib/storage";
+import { isLivingExpense, loanMonthlyPayment, parseDateOnly } from "@/lib/storage";
+import { financialHealthCompletionCallbacks } from "@/lib/financial-health-analytics";
 import { cn } from "@workspace/wealthone-design-system/lib/utils";
 import { Button } from "@workspace/wealthone-design-system/components/ui/button";
 import {
@@ -88,7 +89,8 @@ import {
   isAfter,
   startOfMonth,
   endOfMonth,
-  isWithinInterval
+  isWithinInterval,
+  differenceInCalendarMonths
 } from "date-fns";
 import {
   Popover,
@@ -100,6 +102,7 @@ import {
   isActiveLoan,
   type LoanType,
   type InterestType,
+  type LoanRepaymentType,
   type Loan
 } from "@/lib/storage";
 import { loanPayoffDetails } from "@/lib/retirement-projection";
@@ -121,6 +124,7 @@ import { CardSortControls } from "@/components/card-sort-controls";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { DownloadExcelButton } from "@/components/download-excel-button";
 import { buildLoanReportSheets } from "@/lib/excel-report-builders";
+import { QueryErrorState } from "@/components/query-error-state";
 
 const loanTypes: LoanType[] = [
   "Home",
@@ -130,6 +134,11 @@ const loanTypes: LoanType[] = [
   "Other"
 ];
 const interestTypes: InterestType[] = ["Fixed", "Floating"];
+const repaymentTypes: Array<{ value: LoanRepaymentType; label: string }> = [
+  { value: "emi", label: "EMI (amortizing)" },
+  { value: "bullet", label: "Bullet payment" },
+  { value: "interest-only-plus-bullet", label: "Interest-only + principal bullet" },
+];
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -141,6 +150,7 @@ const formSchema = z.object({
   totalTenureMonths: z.coerce.number().min(1).default(1),
   startDate: z.date(),
   emi: z.coerce.number().default(0),
+  repaymentType: z.enum(["emi", "bullet", "interest-only-plus-bullet"] as const).default("emi"),
   prepayments: z.coerce.number().default(0),
   notes: z.string().optional()
 });
@@ -148,11 +158,14 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function Loans() {
-  const { data: loans = [], isLoading: loadingLoans } = useLoans();
-  const { data: incomes = [], isLoading: loadingIncome } = useIncomeSources();
-  const { data: expenses = [], isLoading: loadingExpenses } = useExpenses();
-  const { data: retirementInputs, isLoading: loadingRetirement } =
-    useRetirementInputs();
+  const loansQuery = useLoans();
+  const incomesQuery = useIncomeSources();
+  const expensesQuery = useExpenses();
+  const retirementQuery = useRetirementInputs();
+  const { data: loans = [], isLoading: loadingLoans } = loansQuery;
+  const { data: incomes = [], isLoading: loadingIncome } = incomesQuery;
+  const { data: expenses = [], isLoading: loadingExpenses } = expensesQuery;
+  const { data: retirementInputs, isLoading: loadingRetirement } = retirementQuery;
   const { data: uiPreferences = defaultUiPreferences() } = useUiPreferences();
   const updatePreferences = useUpdateUiPreferences();
 
@@ -181,6 +194,7 @@ export default function Loans() {
       totalTenureMonths: 12,
       startDate: new Date(),
       emi: 0,
+      repaymentType: "emi",
       prepayments: 0,
       notes: ""
     }
@@ -199,6 +213,7 @@ export default function Loans() {
         totalTenureMonths: loan.totalTenureMonths,
         startDate: parseDateOnly(loan.startDate),
         emi: loan.emi,
+        repaymentType: loan.repaymentType ?? "emi",
         prepayments: loan.prepayments,
         notes: loan.notes || ""
       });
@@ -214,6 +229,7 @@ export default function Loans() {
         totalTenureMonths: 240,
         startDate: new Date(),
         emi: 0,
+        repaymentType: "emi",
         prepayments: 0,
         notes: ""
       });
@@ -223,9 +239,18 @@ export default function Loans() {
 
   const onSubmit = (data: FormValues) => {
     if (isSaving) return;
-    
+
+    let out = data.outstandingPrincipal;
+    if (!editingId && out === 0) {
+      out = data.sanctionedPrincipal;
+    }
+
     let emi = data.emi;
-    if (!emi || emi === 0) {
+    if (data.repaymentType === "bullet") {
+      emi = 0;
+    } else if (data.repaymentType === "interest-only-plus-bullet") {
+      emi = Math.round(out * data.annualInterestRate / 1200);
+    } else if (!emi || emi === 0) {
       const p = data.sanctionedPrincipal;
       const r = data.annualInterestRate / 12 / 100;
       const n = data.totalTenureMonths;
@@ -236,11 +261,6 @@ export default function Loans() {
       } else {
         emi = Math.round(p / n);
       }
-    }
-
-    let out = data.outstandingPrincipal;
-    if (!editingId && data.startDate > new Date() && out === 0) {
-      out = data.sanctionedPrincipal;
     }
 
     const payload = { 
@@ -257,31 +277,40 @@ export default function Loans() {
           id: editingId,
           createdAt: loans.find((l) => l.id === editingId)!.createdAt
         },
-        {
-          onSuccess: () => {
+        financialHealthCompletionCallbacks("loans", "updated", () => {
             setIsDialogOpen(false);
             toast({ title: "Loan updated" });
-          }
-        }
+        })
       );
     } else {
-      addLoan.mutate(payload, {
-        onSuccess: () => {
+      addLoan.mutate(payload, financialHealthCompletionCallbacks("loans", "created", () => {
           setIsDialogOpen(false);
           toast({ title: "Loan added" });
-        }
-      });
+      }));
     }
   };
 
   const metrics = useMemo(() => {
     let totalOutstanding = 0;
     let totalEMI = 0;
+    let totalInterest = 0;
+    let debtFreeMonths = 0;
 
-    const activeLoans = loans.filter(isActiveLoan);
+    const activeLoans = loans.filter((loan) => isActiveLoan(loan));
     activeLoans.forEach((l) => {
       totalOutstanding += l.outstandingPrincipal;
-      totalEMI += l.emi;
+      totalEMI += loanMonthlyPayment(l);
+    });
+    const overviewLoans = loans.filter((loan) => Number(loan.outstandingPrincipal) > 0);
+    totalOutstanding = overviewLoans.reduce(
+      (sum, loan) => sum + Math.max(0, loan.outstandingPrincipal),
+      0,
+    );
+    overviewLoans.forEach((l) => {
+      const payoff = loanPayoffDetails(l);
+      totalInterest += payoff.totalInterestLeft;
+      const startDelay = Math.max(0, differenceInCalendarMonths(parseDateOnly(l.startDate), new Date()));
+      debtFreeMonths = Math.max(debtFreeMonths, startDelay + payoff.remainingMonths);
     });
 
     const totalIncome = incomes.reduce(
@@ -324,7 +353,10 @@ export default function Loans() {
       currentOrdinaryExpenses,
       totalOutflow,
       retirementDate,
-      activeLoanCount: activeLoans.length
+      activeLoanCount: activeLoans.length,
+      overviewLoanCount: overviewLoans.length
+      ,totalInterest
+      ,debtFreeMonths
     };
   }, [loans, incomes, expenses, retirementInputs]);
 
@@ -343,6 +375,10 @@ export default function Loans() {
         </div>
       </div>
     );
+  }
+
+  if (loansQuery.isError || incomesQuery.isError || expensesQuery.isError || retirementQuery.isError) {
+    return <QueryErrorState onRetry={() => loansQuery.refetch()} />;
   }
 
   const loanExportSheets = buildLoanReportSheets(listedLoans, {
@@ -374,14 +410,17 @@ export default function Loans() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <Card className="min-w-0 border-0 shadow-md bg-white">
-          <CardContent className="space-y-3 p-4 md:p-5">
+      <div className="grid grid-cols-2 gap-3 pt-px md:grid-cols-4 md:gap-4">
+        <Card className="min-w-0 border-0 shadow-md bg-card">
+          <CardContent className="space-y-3 p-4 pt-4 md:p-5 md:pt-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider md:text-xs">
                 Total Outstanding
               </CardDescription>
-              <CardTitle className="w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl">
+              <CardTitle className={cn(
+                "w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
+                metrics.totalOutstanding > 0 ? "text-negative" : "text-foreground",
+              )}>
                 <LoanMetricCurrency value={metrics.totalOutstanding} />
               </CardTitle>
             </div>
@@ -393,13 +432,13 @@ export default function Loans() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 border-0 shadow-md bg-white">
-          <CardContent className="space-y-3 p-4 md:p-5">
+        <Card className="min-w-0 border-0 shadow-md bg-card">
+          <CardContent className="space-y-3 p-4 pt-4 md:p-5 md:pt-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider md:text-xs">
                 Monthly EMI Burden
               </CardDescription>
-              <CardTitle className="w-full text-lg font-sans font-bold text-destructive sm:text-xl xl:text-2xl">
+              <CardTitle className="w-full text-lg font-sans font-bold text-foreground sm:text-xl xl:text-2xl">
                 <LoanMetricCurrency value={metrics.totalEMI} />
               </CardTitle>
             </div>
@@ -411,20 +450,15 @@ export default function Loans() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 border-0 shadow-md bg-white">
-          <CardContent className="space-y-3 p-4 md:p-5">
+        <Card className="min-w-0 border-0 shadow-md bg-card">
+          <CardContent className="space-y-3 p-4 pt-4 md:p-5 md:pt-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider md:text-xs">
                 Debt-to-Income
               </CardDescription>
               <CardTitle
                 className={cn(
-                  "financial-number w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
-                  metrics.dti > 40
-                    ? "text-destructive"
-                    : metrics.dti > 20
-                      ? "text-secondary"
-                      : "text-emerald-600"
+                  "financial-number w-full text-lg font-sans font-bold text-foreground sm:text-xl xl:text-2xl",
                 )}
               >
                 {metrics.dti.toFixed(2)}%
@@ -432,31 +466,61 @@ export default function Loans() {
             </div>
             <div className="flex items-center text-xs md:text-sm truncate">
               <span className="text-muted-foreground truncate">
-                Of <LoanMetricCurrency value={metrics.totalIncome} /> net income
+                 Of <span className="text-positive"><LoanMetricCurrency value={metrics.totalIncome} /></span> net income
               </span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 border-0 shadow-md bg-gradient-to-br from-primary to-primary/90 text-primary-foreground">
-          <CardContent className="space-y-3 p-4 md:p-5">
+        <Card className="min-w-0 border-0 shadow-md bg-card">
+          <CardContent className="space-y-3 p-4 pt-4 md:p-5 md:pt-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider text-primary-foreground/80 md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider text-muted-foreground md:text-xs">
                 Monthly Outflow
               </CardDescription>
-              <CardTitle className="w-full text-lg font-sans font-bold text-white sm:text-xl xl:text-2xl">
+              <CardTitle className="w-full text-lg font-sans font-bold text-foreground sm:text-xl xl:text-2xl">
                 <LoanMetricCurrency value={metrics.totalOutflow} />
               </CardTitle>
             </div>
-            <p className="text-xs md:text-sm text-primary-foreground/90">
+            <p className="text-xs md:text-sm text-muted-foreground">
               Expenses + EMIs
             </p>
           </CardContent>
         </Card>
       </div>
 
+      {metrics.overviewLoanCount > 0 && (
+        <Card className="border-0 bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-serif">All-loans debt-free overview</CardTitle>
+            <CardDescription>Combined payoff timeline and retirement impact.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            <div><p className="text-muted-foreground">Debt-free date</p><p className="font-semibold">{format(addMonths(new Date(), metrics.debtFreeMonths), "MMM yyyy")}</p></div>
+            <div><p className="text-muted-foreground">Future interest</p><p className="font-semibold text-foreground">{formatINR(metrics.totalInterest)}</p></div>
+            <div><p className="text-muted-foreground">Combined burden</p><p className="font-semibold text-foreground">{formatINR(metrics.totalEMI)}/mo</p></div>
+            <div><p className="text-muted-foreground">Retirement overlap</p><p className="font-semibold">{metrics.retirementDate && isAfter(addMonths(new Date(), metrics.debtFreeMonths), metrics.retirementDate) ? "Yes — review payoff plan" : "None projected"}</p></div>
+          </CardContent>
+          <CardContent className="pt-0">
+            <h3 className="mb-2 text-sm font-semibold">Debt payoff timeline</h3>
+            <ol className="space-y-2 border-l-2 border-primary/20 pl-4" aria-label="All loan payoff timeline">
+              {loans.filter((loan) => Number(loan.outstandingPrincipal) > 0).sort((a, b) => {
+                const aEnd = differenceInCalendarMonths(parseDateOnly(a.startDate), new Date()) + loanPayoffDetails(a).remainingMonths;
+                const bEnd = differenceInCalendarMonths(parseDateOnly(b.startDate), new Date()) + loanPayoffDetails(b).remainingMonths;
+                return aEnd - bEnd;
+              }).map((loan) => {
+                const delay = Math.max(0, differenceInCalendarMonths(parseDateOnly(loan.startDate), new Date()));
+                const payoff = loanPayoffDetails(loan);
+                const payoffDate = addMonths(new Date(), delay + payoff.remainingMonths);
+                return <li key={loan.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-2.5 text-sm"><span className="font-medium">{loan.name} · {loan.repaymentType === "bullet" ? "bullet maturity" : "payoff"}</span><span>{format(payoffDate, "MMM yyyy")} · {formatINR(payoff.totalInterestLeft)} interest</span></li>;
+              })}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        <Card className="border-0 shadow-sm bg-white lg:col-span-2">
+        <Card className="border-0 shadow-sm bg-card lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-4 md:p-6">
             <div className="flex w-full items-start justify-between gap-3">
               <CardTitle className="min-w-0 pt-2 text-base font-serif md:text-lg sm:pt-1">Your Loans</CardTitle>
@@ -502,10 +566,11 @@ export default function Loans() {
                   const r = loan.annualInterestRate / 12 / 100;
                   const payoff = loanPayoffDetails(loan);
                   const p = payoff.remainingPrincipal;
-                  const emi = loan.emi;
+                  const emi = loanMonthlyPayment(loan);
                   const { remainingMonths, totalInterestLeft } = payoff;
 
-                  const endDate = addMonths(new Date(), remainingMonths);
+                  const startDelay = Math.max(0, differenceInCalendarMonths(parseDateOnly(loan.startDate), new Date()));
+                  const endDate = addMonths(new Date(), startDelay + remainingMonths);
                   const overlapsRetirement =
                     metrics.retirementDate &&
                     isAfter(endDate, metrics.retirementDate);
@@ -525,9 +590,7 @@ export default function Loans() {
                         <div className="flex min-w-0 items-start gap-4">
                           <div className={cn(
                             "h-10 w-10 shrink-0 rounded-full flex items-center justify-center mt-1",
-                            status === "Planned" ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" :
-                            status === "Completed" ? "bg-muted text-muted-foreground" :
-                            "bg-destructive/10 text-destructive"
+                            "bg-muted text-muted-foreground"
                           )}>
                             <Landmark className="h-5 w-5" />
                           </div>
@@ -537,9 +600,7 @@ export default function Loans() {
                                 {loan.name}
                               </p>
                               <span className={cn(
-                                "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                                status === "Active" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400" :
-                                status === "Planned" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                                "text-tiny font-semibold px-2 py-0.5 rounded-full",
                                 "bg-muted text-muted-foreground"
                               )}>
                                 {status}
@@ -549,13 +610,16 @@ export default function Loans() {
                               {loan.type} • {loan.annualInterestRate}%{" "}
                               {loan.interestType}
                             </p>
+                            <p className="text-xs text-muted-foreground">
+                              {repaymentTypes.find((type) => type.value === (loan.repaymentType ?? "emi"))?.label}
+                            </p>
                             {status === "Planned" && (
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 Starts {format(parseDateOnly(loan.startDate), "MMM yyyy")}
                               </p>
                             )}
                             {overlapsRetirement && status !== "Completed" && (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-secondary font-medium">
+                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground font-medium">
                                 <AlertTriangle className="h-3 w-3" />
                                 Loan continues into retirement
                               </div>
@@ -648,20 +712,27 @@ export default function Loans() {
                           <p className="text-muted-foreground mb-1">
                             {isFuture ? "Planned Amount" : "Outstanding"}
                           </p>
-                          <p className="[overflow-wrap:anywhere] font-semibold">
+                          <p className={cn(
+                            "[overflow-wrap:anywhere] font-semibold",
+                            displayOutstanding > 0 ? "text-negative" : "text-foreground",
+                          )}>
                             {formatINR(displayOutstanding)}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-muted-foreground mb-1">{isFuture ? "Planned EMI" : "EMI"}</p>
+                          <p className="text-muted-foreground mb-1">{loan.repaymentType === "bullet" ? "Monthly burden" : isFuture ? "Planned monthly burden" : "Monthly burden"}</p>
                           <p className={cn(
                             "[overflow-wrap:anywhere] font-semibold",
-                            status === "Planned" ? "text-blue-600 dark:text-blue-400" :
-                            status === "Completed" ? "text-muted-foreground" : "text-destructive"
+                            "text-foreground"
                           )}>
-                            {formatINR(loan.emi)}
+                            {formatINR(loanMonthlyPayment(loan))}
                           </p>
                         </div>
+                        {loan.repaymentType === "bullet" && (
+                          <div className="col-span-2 min-w-0 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground md:col-span-4">
+                            Bullet maturity obligation: {formatINR(p + totalInterestLeft)} due around {format(endDate, "MMM yyyy")}.
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="text-muted-foreground mb-1">
                             {isFuture ? "Total Tenure" : "Remaining Time"}
@@ -675,7 +746,7 @@ export default function Loans() {
                           <p className="text-muted-foreground mb-1">
                             Future Interest
                           </p>
-                          <p className="[overflow-wrap:anywhere] font-semibold">
+                          <p className="[overflow-wrap:anywhere] font-semibold text-foreground">
                             {formatINR(totalInterestLeft)}
                           </p>
                         </div>
@@ -690,8 +761,7 @@ export default function Loans() {
                             </span>
                           </h4>
                           <p className="text-xs text-muted-foreground mb-4">
-                            Adding an extra payment to your EMI reduces
-                            principal faster.
+                            Extra monthly principal payments reduce the balance and future interest for this repayment structure.
                           </p>
 
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -699,7 +769,14 @@ export default function Loans() {
                               const newEmi = emi + extra;
                               let newRemainingMonths = 0;
                               let newInterestLeft = 0;
-                              if (r > 0 && newEmi > p * r) {
+                              if ((loan.repaymentType ?? "emi") !== "emi") {
+                                let balance = p;
+                                while (balance > 0.005 && newRemainingMonths < remainingMonths) {
+                                  newInterestLeft += balance * r;
+                                  balance = Math.max(0, balance - extra);
+                                  newRemainingMonths += 1;
+                                }
+                              } else if (r > 0 && newEmi > p * r) {
                                 newRemainingMonths = Math.ceil(
                                   Math.log(newEmi / (newEmi - p * r)) /
                                     Math.log(1 + r)
@@ -718,8 +795,8 @@ export default function Loans() {
                                   key={extra}
                                   className="p-3 bg-card border border-border rounded-lg flex flex-col gap-1"
                                 >
-                                  <div className="text-xs font-semibold text-primary">
-                                    +{formatINR(extra)}/mo
+                                  <div className="text-xs font-semibold text-muted-foreground">
+                                    +<span className="text-foreground">{formatINR(extra)}</span>/mo principal
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     Save{" "}
@@ -729,7 +806,7 @@ export default function Loans() {
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     Save{" "}
-                                    <span className="text-emerald-600 font-medium">
+                                    <span className="text-positive font-medium">
                                       {formatINR(interestSaved)}
                                     </span>{" "}
                                     in int.
@@ -760,7 +837,7 @@ export default function Loans() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-white h-fit">
+        <Card className="border-0 shadow-sm bg-card h-fit">
           <CardHeader className="p-4 md:p-6 md:pb-4">
             <CardTitle className="text-base md:text-lg font-serif">
               Outflow Breakdown
@@ -772,7 +849,7 @@ export default function Loans() {
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-muted-foreground">Living Expenses</span>
                   <span className="font-semibold">
-                    {formatINR(metrics.currentOrdinaryExpenses)}
+                    <span className="text-foreground">{formatINR(metrics.currentOrdinaryExpenses)}</span>
                   </span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -788,7 +865,7 @@ export default function Loans() {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-muted-foreground">Loan EMIs</span>
-                  <span className="font-semibold text-destructive">
+                  <span className="font-semibold text-foreground">
                     {formatINR(metrics.totalEMI)}
                   </span>
                 </div>
@@ -803,19 +880,14 @@ export default function Loans() {
               </div>
 
               <div className="pt-4 border-t border-border">
-                <div className="flex justify-between font-semibold">
+                 <div className="flex justify-between font-semibold">
                   <span>Monthly Outflow</span>
-                  <span>{formatINR(metrics.totalOutflow)}</span>
+                   <span className="text-foreground">{formatINR(metrics.totalOutflow)}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-2 text-muted-foreground">
                   <span>True Savings Rate</span>
                   <span
-                    className={cn(
-                      "font-medium",
-                      metrics.totalIncome - metrics.totalOutflow > 0
-                        ? "text-emerald-600"
-                        : "text-destructive"
-                    )}
+                     className="font-medium text-foreground"
                   >
                     {metrics.totalIncome > 0
                       ? (
@@ -867,7 +939,7 @@ export default function Loans() {
       </AlertDialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[95dvh] w-[calc(100%-2rem)] max-w-2xl rounded-xl p-6 flex flex-col gap-0">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl rounded-xl p-6 flex flex-col gap-0">
           <DialogHeader className="shrink-0 pb-4">
             <DialogTitle>{editingId ? "Edit Loan" : "Add Loan"}</DialogTitle>
             <DialogDescription>
@@ -882,6 +954,24 @@ export default function Loans() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
+                  name="repaymentType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Repayment type</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {repaymentTypes.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
@@ -889,7 +979,7 @@ export default function Loans() {
                       <FormControl>
                         <Input
                           placeholder="e.g. HDFC Home Loan"
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -909,7 +999,7 @@ export default function Loans() {
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="text-blue-600 dark:text-blue-400 font-medium">
+                          <SelectTrigger className="text-secondary font-medium">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                         </FormControl>
@@ -938,7 +1028,7 @@ export default function Loans() {
                         <Input
                           type="number"
                           formatWithCommas
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -957,7 +1047,7 @@ export default function Loans() {
                         <Input
                           type="number"
                           formatWithCommas
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -978,7 +1068,7 @@ export default function Loans() {
                         <Input
                           type="number"
                           step="0.01"
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -998,7 +1088,7 @@ export default function Loans() {
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="text-blue-600 dark:text-blue-400 font-medium">
+                          <SelectTrigger className="text-secondary font-medium">
                             <SelectValue placeholder="Type" />
                           </SelectTrigger>
                         </FormControl>
@@ -1024,7 +1114,7 @@ export default function Loans() {
                       <FormControl>
                         <Input
                           type="number"
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -1042,7 +1132,7 @@ export default function Loans() {
                     <FormItem>
                       <FormFieldHeader className="md:min-h-10">
                         <FormLabel>
-                          Monthly EMI (₹){" "}
+                          Scheduled monthly payment (₹){" "}
                           <span className="text-muted-foreground text-xs font-normal">
                             (Auto-calculated if 0)
                           </span>
@@ -1052,7 +1142,7 @@ export default function Loans() {
                         <Input
                           type="number"
                           formatWithCommas
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>

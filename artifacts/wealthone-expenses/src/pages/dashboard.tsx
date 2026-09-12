@@ -7,7 +7,13 @@ import { useInvestments } from "@/hooks/use-investments";
 import { useLoans } from "@/hooks/use-loans";
 import { useRetirementInputs } from "@/hooks/use-retirement";
 import { calculateRetirementProjection, calculateRetirementReadiness, remainingLoanMonths } from "@/lib/retirement-projection";
-import { isLivingExpense } from "@/lib/storage";
+import {
+  budgetTotalForMonth,
+  isBudgetExpense,
+  isLivingExpense,
+  loanMonthlyPayment,
+} from "@/lib/storage";
+import { getTargetRetirementMonth } from "@/lib/budget-helpers";
 import { getPlanSetup } from "@/lib/plan-setup";
 import { CATEGORY_ICON_TONE, getCategoryIcon } from "@/lib/category-visuals";
 import { formatCompactINR, formatINR } from "@/lib/utils";
@@ -20,16 +26,21 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 import { Receipt, Wallet, PiggyBank, Landmark, CheckCircle2, AlertTriangle, ArrowRight, TrendingUp, PieChartIcon, ChevronDown } from "lucide-react";
 import { Link } from "wouter";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/wealthone-design-system/components/ui/collapsible";
+import { QueryErrorState } from "@/components/query-error-state";
+import { usePlannedExpenses } from "@/hooks/use-planned-expenses";
+import { useFinancialHealthData } from "@/hooks/use-financial-health";
+import { calculateFinancialHealthScore, calculateNetWorth } from "@/lib/financial-metrics";
+import { FinancialHealthSummary } from "@/components/financial-health-summary";
+import { DashboardTour } from "@/components/dashboard-tour";
+import { FinanceTermHelp } from "@/components/finance-term-help";
+import { useUiPreferences, useUpdateUiPreferences } from "@/hooks/use-ui-preferences";
 
 const CHART_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--secondary))",
-  "#10b981",
-  "#8b5cf6",
-  "#6366f1",
-  "#ec4899",
-  "#f43f5e",
-  "#f59e0b",
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
 function ResponsiveCurrency({ value }: { value: number }) {
@@ -42,12 +53,23 @@ function ResponsiveCurrency({ value }: { value: number }) {
 }
 
 export default function Dashboard() {
-  const { data: expenses = [], isLoading: loadingExpenses } = useExpenses();
-  const { data: budgets = [], isLoading: loadingBudgets } = useBudgets();
-  const { data: sources = [], isLoading: loadingIncome } = useIncomeSources();
-  const { data: investments = [], isLoading: loadingInv } = useInvestments();
-  const { data: loans = [], isLoading: loadingLoans } = useLoans();
-  const { data: retirementInputs, isLoading: loadingRet } = useRetirementInputs();
+  const expensesQuery = useExpenses();
+  const budgetsQuery = useBudgets();
+  const incomeQuery = useIncomeSources();
+  const investmentsQuery = useInvestments();
+  const loansQuery = useLoans();
+  const retirementQuery = useRetirementInputs();
+  const plannedExpensesQuery = usePlannedExpenses();
+  const financialHealthQuery = useFinancialHealthData();
+  const { data: uiPreferences } = useUiPreferences();
+  const updateUiPreferences = useUpdateUiPreferences();
+  const { data: expenses = [], isLoading: loadingExpenses } = expensesQuery;
+  const { data: budgets = [], isLoading: loadingBudgets } = budgetsQuery;
+  const { data: sources = [], isLoading: loadingIncome } = incomeQuery;
+  const { data: investments = [], isLoading: loadingInv } = investmentsQuery;
+  const { data: loans = [], isLoading: loadingLoans } = loansQuery;
+  const { data: retirementInputs, isLoading: loadingRet } = retirementQuery;
+  const { data: plannedExpenses = [], isLoading: loadingPlanned } = plannedExpensesQuery;
   const [isOutlookExpanded, setIsOutlookExpanded] = useState(false);
   const [isOverspendExpanded, setIsOverspendExpanded] = useState(true);
 
@@ -68,9 +90,23 @@ export default function Dashboard() {
         && isWithinInterval(date, { start: currentMonthStart, end: currentMonthEnd })
         && isLivingExpense(e, loans);
     });
+    const currentMonthBudgetExpenses = expenses.filter((expense) => {
+      const date = new Date(expense.date);
+      return Number.isFinite(date.getTime())
+        && Number.isFinite(expense.amount)
+        && expense.amount > 0
+        && isWithinInterval(date, { start: currentMonthStart, end: currentMonthEnd })
+        && isBudgetExpense(expense);
+    });
 
     const currentTotalOrdinary = currentMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const totalBudget = budgets.reduce((sum, b) => sum + (Number.isFinite(b.monthlyLimit) ? Math.max(0, b.monthlyLimit) : 0), 0);
+    const totalBudget = budgetTotalForMonth(
+      budgets,
+      currentMonthStart,
+      retirementInputs?.generalInflation ?? 0,
+      currentMonthStart,
+      getTargetRetirementMonth(retirementInputs),
+    );
 
     const currentIncome = sources.reduce((sum, s) => {
       const { monthlyNet } = calculateIncomeMetrics(s);
@@ -79,7 +115,7 @@ export default function Dashboard() {
 
     const activeLoans = loans.filter((loan) => remainingLoanMonths(loan) > 0);
     const totalEMI = activeLoans.reduce(
-      (sum, loan) => sum + (Number.isFinite(loan.emi) ? Math.max(0, loan.emi) : 0),
+      (sum, loan) => sum + loanMonthlyPayment(loan),
       0,
     );
     const totalOutflow = currentTotalOrdinary + totalEMI;
@@ -87,7 +123,7 @@ export default function Dashboard() {
     const currentSavings = currentIncome - totalOutflow;
     const savingsRate = currentIncome > 0 ? (currentSavings / currentIncome) * 100 : 0;
 
-    const categorySpending = currentMonthExpenses.reduce((acc, e) => {
+    const categorySpending = currentMonthBudgetExpenses.reduce((acc, e) => {
       acc[e.category] = (acc[e.category] || 0) + e.amount;
       return acc;
     }, {} as Record<string, number>);
@@ -104,14 +140,21 @@ export default function Dashboard() {
 
     budgets.forEach(b => {
       const spent = categorySpending[b.category] || 0;
-      if (spent > b.monthlyLimit) {
+      const categoryBudget = budgetTotalForMonth(
+        [b],
+        currentMonthStart,
+        retirementInputs?.generalInflation ?? 0,
+        currentMonthStart,
+        getTargetRetirementMonth(retirementInputs),
+      );
+      if (spent > categoryBudget) {
         overBudgetCategories++;
-        const over = spent - b.monthlyLimit;
+        const over = spent - categoryBudget;
         totalOverspend += over;
         overspentCategories.push({
           name: b.category,
           spent,
-          budget: b.monthlyLimit,
+          budget: categoryBudget,
           amount: over,
         });
         if (over > maxOverspendCategory.amount) {
@@ -161,6 +204,8 @@ export default function Dashboard() {
       incomes: sources,
       investments,
       loans,
+      plannedExpenses,
+      emergencyFund: financialHealthQuery.data?.emergencyFund,
       assumptions: dashboardInputs,
     };
 
@@ -196,9 +241,9 @@ export default function Dashboard() {
       projection,
       readiness,
     };
-  }, [expenses, budgets, sources, investments, loans, retirementInputs]);
+  }, [expenses, budgets, sources, investments, loans, plannedExpenses, retirementInputs, financialHealthQuery.data?.emergencyFund]);
 
-  if (loadingExpenses || loadingBudgets || loadingIncome || loadingInv || loadingLoans || loadingRet) {
+  if (loadingExpenses || loadingBudgets || loadingIncome || loadingInv || loadingLoans || loadingRet || loadingPlanned || financialHealthQuery.isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-pulse flex flex-col items-center">
@@ -209,6 +254,10 @@ export default function Dashboard() {
     );
   }
 
+  if ([expensesQuery, budgetsQuery, incomeQuery, investmentsQuery, loansQuery, retirementQuery, plannedExpensesQuery, financialHealthQuery].some((query) => query.isError)) {
+    return <QueryErrorState onRetry={() => expensesQuery.refetch()} />;
+  }
+
   const { projection, readiness } = stats;
   const roundedUnallocatedSurplus = Math.round(readiness.unallocatedSurplus);
   const roundedExtraSipRequired = Math.round(projection.extraSipRequired);
@@ -216,9 +265,33 @@ export default function Dashboard() {
     && roundedExtraSipRequired > 0
     && roundedUnallocatedSurplus >= roundedExtraSipRequired;
   const additionalCashFlowNeeded = Math.max(0, roundedExtraSipRequired - roundedUnallocatedSurplus);
+  const dashboardNetWorth = calculateNetWorth({
+    investments,
+    loans,
+    cashBalance: financialHealthQuery.data?.emergencyFund.reserveBalance,
+  });
+  const health = calculateFinancialHealthScore({
+    monthlyNetIncome: setup.hasIncome ? stats.currentIncome : undefined,
+    monthlyEssentialExpenses: setup.hasSpendingBaseline ? projection.livingCostBaseline : undefined,
+    monthlyDebtPayments: stats.totalEMI,
+    monthlySavings: setup.canProjectRetirement
+      ? Math.max(0, stats.currentIncome - projection.livingCostBaseline - stats.totalEMI)
+      : undefined,
+    emergencyReserve: financialHealthQuery.data?.emergencyFund.reserveBalance,
+    emergencyTargetMonths: financialHealthQuery.data?.emergencyFund.targetMonths,
+    totalAssets: setup.hasInvestments || (financialHealthQuery.data?.emergencyFund.reserveBalance ?? 0) > 0
+      ? dashboardNetWorth.totalAssets
+      : undefined,
+    totalLiabilities: loans.length > 0 ? dashboardNetWorth.totalLiabilities : undefined,
+  });
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-8 md:pb-12">
+      <div className="flex flex-col justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center">
+        <div><p className="font-semibold">Keep building your plan</p><p className="text-sm text-muted-foreground">Resume the optional quick start or use each section below to add your complete financial picture.</p></div>
+        <Button asChild variant="outline" size="sm"><Link href="/onboarding">Open quick start</Link></Button>
+      </div>
+      <DashboardTour dismissed={uiPreferences?.dashboardTourDismissed === true} onDismiss={() => updateUiPreferences.mutate({ dashboardTourDismissed: true })} />
       {/* Row 0: One retirement verdict. Supporting cards below avoid repeating it. */}
       {!setup.canProjectRetirement ? (
         <PlanSetupPanel setup={setup} targetAge={projection.targetAge} />
@@ -228,16 +301,10 @@ export default function Dashboard() {
           <div
             className={cn(
               "relative w-full p-4 pr-12 text-left md:hidden",
-              readiness.targetIsFunded
-                ? "bg-gradient-to-r from-emerald-500/[0.05] to-primary/[0.03]"
-                : canFundTargetFromAvailableSurplus
-                  ? "bg-gradient-to-r from-amber-500/[0.06] to-primary/[0.03]"
-                  : "bg-gradient-to-r from-rose-500/[0.05] to-primary/[0.03]",
+              "bg-muted/20",
             )}
           >
-            <h2 className="pr-10 font-serif text-lg font-semibold text-foreground">
-              Your retirement outlook
-            </h2>
+            <div className="flex items-center"><h2 className="font-serif text-lg font-semibold text-foreground">Your retirement outlook</h2><FinanceTermHelp term="Retirement corpus" summary="The pool of money your plan estimates you will need at retirement." details="The projection grows your current spending with inflation, accounts for pension income, and estimates how much invested money could support those costs through your life expectancy." example="If retirement expenses are ₹60,000 a month, the corpus must fund those expenses for the full retirement period—not just the first year." /></div>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
               {readiness.targetIsFunded ? (
                 <>
@@ -249,13 +316,13 @@ export default function Dashboard() {
                 <>
                   Target age <strong className="text-foreground">{projection.targetAge}</strong>
                   <span className="mx-1.5 text-border">•</span>
-                  Invest <strong className="financial-number text-amber-700 dark:text-amber-400" title={`${formatINR(projection.extraSipRequired)}/mo`}>{formatCompactINR(roundedExtraSipRequired)}/mo</strong> to close the gap
+                  Invest <strong className="financial-number text-negative" title={`${formatINR(projection.extraSipRequired)}/mo`}>{formatCompactINR(roundedExtraSipRequired)}/mo</strong> to close the gap
                 </>
               ) : (
                 <>
                   Target age <strong className="text-foreground">{projection.targetAge}</strong>
                   <span className="mx-1.5 text-border">•</span>
-                  <strong className="text-rose-700 dark:text-rose-400">Financial action needed</strong>
+                  <strong className="text-muted-foreground">Financial action needed</strong>
                 </>
               )}
             </p>
@@ -288,21 +355,21 @@ export default function Dashboard() {
             </Button>
           </div>
         {readiness.targetIsFunded ? (
-          <div className="relative bg-emerald-50/50 p-5 md:p-8 dark:bg-emerald-950/20">
+          <div className="relative bg-card p-5 md:p-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-5">
-              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-muted text-muted-foreground flex items-center justify-center shrink-0">
                 <CheckCircle2 className="h-6 w-6 md:h-7 md:w-7" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="mb-1.5 pr-10">
-                  <h2 className="text-xs font-semibold uppercase tracking-widest text-emerald-800 opacity-90 dark:text-emerald-400 md:text-sm">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground md:text-sm">
                     Your retirement outlook
                   </h2>
                 </div>
-                <p className="text-2xl md:text-4xl font-serif text-emerald-950 dark:text-emerald-300 leading-tight">
+                <p className="text-2xl md:text-4xl font-serif text-foreground leading-tight">
                   At your current earning and investment pace, you can retire at age {readiness.currentPlanRetirementAge ?? projection.targetAge}.
                 </p>
-                <p className="mt-2 md:mt-3 text-xs md:text-sm font-medium text-emerald-800/80 dark:text-emerald-400/90">
+                <p className="mt-2 md:mt-3 text-xs md:text-sm font-medium text-muted-foreground">
                   {readiness.currentPlanRetirementAge && readiness.currentPlanRetirementAge < projection.targetAge
                     ? `${projection.targetAge - readiness.currentPlanRetirementAge} years earlier than your target age of ${projection.targetAge}.`
                     : `You are on track for your target retirement age of ${projection.targetAge}.`
@@ -312,30 +379,30 @@ export default function Dashboard() {
             </div>
           </div>
         ) : canFundTargetFromAvailableSurplus ? (
-          <div className="relative bg-amber-50/60 p-5 md:p-8 dark:bg-amber-950/20">
+          <div className="relative bg-card p-5 md:p-8">
             <div className="flex flex-col items-start gap-4 md:gap-5 sm:flex-row sm:items-center">
-              <div className="flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
+              <div className="flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <PiggyBank className="h-6 w-6 md:h-7 md:w-7" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="mb-1.5 pr-10">
-                  <h2 className="text-xs font-semibold uppercase tracking-widest text-amber-800 opacity-90 dark:text-amber-400 md:text-sm">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground md:text-sm">
                     Your retirement outlook · Investment action needed
                   </h2>
                 </div>
-                <p className="text-2xl font-serif leading-tight text-amber-950 dark:text-amber-200 md:text-4xl">
+                <p className="text-2xl font-serif leading-tight text-foreground md:text-4xl">
                   Your target retirement age of {projection.targetAge} is within reach.
                 </p>
-                <p className="mt-2 md:mt-3 text-xs md:text-sm font-medium text-amber-900/80 dark:text-amber-300/90">
-                  Invest <span className="financial-number" title={`${formatINR(projection.extraSipRequired)}/month`}>{formatCompactINR(roundedExtraSipRequired)}/month</span> from your available{" "}
-                  <span className="financial-number" title={`${formatINR(readiness.unallocatedSurplus)}/month`}>{formatCompactINR(roundedUnallocatedSurplus)}/month</span> surplus to close the gap.
+                <p className="mt-2 md:mt-3 text-xs md:text-sm font-medium text-muted-foreground">
+                  Invest <span className="financial-number text-negative" title={`${formatINR(projection.extraSipRequired)}/month`}>{formatCompactINR(roundedExtraSipRequired)}/month</span> from your available{" "}
+                  <span className="financial-number text-warning" title={`${formatINR(readiness.unallocatedSurplus)}/month`}>{formatCompactINR(roundedUnallocatedSurplus)}/month</span> surplus to close the gap.
                   {readiness.currentPlanRetirementAge
                     ? ` Without that change, your current plan supports retirement at age ${readiness.currentPlanRetirementAge}.`
                     : ""}
                 </p>
                 {readiness.fullSurplusRetirementAge
                   && (!readiness.currentPlanRetirementAge || readiness.fullSurplusRetirementAge < readiness.currentPlanRetirementAge) && (
-                  <p className="mt-2 text-xs italic leading-relaxed text-amber-800/70 dark:text-amber-400/75">
+                  <p className="mt-2 text-xs italic leading-relaxed text-muted-foreground">
                     Note: If you invest your full available surplus each month, your plan could support retirement as early as age {readiness.fullSurplusRetirementAge}.
                   </p>
                 )}
@@ -343,28 +410,28 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="relative bg-rose-50/50 p-5 md:p-8 dark:bg-rose-950/20">
+          <div className="relative bg-card p-5 md:p-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 md:gap-5">
-              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <div className="h-12 w-12 md:h-14 md:w-14 rounded-full bg-muted text-muted-foreground flex items-center justify-center shrink-0">
                 <AlertTriangle className="h-6 w-6 md:h-7 md:w-7" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="mb-1.5 pr-10">
-                  <h2 className="text-xs font-semibold uppercase tracking-widest text-rose-800 opacity-90 dark:text-rose-400 md:text-sm">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground md:text-sm">
                     Your retirement outlook · Financial action needed
                   </h2>
                 </div>
-                <p className="text-2xl md:text-4xl font-serif text-rose-950 dark:text-rose-300 leading-tight">
+                <p className="text-2xl md:text-4xl font-serif text-foreground leading-tight">
                   {readiness.currentPlanRetirementAge
                     ? `At your current pace, you can retire at age ${readiness.currentPlanRetirementAge}—later than your target age of ${projection.targetAge}.`
                     : `At your current pace, your retirement corpus will not last through age ${projection.lifeExpectancy}.`
                   }
                 </p>
-                <p className="mt-2 md:mt-3 text-xs md:text-sm font-medium text-rose-800 dark:text-rose-400">
+                <p className="mt-2 md:mt-3 text-xs md:text-sm font-medium text-muted-foreground">
                   To reach age {projection.targetAge}, you need to invest{" "}
-                  <span className="financial-number" title={`${formatINR(projection.extraSipRequired)}/month`}>{formatCompactINR(roundedExtraSipRequired)}/month</span>.
+                  <span className="financial-number text-negative" title={`${formatINR(projection.extraSipRequired)}/month`}>{formatCompactINR(roundedExtraSipRequired)}/month</span>.
                   {additionalCashFlowNeeded > 0
-                    ? ` Your available surplus is not enough—you would need to free up or generate at least ${formatINR(additionalCashFlowNeeded)} more per month first.`
+                    ? <> Your available surplus is not enough—you would need to free up or generate at least <span className="financial-number text-negative">{formatINR(additionalCashFlowNeeded)}</span> more per month first.</>
                     : ""}
                 </p>
               </div>
@@ -377,14 +444,29 @@ export default function Dashboard() {
 
       {setup.canProjectRetirement && setup.nextStep && <PlanSetupNudge setup={setup} />}
 
+      <FinancialHealthSummary
+        result={health}
+        snapshots={financialHealthQuery.data?.netWorthSnapshots ?? []}
+        variant="compact"
+      />
+
       {/* Row 1: The Flow */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Link href="/income" className="block h-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl">
           <Card className="min-w-0 border-0 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow h-full group">
-            <CardContent className="space-y-3 p-4 md:p-5">
+            <CardContent className="space-y-3 p-4 md:p-5 lg:pt-7">
               <div className="space-y-1">
-                <CardDescription className="font-medium text-[10px] uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Monthly Income</CardDescription>
-                <CardTitle className={cn("w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl", setup.hasIncome ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground/40")}>
+                <CardDescription className="font-medium text-tiny uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Monthly Income</CardDescription>
+                <CardTitle className={cn(
+                  "w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
+                  !setup.hasIncome
+                    ? "text-muted-foreground/40"
+                    : stats.currentIncome > 0
+                      ? "text-positive"
+                      : stats.currentIncome < 0
+                        ? "text-negative"
+                        : "text-foreground",
+                )}>
                   {setup.hasIncome ? <ResponsiveCurrency value={stats.currentIncome} /> : "—"}
                 </CardTitle>
               </div>
@@ -401,10 +483,15 @@ export default function Dashboard() {
 
         <Link href="/transactions" className="block h-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl">
           <Card className="min-w-0 border-0 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow h-full group">
-            <CardContent className="space-y-3 p-4 md:p-5">
+            <CardContent className="space-y-3 p-4 md:p-5 lg:pt-7">
               <div className="space-y-1">
-                <CardDescription className="font-medium text-[10px] uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Monthly Outflow</CardDescription>
-                <CardTitle className={cn("w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl", !setup.hasSpendingBaseline && !setup.hasLoans && "text-muted-foreground/40")}>
+                <CardDescription className="font-medium text-tiny uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Monthly Outflow</CardDescription>
+                <CardTitle className={cn(
+                  "w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
+                  !setup.hasSpendingBaseline && !setup.hasLoans
+                     ? "text-muted-foreground/40"
+                     : "text-foreground",
+                )}>
                   {setup.hasSpendingBaseline || setup.hasLoans ? <ResponsiveCurrency value={stats.totalOutflow} /> : "—"}
                 </CardTitle>
               </div>
@@ -421,10 +508,19 @@ export default function Dashboard() {
 
         <Link href="/income" className="block h-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl">
           <Card className="min-w-0 border-0 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow h-full group">
-            <CardContent className="space-y-3 p-4 md:p-5">
+            <CardContent className="space-y-3 p-4 md:p-5 lg:pt-7">
               <div className="space-y-1">
-                <CardDescription className="font-medium text-[10px] uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Monthly Savings</CardDescription>
-                <CardTitle className={cn("w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl", setup.canProjectRetirement ? "text-primary" : "text-muted-foreground/40")}>
+                <CardDescription className="font-medium text-tiny uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Monthly Savings</CardDescription>
+                <CardTitle className={cn(
+                  "w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
+                  !setup.canProjectRetirement
+                    ? "text-muted-foreground/40"
+                    : stats.currentSavings > 0
+                      ? "text-warning"
+                      : stats.currentSavings < 0
+                        ? "text-negative"
+                        : "text-foreground",
+                )}>
                   {setup.canProjectRetirement ? <ResponsiveCurrency value={stats.currentSavings} /> : "—"}
                 </CardTitle>
               </div>
@@ -439,15 +535,19 @@ export default function Dashboard() {
 
         <Link href="/income" className="block h-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl">
           <Card className="border-0 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow h-full group relative overflow-hidden">
-            <div className={cn("absolute inset-0 opacity-[0.03] transition-opacity group-hover:opacity-[0.05]", stats.savingsRate >= stats.requiredSavingsRate ? "bg-emerald-500" : "bg-primary")}></div>
-            <CardContent className="relative z-10 space-y-3 p-4 md:p-5">
+            <div className="absolute inset-0 bg-muted opacity-[0.03] transition-opacity group-hover:opacity-[0.05]"></div>
+            <CardContent className="relative z-10 space-y-3 p-4 md:p-5 lg:pt-7">
               <div className="space-y-1">
-                <CardDescription className="font-medium text-[10px] uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Savings Rate</CardDescription>
+                <CardDescription className="font-medium text-tiny uppercase tracking-wider transition-colors group-hover:text-primary md:text-xs">Savings Rate</CardDescription>
                 <CardTitle className={cn(
                   "financial-number w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
                   !setup.canProjectRetirement
                     ? "text-muted-foreground/40"
-                    : stats.savingsRate >= stats.requiredSavingsRate ? "text-emerald-700 dark:text-emerald-400" : "text-primary",
+                    : !Number.isFinite(stats.savingsRate) || !Number.isFinite(stats.requiredSavingsRate)
+                      ? "text-foreground"
+                      : stats.savingsRate >= stats.requiredSavingsRate
+                        ? "text-positive"
+                        : "text-negative",
                 )}>
                   {setup.canProjectRetirement ? `${stats.savingsRate.toFixed(1)}%` : "—"}
                 </CardTitle>
@@ -466,18 +566,21 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <Link href="/investments" className="block h-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl">
           <Card className="border-0 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow h-full flex flex-col justify-between">
-            <CardContent className="p-3 md:p-5">
-              <CardDescription className="mb-2 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide md:mb-3 md:gap-1.5 md:text-xs md:font-medium md:tracking-wider">
-                <TrendingUp className="h-3.5 w-3.5 text-primary md:h-4 md:w-4" /> Investments
+            <CardContent className="p-3 md:p-5 lg:pt-7">
+              <CardDescription className="mb-2 flex items-center gap-1 text-tiny font-semibold uppercase tracking-wide md:mb-3 md:gap-1.5 md:text-xs md:font-medium md:tracking-wider">
+                <TrendingUp className="h-3.5 w-3.5 text-muted-foreground md:h-4 md:w-4" /> Investments
               </CardDescription>
               {setup.hasInvestments ? (
                 <>
-                  <CardTitle className="mb-1 font-sans text-lg font-bold md:mb-2 md:text-2xl"><ResponsiveCurrency value={stats.totalInvestments} /></CardTitle>
-                  <p className="truncate text-[11px] text-muted-foreground md:text-sm">
-                    Gain: <span className={cn("financial-number font-medium", stats.investmentGain >= 0 ? "text-emerald-600" : "text-destructive")} title={formatINR(stats.investmentGain)}>{stats.investmentGain >= 0 ? "+" : ""}{formatCompactINR(stats.investmentGain)}</span>
+                  <CardTitle className={cn(
+                    "mb-1 font-sans text-lg font-bold md:mb-2 md:text-2xl",
+                    stats.totalInvestments > 0 ? "text-positive" : "text-foreground",
+                  )}><ResponsiveCurrency value={stats.totalInvestments} /></CardTitle>
+                  <p className="truncate text-tiny text-muted-foreground md:text-sm">
+                    Gain: <span className={cn("financial-number font-medium", stats.investmentGain > 0 ? "text-positive" : stats.investmentGain < 0 ? "text-negative" : "text-foreground")} title={formatINR(stats.investmentGain)}>{stats.investmentGain >= 0 ? "+" : ""}{formatCompactINR(stats.investmentGain)}</span>
                   </p>
-                  <p className="mt-0.5 text-[9px] text-muted-foreground opacity-80 md:mt-1 md:text-xs">
-                    <span className="financial-number">{stats.returnPercentage.toFixed(1)}%</span> absolute return
+                  <p className="mt-0.5 text-tiny text-muted-foreground opacity-80 md:mt-1 md:text-xs">
+                    <span className={cn("financial-number", stats.returnPercentage > 0 ? "text-positive" : stats.returnPercentage < 0 ? "text-negative" : "text-foreground")}>{stats.returnPercentage.toFixed(1)}%</span> absolute return
                   </p>
                 </>
               ) : (
@@ -497,24 +600,27 @@ export default function Dashboard() {
 
         <Link href="/loans" className="block h-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl">
           <Card className="border-0 shadow-sm bg-card cursor-pointer hover:shadow-md transition-shadow h-full flex flex-col justify-between">
-            <CardContent className="p-3 md:p-5">
-              <CardDescription className="mb-2 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide md:mb-3 md:gap-1.5 md:text-xs md:font-medium md:tracking-wider">
-                <Landmark className="h-3.5 w-3.5 text-destructive md:h-4 md:w-4" /> Outstanding Debt
+            <CardContent className="p-3 md:p-5 lg:pt-7">
+              <CardDescription className="mb-2 flex items-center gap-1 text-tiny font-semibold uppercase tracking-wide md:mb-3 md:gap-1.5 md:text-xs md:font-medium md:tracking-wider">
+                <Landmark className="h-3.5 w-3.5 text-muted-foreground md:h-4 md:w-4" /> Outstanding Debt
               </CardDescription>
               {setup.hasLoans ? (
                 <>
-                  <CardTitle className="mb-1 font-sans text-lg font-bold text-destructive md:mb-2 md:text-2xl"><ResponsiveCurrency value={stats.totalOutstandingLoans} /></CardTitle>
-                  <p className="truncate text-[11px] text-muted-foreground md:text-sm">
-                    EMIs: <span className="financial-number" title={`${formatINR(stats.totalEMI)}/mo`}>{formatCompactINR(stats.totalEMI)}/mo</span>
+                  <CardTitle className={cn(
+                    "mb-1 font-sans text-lg font-bold md:mb-2 md:text-2xl",
+                    stats.totalOutstandingLoans > 0 ? "text-negative" : "text-foreground",
+                  )}><ResponsiveCurrency value={stats.totalOutstandingLoans} /></CardTitle>
+                  <p className="truncate text-tiny text-muted-foreground md:text-sm">
+                    EMIs: <span className="financial-number text-foreground" title={`${formatINR(stats.totalEMI)}/mo`}>{formatCompactINR(stats.totalEMI)}/mo</span>
                   </p>
-                  <p className="mt-0.5 text-[9px] text-muted-foreground opacity-80 md:mt-1 md:text-xs">
+                  <p className="mt-0.5 text-tiny text-muted-foreground opacity-80 md:mt-1 md:text-xs">
                     <span className="financial-number">{Math.floor(stats.maxRemainingLoanMonths / 12)} yrs</span>{" "}
                     <span className="financial-number">{Math.round(stats.maxRemainingLoanMonths % 12)} mo</span> left
                   </p>
                 </>
               ) : (
                 <>
-                  <CardTitle className="text-xl md:text-2xl font-sans font-bold mb-1 md:mb-2 text-emerald-700 dark:text-emerald-400">Debt free</CardTitle>
+                  <CardTitle className="text-xl md:text-2xl font-sans font-bold mb-1 md:mb-2 text-foreground">Debt free</CardTitle>
                   <p className="text-xs md:text-sm text-muted-foreground">
                     Nothing tracked yet. Add a home, car or education loan and we will show the month each EMI ends.
                   </p>
@@ -528,26 +634,26 @@ export default function Dashboard() {
         </Link>
 
         <Link href="/investments" className="col-span-2 block h-full rounded-xl outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 md:col-span-1" data-testid="dashboard-available-to-invest-link">
-          <Card className="border border-emerald-200/70 bg-emerald-50/50 shadow-sm cursor-pointer hover:shadow-md transition-shadow h-full flex flex-col justify-between group dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <CardContent className="p-3 md:p-5">
-              <CardDescription className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 md:mb-4 md:text-xs md:font-medium md:tracking-wider">
+          <Card data-testid="dashboard-available-to-invest-card" className="group flex h-full cursor-pointer flex-col justify-between border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+            <CardContent className="p-3 md:p-5 lg:pt-7">
+              <CardDescription className="mb-2 flex items-center gap-1.5 text-tiny font-semibold uppercase tracking-wide text-muted-foreground md:mb-4 md:text-xs md:font-medium md:tracking-wider">
                 <PiggyBank className="h-4 w-4" /> Available to Invest
               </CardDescription>
               <div className="grid grid-cols-2 gap-3 md:block md:space-y-4">
                 <div data-testid="dashboard-monthly-surplus">
-                  <p className="text-[10px] md:text-xs text-emerald-800/70 dark:text-emerald-400/80 font-medium mb-0.5">Monthly Surplus</p>
-                  <p className="font-sans text-lg font-bold leading-none text-emerald-800 dark:text-emerald-300 md:text-2xl">
-                    <span className="financial-number" title={`${formatINR(readiness.unallocatedSurplus)}/mo`}>{formatCompactINR(readiness.unallocatedSurplus)}<span className="text-xs md:text-sm font-normal text-emerald-700/80 dark:text-emerald-400/80">/mo</span></span>
+                  <p className="text-tiny md:text-xs text-muted-foreground font-medium mb-0.5">Monthly Surplus</p>
+                  <p className={cn("font-sans text-lg font-bold leading-none md:text-2xl", readiness.unallocatedSurplus > 0 ? "text-warning" : readiness.unallocatedSurplus < 0 ? "text-negative" : "text-foreground")}>
+                    <span className="financial-number" title={`${formatINR(readiness.unallocatedSurplus)}/mo`}>{formatCompactINR(readiness.unallocatedSurplus)}<span className="text-xs md:text-sm font-normal">/mo</span></span>
                   </p>
                 </div>
-                <div className="border-l border-emerald-200/70 pl-3 dark:border-emerald-900/60 md:border-l-0 md:pl-0" data-testid="dashboard-lump-sum">
-                  <p className="text-[10px] md:text-xs text-emerald-800/70 dark:text-emerald-400/80 font-medium mb-0.5">Lump-Sum Available</p>
-                  <p className="font-sans text-lg font-bold leading-none text-emerald-800 dark:text-emerald-300 md:text-xl">
+                <div className="border-l border-border pl-3 md:border-l-0 md:pl-0" data-testid="dashboard-lump-sum">
+                  <p className="text-tiny md:text-xs text-muted-foreground font-medium mb-0.5">Lump-Sum Available</p>
+                  <p className={cn("font-sans text-lg font-bold leading-none md:text-xl", projection.lumpSumAvailable > 0 ? "text-warning" : projection.lumpSumAvailable < 0 ? "text-negative" : "text-foreground")}>
                     <ResponsiveCurrency value={projection.lumpSumAvailable} />
                   </p>
                 </div>
               </div>
-              <p className="mt-2 inline-flex items-center text-[11px] font-medium text-emerald-700 dark:text-emerald-400 md:mt-4 md:text-xs">
+              <p className="mt-2 inline-flex items-center text-tiny font-semibold text-primary md:mt-4 md:text-xs">
                 Put this surplus to work <ArrowRight className="h-3.5 w-3.5 ml-1 transition-transform group-hover:translate-x-0.5" />
               </p>
             </CardContent>
@@ -600,8 +706,8 @@ export default function Dashboard() {
                           />
                           <span className="truncate text-sm font-medium md:max-w-[140px]" title={entry.name}>{entry.name}</span>
                         </div>
-                        <span className="financial-number text-right text-sm font-semibold">{formatINR(entry.value)}</span>
-                        <span className="financial-number min-w-11 text-right text-[11px] text-muted-foreground md:text-xs">{percentage.toFixed(1)}%</span>
+                         <span className="financial-number text-right text-sm font-semibold text-foreground">{formatINR(entry.value)}</span>
+                        <span className="financial-number min-w-11 text-right text-tiny text-muted-foreground md:text-xs">{percentage.toFixed(1)}%</span>
                       </div>
                     );
                   })}
@@ -646,18 +752,18 @@ export default function Dashboard() {
             <div className="flex flex-1 flex-col justify-start space-y-3">
               {stats.budgetHealth.totalOverspend > 0 ? (
                 <Collapsible open={isOverspendExpanded} onOpenChange={setIsOverspendExpanded}>
-                  <div className="overflow-hidden rounded-lg border border-destructive/15 bg-destructive/[0.04]">
+                  <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
                     <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-destructive/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-destructive/30"
+                       <button
+                         type="button"
+                         className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         aria-label={`${isOverspendExpanded ? "Collapse" : "Expand"} over-budget categories`}
                       >
-                        <span className="flex min-w-0 items-center gap-2.5">
-                          <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-destructive">
-                              {formatINR(stats.budgetHealth.totalOverspend)} over budget
+                         <span className="flex min-w-0 items-center gap-2.5">
+                           <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                           <span className="min-w-0">
+                             <span className="block truncate text-sm font-semibold text-muted-foreground">
+                               <span className="text-negative">{formatINR(stats.budgetHealth.totalOverspend)}</span> over budget
                             </span>
                             <span className="block text-xs text-muted-foreground">
                               {stats.budgetHealth.overspentCategories.length} categor{stats.budgetHealth.overspentCategories.length === 1 ? "y" : "ies"} exceeded
@@ -668,16 +774,16 @@ export default function Dashboard() {
                       </button>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="max-h-44 divide-y divide-destructive/10 overflow-y-auto border-t border-destructive/10">
+                      <div className="max-h-44 divide-y divide-border/60 overflow-y-auto border-t border-border/60">
                         {stats.budgetHealth.overspentCategories.map((category) => (
                           <div key={category.name} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
                             <div className="min-w-0">
                               <p className="truncate font-medium text-foreground">{category.name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {formatINR(category.spent)} spent · {formatINR(category.budget)} budget
+                                <span className="text-foreground">{formatINR(category.spent)}</span> spent · <span className="text-foreground">{formatINR(category.budget)}</span> budget
                               </p>
                             </div>
-                            <span className="shrink-0 font-semibold text-destructive">
+                            <span className="shrink-0 font-semibold text-negative">
                               +{formatINR(category.amount)}
                             </span>
                           </div>
@@ -687,7 +793,7 @@ export default function Dashboard() {
                   </div>
                 </Collapsible>
               ) : stats.currentTotalOrdinary > 0 ? (
-                <div className="text-sm bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 p-4 rounded-lg flex items-start gap-2 border border-emerald-100 dark:border-emerald-800/50">
+                <div className="text-sm bg-muted/40 text-muted-foreground p-4 rounded-lg flex items-start gap-2 border border-border/50">
                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
                   <p>You are keeping your spending under control this month. Excellent work.</p>
                 </div>
@@ -734,7 +840,7 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground truncate">{expense.category} • {format(new Date(expense.date), "dd MMM")}</p>
                         </div>
                       </div>
-                      <div className="font-semibold font-sans shrink-0">
+                      <div className="font-semibold font-sans shrink-0 text-foreground">
                         {formatINR(expense.amount)}
                       </div>
                     </div>

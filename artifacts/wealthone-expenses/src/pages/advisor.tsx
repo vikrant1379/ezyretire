@@ -68,7 +68,7 @@ export default function Advisor() {
               {advisor.photoUrl ? (
                 <img src={advisor.photoUrl} alt={advisor.name} className="h-32 w-32 rounded-full object-cover border-4 border-card shadow-sm bg-card" />
               ) : (
-                <div className="h-32 w-32 rounded-full bg-primary/10 text-primary flex items-center justify-center text-4xl font-serif border-4 border-card shadow-sm">
+                <div className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-card bg-background font-serif text-4xl text-foreground shadow-sm">
                   {advisor.name.charAt(0)}
                 </div>
               )}
@@ -78,7 +78,7 @@ export default function Advisor() {
               </div>
             </div>
             <div className="pb-2 flex justify-center w-full md:w-auto">
-              <Button asChild className="bg-[#25D366] hover:bg-[#128C7E] text-white rounded-full px-6">
+              <Button asChild className="rounded-full bg-support px-6 text-support-foreground hover:bg-support-hover">
                 <a href={formatWhatsappLink(advisor.whatsapp || settings?.businessWhatsapp || "")} target="_blank" rel="noopener noreferrer">
                   <MessageCircle className="mr-2 h-4 w-4" />
                   Message

@@ -1,10 +1,10 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { fetchFinancialData, clearFinancialData } from "@/lib/financial-api";
+import { clearFinancialData, deleteFinancialExpense } from "@/lib/financial-api";
 import {
   useFinancialOperation,
   useFinancialWrite,
-  FINANCIAL_DATA_KEY,
 } from "@/hooks/use-financial-write";
+import { financialDataQueryOptions } from "@/lib/query-policy";
 import { type Expense } from "@/lib/storage";
 import {
   mergeImportedExpenses,
@@ -15,8 +15,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export function useExpenses() {
   return useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
+    ...financialDataQueryOptions(),
     select: (data) =>
       [...data.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   });
@@ -56,13 +55,10 @@ export function useUpdateExpense() {
 }
 
 export function useDeleteExpense() {
-  const write = useFinancialWrite();
+  const performFinancialOperation = useFinancialOperation();
   return useMutation({
     mutationFn: async (id: string) => {
-      await write((current) => ({
-        ...current,
-        expenses: current.expenses.filter((expense) => expense.id !== id),
-      }));
+      await performFinancialOperation(() => deleteFinancialExpense(id));
       return id;
     },
   });

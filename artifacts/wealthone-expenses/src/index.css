@@ -1,13 +1,128 @@
 @import "@workspace/wealthone-design-system/styles.css";
 
-.financial-number {
+/* Keep the established projection-series palette independent of UI colors. */
+.retirement-projection-chart {
+  --optimistic-corpus: 148 48% 43%;
+  --primary: 219 48% 20%;
+  --chart-3: 148 48% 43%;
+  --chart-4: 40 67% 51%;
+  --chart-5: 0 76% 57%;
+  --destructive: 0 76% 57%;
+  --accent: 40 49% 56%;
+}
+
+.dark .retirement-projection-chart {
+  --optimistic-corpus: 143 55% 62%;
+  --primary: 45 55% 62%;
+  --chart-3: 53 89% 67%;
+  --chart-4: 0 95% 75%;
+  --chart-5: 214 20% 69%;
+  --destructive: 0 95% 75%;
+  --accent: 40 49% 56%;
+}
+@theme inline {
+  --color-loading-tagline: var(--loading-tagline);
+}
+
+:root {
+  --loading-tagline: hsl(var(--muted-foreground));
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-right: 0px;
+  --safe-area-inset-bottom: 0px;
+  --safe-area-inset-left: 0px;
+  --app-safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top));
+  --app-safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right));
+  --app-safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom));
+  --app-safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left));
+  --app-visual-height: 100dvh;
+  --app-visual-offset-top: 0px;
+  --app-visual-width: 100vw;
+  --app-visual-offset-left: 0px;
+  scroll-padding-top: var(--app-safe-top);
+  scroll-padding-right: var(--app-safe-right);
+  scroll-padding-bottom: var(--app-safe-bottom);
+  scroll-padding-left: var(--app-safe-left);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html[data-app-keyboard-open="true"] [data-testid="page-scroll-container"],
+html[data-app-keyboard-open="true"] [data-app-overlay-scroll] {
+  scroll-padding-block: calc(var(--app-safe-top) + 1rem) calc(var(--app-safe-bottom) + 1rem);
+}
+
+html[data-app-keyboard-open="true"] [data-radix-popper-content-wrapper] {
+  max-height: calc(var(--app-visual-height) - var(--app-safe-top) - var(--app-safe-bottom) - 1rem);
+  translate:
+    var(--app-visual-viewport-shift-x, 0px)
+    var(--app-visual-viewport-shift-y, 0px);
+}
+
+.safe-area-x {
+  padding-left: calc(1rem + var(--app-safe-left));
+  padding-right: calc(1rem + var(--app-safe-right));
+}
+
+.financial-number,
+.amount,
+.currency,
+[data-type="money"] {
   display: inline-block;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-family: var(--font-sans);
+}
+@media (max-width: 1279px) {
+  [data-hide-mobile-route-heading="true"] h1:first-of-type {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .mobile-header-motion {
-    transition: none;
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  body[data-monthly-report-print="true"] [data-testid="desktop-sidebar"],
+  body[data-monthly-report-print="true"] [data-testid="mobile-bottom-navigation"],
+  body[data-monthly-report-print="true"] [data-testid="mobile-header"],
+  body[data-monthly-report-print="true"] [data-app-toast-viewport="true"] {
+    display: none !important;
+  }
+
+  body[data-monthly-report-print="true"] #root,
+  body[data-monthly-report-print="true"] #root > div,
+  body[data-monthly-report-print="true"] main,
+  body[data-monthly-report-print="true"] [data-testid="page-scroll-container"] {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body[data-monthly-report-print="true"] [data-testid="page-content"] {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  body[data-monthly-report-print="true"] .monthly-report-card:not([data-print-selected="true"]) {
+    display: none !important;
+  }
+
+  body[data-monthly-report-print="true"] .monthly-report-card,
+  body[data-monthly-report-print="true"] .monthly-report-card section {
+    break-inside: avoid;
   }
 }

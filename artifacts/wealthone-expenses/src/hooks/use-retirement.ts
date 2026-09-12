@@ -1,39 +1,47 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { fetchFinancialData } from "@/lib/financial-api";
-import { useFinancialWrite, FINANCIAL_DATA_KEY } from "@/hooks/use-financial-write";
+import { useFinancialOperation, useFinancialWrite } from "@/hooks/use-financial-write";
+import { updateRetirementPlanning } from "@/lib/financial-api";
+import { financialDataQueryOptions } from "@/lib/query-policy";
 import { type ProfileInputs, type RetirementInputs } from "@/lib/storage";
+import { mergeRetirementScenarioInputs } from "@/lib/planning-simulations";
 
 export function useRetirementInputs() {
   return useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
+    ...financialDataQueryOptions(),
     select: (data) => data.retirementInputs,
   });
 }
 
 export function useUpdateRetirementInputs() {
-  const write = useFinancialWrite();
+  const perform = useFinancialOperation();
   return useMutation({
     mutationFn: async (inputs: RetirementInputs) => {
-      await write((current) => ({
+      await perform(() => updateRetirementPlanning(inputs));
+      return inputs;
+    },
+  });
+}
+
+export function useApplyRetirementScenario() {
+  const write = useFinancialWrite();
+  return useMutation({
+    mutationFn: async (scenario: RetirementInputs) => {
+      const saved = await write((current) => ({
         ...current,
-        retirementInputs: inputs,
+        retirementInputs: mergeRetirementScenarioInputs(current.retirementInputs, scenario),
         profileInputs: {
           ...current.profileInputs,
-          dateOfBirth: inputs.dateOfBirth,
-          targetRetirementAge: inputs.targetRetirementAge,
-          lifeExpectancy: inputs.lifeExpectancy,
+          targetRetirementAge: scenario.targetRetirementAge,
         },
       }));
-      return inputs;
+      return saved.retirementInputs;
     },
   });
 }
 
 export function useProfileInputs() {
   return useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
+    ...financialDataQueryOptions(),
     select: (data) => data.profileInputs,
   });
 }

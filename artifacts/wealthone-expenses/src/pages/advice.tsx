@@ -16,6 +16,9 @@ import { formatINR } from "@/lib/utils";
 import { useToast } from "@workspace/wealthone-design-system/hooks/use-toast";
 import { MessageSquareHeart, CheckCircle2, AlertTriangle, MessageCircle, ArrowRight, ShieldCheck, Clock, User, QrCode, Mail } from "lucide-react";
 import { useProfileInputs } from "@/hooks/use-retirement";
+import { useQueryClient } from "@tanstack/react-query";
+import { setAdviceOverview } from "@/lib/advice-query-cache";
+import { capturePrivateQueryGeneration } from "@/lib/query-policy";
 
 const consultationTopics = [
   AdviceRequestInputTopic.financial,
@@ -53,9 +56,9 @@ export default function Advice() {
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary md:h-16 md:w-16">
             <MessageSquareHeart className="h-7 w-7 md:h-8 md:w-8" aria-hidden="true" />
           </div>
-          <CardTitle className="font-serif text-2xl md:text-3xl">
+          <h1 className="font-serif text-2xl font-semibold leading-none tracking-tight md:text-3xl">
             Advisor section updates are coming soon
-          </CardTitle>
+          </h1>
           <CardDescription className="max-w-xl pt-2 text-sm leading-6 md:text-base md:leading-7">
             We are improving the way you request professional guidance. Consultation requests and
             payments are temporarily unavailable while this section is updated.
@@ -79,12 +82,13 @@ export default function Advice() {
 }
 
 function LegacyAdviceFlow() {
+  const queryClient = useQueryClient();
   const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { data: profile } = useProfileInputs();
   const { toast } = useToast();
   const [paymentReference, setPaymentReference] = useState("");
   
-  const { data: overview, isLoading: overviewLoading, refetch } = useGetAdviceOverview({
+  const { data: overview, isLoading: overviewLoading } = useGetAdviceOverview({
     query: {
       enabled: isAuthenticated,
       queryKey: getGetAdviceOverviewQueryKey(),
@@ -119,6 +123,7 @@ function LegacyAdviceFlow() {
   }, [form, profile?.fullName, profile?.phone, user?.fullName]);
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
+    const queryGeneration = capturePrivateQueryGeneration(queryClient);
     createRequest.mutate({ data: { 
       userName: values.userName,
       whatsappNumber: values.whatsappNumber,
@@ -126,12 +131,12 @@ function LegacyAdviceFlow() {
       note: values.note,
       consent: true 
     } }, {
-      onSuccess: () => {
+      onSuccess: (updatedOverview) => {
+        setAdviceOverview(queryClient, queryGeneration, updatedOverview);
         toast({
           title: "Request submitted successfully",
           description: "We’ll send your WhatsApp confirmation if automatic messaging is available.",
         });
-        refetch();
       },
       onError: (err) => {
         toast({ title: "Failed to submit request", description: String(err), variant: "destructive" });
@@ -149,13 +154,14 @@ function LegacyAdviceFlow() {
       });
       return;
     }
+    const queryGeneration = capturePrivateQueryGeneration(queryClient);
     submitPaymentReference.mutate(
       { data: { paymentReference: reference } },
       {
-        onSuccess: () => {
+        onSuccess: (updatedOverview) => {
+          setAdviceOverview(queryClient, queryGeneration, updatedOverview);
           setPaymentReference("");
           toast({ title: "Payment reference submitted for verification" });
-          refetch();
         },
         onError: (err) => {
           toast({
@@ -385,32 +391,32 @@ function LegacyAdviceFlow() {
       </div>
 
       {isPendingPayment && (
-        <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
+        <Card className="border-warning/30 bg-warning-background shadow-sm">
           <CardHeader className="p-4 md:p-6 md:pb-4">
-            <CardTitle className="text-base md:text-lg font-serif text-amber-900 flex items-center gap-2">
+            <CardTitle className="text-base md:text-lg font-serif text-warning flex items-center gap-2">
               <QrCode className="h-4 w-4 md:h-5 md:w-5" />
               Payment Required
             </CardTitle>
-            <CardDescription className="text-xs md:text-sm text-amber-800">
-              Please complete your payment of {settings?.currency === 'INR' ? formatINR(request.feeAmount) : `${settings?.currency} ${request.feeAmount}`} to confirm your request.
+            <CardDescription className="text-xs md:text-sm text-warning">
+              Please complete your payment of <span className="text-foreground">{settings?.currency === 'INR' ? formatINR(request.feeAmount) : `${settings?.currency} ${request.feeAmount}`}</span> to confirm your request.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-0 md:p-6 md:pt-0 space-y-3 md:space-y-4 text-amber-900">
-            <div className="bg-white/80 border border-amber-200 rounded-lg p-3 md:p-4">
+          <CardContent className="p-4 pt-0 md:p-6 md:pt-0 space-y-3 md:space-y-4 text-warning">
+            <div className="bg-card/80 border border-warning/30 rounded-lg p-3 md:p-4 dark:border-warning/30">
               <p className="text-xs md:text-sm font-medium mb-1">Transfer via UPI to:</p>
               <p className="text-lg md:text-xl font-mono tracking-tight">{settings?.upiId || 'Not configured'}</p>
             </div>
-            <p className="text-[10px] md:text-sm">
+            <p className="text-tiny md:text-sm">
               After you pay, our team will verify the payment and review your request for a suitable professional match. Keep your request number handy.
             </p>
             {request.paymentStatus === "submitted" ? (
-              <div className="rounded-lg border border-amber-200 bg-white/80 p-3 text-sm">
+              <div className="rounded-lg border border-warning/30 bg-card/80 p-3 text-sm dark:border-warning/30">
                 <p className="font-medium">Payment reference submitted</p>
-                <p className="mt-1 break-all text-amber-800">{request.paymentReference}</p>
+                <p className="mt-1 break-all text-warning">{request.paymentReference}</p>
                 <p className="mt-1">Our team is reviewing it. Reload this page to see the latest status.</p>
               </div>
             ) : (
-              <div className="space-y-2 rounded-lg border border-amber-200 bg-white/80 p-3">
+              <div className="space-y-2 rounded-lg border border-warning/30 bg-card/80 p-3 dark:border-warning/30">
                 {request.paymentStatus === "rejected" ? (
                   <p className="text-sm font-medium text-destructive">
                     The previous reference could not be verified. Check it and submit again.
@@ -440,7 +446,7 @@ function LegacyAdviceFlow() {
               </div>
             )}
             {settings?.businessWhatsapp ? (
-              <Button asChild className="w-full bg-[#25D366] text-white hover:bg-[#128C7E]">
+              <Button asChild className="w-full bg-support text-support-foreground hover:bg-support-hover">
                 <a
                   href={formatPaymentWhatsappLink(settings.businessWhatsapp, request.id)}
                   target="_blank"
@@ -451,7 +457,7 @@ function LegacyAdviceFlow() {
                 </a>
               </Button>
             ) : (
-              <p className="rounded-lg border border-amber-200 bg-white/80 p-3 text-sm">
+              <p className="rounded-lg border border-warning/30 bg-card/80 p-3 text-sm dark:border-warning/30">
                 WhatsApp payment support is being configured. You can use the UPI ID above or check back shortly.
               </p>
             )}
@@ -477,11 +483,11 @@ function LegacyAdviceFlow() {
 
       {isAssigned && advisor && (
         <div className="space-y-4 md:space-y-6">
-          <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-start gap-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+          <div className="bg-positive border border-positive/30 p-4 rounded-xl flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-positive mt-0.5 shrink-0" />
             <div>
-              <p className="font-medium text-emerald-900">Professional Matched</p>
-              <p className="text-sm text-emerald-800 mt-1">
+              <p className="font-medium text-positive">Professional Matched</p>
+              <p className="text-sm text-positive mt-1">
                 Your consultation is ready. You can now reach out to your matched professional directly to schedule your call.
               </p>
             </div>
@@ -519,7 +525,7 @@ function LegacyAdviceFlow() {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Button asChild className="flex-1 bg-[#25D366] hover:bg-[#128C7E] text-white">
+                  <Button asChild className="flex-1 bg-support text-support-foreground hover:bg-support-hover">
                     <a href={formatWhatsappLink(advisor.whatsapp || settings?.businessWhatsapp || "", request.id)} target="_blank" rel="noopener noreferrer">
                       <MessageCircle className="mr-2 h-4 w-4" />
                       Message on WhatsApp

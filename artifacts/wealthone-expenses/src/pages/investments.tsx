@@ -44,8 +44,8 @@ function InvestmentMetricCurrency({
 
   return (
     <span className="financial-number" title={exactValue} aria-label={exactValue}>
-      <span className="sm:hidden">{prefix}{formatCompactINR(value)}</span>
-      <span className="hidden sm:inline">{exactValue}</span>
+      <span className="lg:hidden">{prefix}{formatCompactINR(value)}</span>
+      <span className="hidden lg:inline">{exactValue}</span>
     </span>
   );
 }
@@ -141,19 +141,19 @@ import { DownloadExcelButton } from "@/components/download-excel-button";
 import { DisposalImportButton } from "@/components/disposal-import-button";
 import { disposalImportBatchIndexes } from "@/lib/disposal-import";
 import { buildInvestmentReportSheets } from "@/lib/excel-report-builders";
+import { QueryErrorState } from "@/components/query-error-state";
 
 const CHART_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--secondary))",
-  "#10b981",
-  "#8b5cf6",
-  "#6366f1",
-  "#ec4899",
-  "#f43f5e",
-  "#f59e0b",
-  "#0ea5e9",
-  "#14b8a6",
-  "#3b82f6"
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
 const assetClasses: AssetClass[] = [
@@ -281,13 +281,18 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function Investments() {
-  const { data: investments = [], isLoading: loadingInv } = useInvestments();
-  const { data: retirementInputs, isLoading: loadingRet } =
-    useRetirementInputs();
-  const { data: incomes = [], isLoading: loadingInc } = useIncomeSources();
-  const { data: expenses = [], isLoading: loadingExp } = useExpenses();
-  const { data: budgets = [], isLoading: loadingBud } = useBudgets();
-  const { data: loans = [], isLoading: loadingLoans } = useLoans();
+  const investmentsQuery = useInvestments();
+  const retirementQuery = useRetirementInputs();
+  const incomesQuery = useIncomeSources();
+  const expensesQuery = useExpenses();
+  const budgetsQuery = useBudgets();
+  const loansQuery = useLoans();
+  const { data: investments = [], isLoading: loadingInv } = investmentsQuery;
+  const { data: retirementInputs, isLoading: loadingRet } = retirementQuery;
+  const { data: incomes = [], isLoading: loadingInc } = incomesQuery;
+  const { data: expenses = [], isLoading: loadingExp } = expensesQuery;
+  const { data: budgets = [], isLoading: loadingBud } = budgetsQuery;
+  const { data: loans = [], isLoading: loadingLoans } = loansQuery;
   const { data: uiPreferences = defaultUiPreferences() } = useUiPreferences();
   const updatePreferences = useUpdateUiPreferences();
 
@@ -807,6 +812,10 @@ export default function Investments() {
     );
   }
 
+  if ([investmentsQuery, retirementQuery, incomesQuery, expensesQuery, budgetsQuery, loansQuery].some((query) => query.isError)) {
+    return <QueryErrorState onRetry={() => investmentsQuery.refetch()} />;
+  }
+
   const { projection } = metrics;
   const datedFundOpportunities = projection.datedFundOpportunities;
   const fundAllocationOpportunities = projection.fundAllocationOpportunities;
@@ -877,16 +886,16 @@ export default function Investments() {
       {/* Available to Invest */}
       <Collapsible open={isGapAnalysisOpen} onOpenChange={setIsGapAnalysisOpen}>
         <div className="w-full bg-card rounded-2xl overflow-hidden shadow-sm border border-border">
-          <div className="bg-gradient-to-r from-emerald-50/30 to-background p-4 dark:from-emerald-950/10 dark:to-background md:p-6">
+          <div className="bg-card p-4 md:p-6">
             <div className="flex items-start justify-between gap-2 md:items-center md:gap-3">
               <div className="min-w-0 md:flex md:flex-wrap md:items-center md:gap-3">
                 <h2 className="truncate font-serif text-lg md:text-xl">Available to Invest</h2>
                 {projection.extraSipRequired > 0 ? (
-                  <span className="mt-1.5 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-semibold text-rose-800 dark:bg-rose-900/50 dark:text-rose-400 md:mt-0 md:px-3 md:py-1 md:text-xs">
+                  <span className="mt-1.5 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-tiny font-semibold text-muted-foreground md:mt-0 md:px-3 md:py-1 md:text-xs">
                     ACTION REQUIRED
                   </span>
                 ) : (
-                  <span className="mt-1.5 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-400 md:mt-0 md:px-3 md:py-1 md:text-xs">
+                  <span className="mt-1.5 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-tiny font-semibold text-muted-foreground md:mt-0 md:px-3 md:py-1 md:text-xs">
                     FULLY FUNDED
                   </span>
                 )}
@@ -901,24 +910,24 @@ export default function Investments() {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2.5 md:mt-4 md:gap-4">
-              <div className="min-w-0 rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20 md:p-5" data-testid="investments-monthly-surplus">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-emerald-800/80 dark:text-emerald-400/80 md:text-sm">Monthly Surplus</p>
-                <p className="mt-1 truncate font-sans text-xl font-bold text-emerald-900 dark:text-emerald-300 md:mt-2 md:text-3xl">
-                  {formatINR(remainingUnallocatedSurplus)}<span className="text-[10px] font-normal text-emerald-700/80 dark:text-emerald-400/80 md:text-lg">/mo</span>
+              <div className="min-w-0 rounded-xl border border-border bg-card p-3 md:p-5" data-testid="investments-monthly-surplus">
+                <p className="text-tiny font-semibold uppercase tracking-wide text-muted-foreground md:text-sm">Monthly Surplus</p>
+                <p className={cn("mt-1 truncate font-sans text-xl font-bold md:mt-2 md:text-3xl", remainingUnallocatedSurplus > 0 ? "text-warning" : remainingUnallocatedSurplus < 0 ? "text-negative" : "text-foreground")}>
+                  {formatINR(remainingUnallocatedSurplus)}<span className="text-tiny font-normal md:text-lg">/mo</span>
                 </p>
-                <p className="mt-1.5 text-[10px] font-medium leading-snug text-emerald-800 dark:text-emerald-400 md:mt-2 md:text-sm">
+                <p className="mt-1.5 text-tiny font-medium leading-snug text-muted-foreground md:mt-2 md:text-sm">
                   <span className="md:hidden">Free after monthly commitments.</span>
                   <span className="hidden md:inline">
                   After living costs, active EMIs, existing SIPs, and planned take-home SIPs.
                   </span>
                 </p>
               </div>
-              <div className="min-w-0 rounded-xl border border-blue-200/70 bg-blue-50/50 p-3 dark:border-blue-900/60 dark:bg-blue-950/20 md:p-5" data-testid="investments-lump-sum">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-blue-800/80 dark:text-blue-400/80 md:text-sm">Lump-Sum Available</p>
-                <p className="mt-1 truncate font-sans text-xl font-bold text-blue-900 dark:text-blue-300 md:mt-2 md:text-3xl">
+              <div className="min-w-0 rounded-xl border border-border bg-card p-3 md:p-5" data-testid="investments-lump-sum">
+                <p className="text-tiny font-semibold uppercase tracking-wide text-muted-foreground md:text-sm">Lump-Sum Available</p>
+                <p className={cn("mt-1 truncate font-sans text-xl font-bold md:mt-2 md:text-3xl", projection.lumpSumAvailable > 0 ? "text-warning" : projection.lumpSumAvailable < 0 ? "text-negative" : "text-foreground")}>
                   {formatINR(projection.lumpSumAvailable)}
                 </p>
-                <p className="mt-1.5 text-[10px] font-medium leading-snug text-blue-800 dark:text-blue-400 md:mt-2 md:text-sm">
+                <p className="mt-1.5 text-tiny font-medium leading-snug text-muted-foreground md:mt-2 md:text-sm">
                   <span className="md:hidden">Arrived funds not yet committed.</span>
                   <span className="hidden md:inline">
                   Arrived annual or one-time funds not already committed to an investment.
@@ -929,7 +938,7 @@ export default function Investments() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-2 h-7 w-full border-blue-300 bg-background/80 px-2 text-[10px] text-blue-800 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950 md:mt-4 md:h-9 md:w-auto md:px-3 md:text-sm"
+                    className="mt-2 h-7 w-full border-border bg-background/80 px-2 text-tiny text-foreground hover:bg-muted md:mt-4 md:h-9 md:w-auto md:px-3 md:text-sm"
                     onClick={() => openAllocationDialog(allocatableDatedFunds[0])}
                     data-testid="button-plan-lump-sum-investment"
                   >
@@ -945,7 +954,7 @@ export default function Investments() {
                 <div className="space-y-1 md:space-y-4">
                   <div className="flex items-center justify-between py-2 border-b border-border/50">
                     <span className="text-[13px] leading-tight text-muted-foreground md:text-base">Monthly Income</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-[13px] md:text-base">
+                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-positive md:text-base">
                       {formatINR(projection.netMonthlyIncome)}
                     </span>
                   </div>
@@ -953,7 +962,7 @@ export default function Investments() {
                     <span className="text-[13px] leading-tight text-muted-foreground md:text-base">
                       Monthly Budgets + EMIs
                     </span>
-                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-destructive md:text-base">
+                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-foreground md:text-base">
                       -{formatINR(monthlyBudgetAndEmis)}
                     </span>
                   </div>
@@ -961,11 +970,11 @@ export default function Investments() {
                     <span className="max-w-[58%] text-[13px] font-semibold leading-tight text-foreground md:max-w-none md:text-base md:font-medium">
                       Monthly Available for Investment
                     </span>
-                    <span className="shrink-0 text-sm font-bold tabular-nums text-primary md:text-lg">
+                    <span className={cn("shrink-0 text-sm font-bold tabular-nums md:text-lg", projection.availableSurplus > 0 ? "text-warning" : projection.availableSurplus < 0 ? "text-negative" : "text-foreground")}>
                       {formatINR(projection.availableSurplus)}
                     </span>
                   </div>
-                  <p className="text-[10px] leading-snug text-muted-foreground md:text-xs md:leading-relaxed">
+                  <p className="text-tiny leading-snug text-muted-foreground md:text-xs md:leading-relaxed">
                     Planning costs use the higher of your monthly budget and
                     normalized ledger spending.
                   </p>
@@ -978,13 +987,13 @@ export default function Investments() {
                     <span className="text-[13px] leading-tight text-muted-foreground md:text-base">
                       Planned Take-home SIPs
                     </span>
-                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-emerald-600 dark:text-emerald-400 md:text-base">
+                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-positive md:text-base">
                       {formatINR(projection.modeledTakeHomeContribution)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-border/50">
                     <span className="text-[13px] leading-tight text-muted-foreground md:text-base">Salary-linked PF</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-[13px] md:text-base">
+                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-positive md:text-base">
                       {formatINR(projection.linkedPFContribution)}
                     </span>
                   </div>
@@ -992,28 +1001,27 @@ export default function Investments() {
                     <span className="text-[13px] leading-tight text-muted-foreground md:text-base">
                       Take-home SIPs Needed
                     </span>
-                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-primary md:text-base">
+                    <span className="shrink-0 font-semibold tabular-nums text-[13px] text-positive md:text-base">
                       {formatINR(retirementNeeds)}
                     </span>
                   </div>
 
                   <div className="pt-2">
                     {projection.extraSipRequired > 0 ? (
-                      <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-3 dark:border-rose-900/50 dark:bg-rose-900/10 md:p-4">
+                      <div className="rounded-xl border border-border bg-muted/40 p-3 md:p-4">
                         <div className="flex items-start gap-2 md:gap-3">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500 md:h-5 md:w-5" />
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground md:h-5 md:w-5" />
                           <div>
                             <p className="mb-1 text-xs font-semibold leading-snug text-foreground md:text-sm">
-                              You are {formatINR(projection.extraSipRequired)} short
-                              every month.
+                              You are <span className="text-negative">{formatINR(projection.extraSipRequired)}</span> short every month.
                             </p>
                             {canAfford ? (
-                              <p className="text-[11px] font-medium leading-snug text-emerald-600 dark:text-emerald-400 md:text-sm md:leading-normal">
+                              <p className="text-tiny font-medium leading-snug text-muted-foreground md:text-sm md:leading-normal">
                                 Good news: You have enough monthly surplus to
                                 close this gap. Increase your SIPs now.
                               </p>
                             ) : (
-                              <p className="text-[11px] font-medium leading-snug text-rose-600 dark:text-rose-400 md:text-sm md:leading-normal">
+                              <p className="text-tiny font-medium leading-snug text-muted-foreground md:text-sm md:leading-normal">
                                 You cannot afford this with your current expenses.
                                 Cut discretionary spending to retire on time.
                               </p>
@@ -1022,16 +1030,16 @@ export default function Investments() {
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 dark:border-emerald-900/50 dark:bg-emerald-900/10 md:p-4">
+                      <div className="rounded-xl border border-border bg-muted/40 p-3 md:p-4">
                         <div className="flex items-start gap-2 md:gap-3">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500 md:h-5 md:w-5" />
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground md:h-5 md:w-5" />
                           <div>
                             <p className="mb-1 text-xs font-semibold leading-snug text-foreground md:text-sm">
                               Your current investments cover your retirement needs.
                             </p>
-                            <p className="text-[11px] font-medium leading-snug text-emerald-600 dark:text-emerald-400 md:text-sm md:leading-normal">
+                            <p className="text-tiny font-medium leading-snug text-muted-foreground md:text-sm md:leading-normal">
                               You still have{" "}
-                              {formatINR(remainingUnallocatedSurplus)}/mo available.
+                              <span className="text-warning">{formatINR(remainingUnallocatedSurplus)}</span>/mo available.
                               Keep investing to retire earlier.
                             </p>
                           </div>
@@ -1289,7 +1297,7 @@ export default function Investments() {
 
       <Collapsible open={isYearlyOutlookOpen} onOpenChange={setIsYearlyOutlookOpen}>
         <Card className="border-0 shadow-sm bg-card" data-testid="yearly-surplus-outlook">
-          <CardHeader className="relative gap-3 pb-14 sm:flex-row sm:items-center sm:justify-between sm:pb-6">
+          <CardHeader className="relative gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:pb-6">
             <div className="min-w-0 pr-12 sm:pr-0">
               <CardTitle className="text-lg font-serif">
                 Estimated yearly surplus outlook
@@ -1355,8 +1363,8 @@ export default function Investments() {
                       <th className="px-4 py-3 text-right font-medium">Estimated income/mo</th>
                       <th className="px-4 py-3 text-right font-medium">Estimated living/mo</th>
                       <th className="px-4 py-3 text-right font-medium">Scheduled outflows/mo</th>
-                      <th className="px-4 py-3 text-right font-medium text-emerald-700 dark:text-emerald-400">Estimated surplus/mo</th>
-                      <th className="px-4 py-3 text-right font-medium text-emerald-700 dark:text-emerald-400">
+                      <th className="px-4 py-3 text-right font-medium">Estimated surplus/mo</th>
+                      <th className="px-4 py-3 text-right font-medium">
                         Annual funds (separate from surplus/mo)
                       </th>
                     </tr>
@@ -1374,15 +1382,10 @@ export default function Investments() {
                               + entry.planningInvestment,
                           )}
                         </td>
-                        <td className={cn(
-                          "px-4 py-3 text-right font-semibold",
-                          entry.surplus >= 0
-                            ? "text-emerald-700 dark:text-emerald-400"
-                            : "text-destructive",
-                        )}>
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">
                           {formatINR(entry.surplus)}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-400">
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">
                           {formatINR(entry.annualFunds)}
                         </td>
                       </tr>
@@ -1391,13 +1394,13 @@ export default function Investments() {
                 </table>
               </div>
               {allocatableDatedFunds.length > 0 && (
-                <div className="mt-4 rounded-xl border border-blue-200/70 bg-blue-50/50 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
+                <div className="mt-4 rounded-xl border border-border bg-muted/40 p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="font-semibold text-blue-950 dark:text-blue-200">
+                      <p className="font-semibold text-foreground">
                         Decide how to use annual funds
                       </p>
-                      <p className="mt-1 text-sm text-blue-900/80 dark:text-blue-300/80">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         These funds are separate from monthly surplus. You can allocate arrived money now or plan an upcoming fund in advance.
                       </p>
                     </div>
@@ -1408,7 +1411,7 @@ export default function Investments() {
                           size="sm"
                           onClick={() => openAllocationDialog(arrivedAllocatableFunds[0])}
                         >
-                          Allocate {formatINR(arrivedAllocatableAmount)} now
+                          Allocate <span className="text-warning">{formatINR(arrivedAllocatableAmount)}</span> now
                         </Button>
                       )}
                       {upcomingAllocatableFunds[0] && (
@@ -1418,16 +1421,16 @@ export default function Investments() {
                           size="sm"
                           onClick={() => openAllocationDialog(upcomingAllocatableFunds[0])}
                         >
-                          Plan {formatINR(upcomingAllocatableAmount)} upcoming
+                          Plan <span className="text-foreground">{formatINR(upcomingAllocatableAmount)}</span> upcoming
                         </Button>
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2 text-xs text-blue-900/80 sm:grid-cols-2 dark:text-blue-300/80">
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                     <p>
                       <span className="font-semibold">Available now:</span>{" "}
                       {arrivedAllocatableFunds.length > 0
-                        ? formatINR(arrivedAllocatableAmount)
+                        ? <span className="text-warning">{formatINR(arrivedAllocatableAmount)}</span>
                         : "No unallocated funds"}
                     </p>
                     <p>
@@ -1451,16 +1454,16 @@ export default function Investments() {
         <Card className="min-w-0 border-0 shadow-sm bg-card">
           <CardContent className="space-y-3 p-4 md:p-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider md:text-xs">
                 Current Value
               </CardDescription>
-              <CardTitle className="w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl">
+              <CardTitle className="w-full text-lg font-sans font-bold text-positive sm:text-xl xl:text-2xl">
                 <InvestmentMetricCurrency value={metrics.totalCurrent} />
               </CardTitle>
             </div>
             <div className="flex items-center text-xs md:text-sm">
               <span className="text-muted-foreground">
-                Invested: <InvestmentMetricCurrency value={metrics.totalInvested} />
+                Invested: <span className="text-positive"><InvestmentMetricCurrency value={metrics.totalInvested} /></span>
               </span>
             </div>
           </CardContent>
@@ -1469,25 +1472,31 @@ export default function Investments() {
         <Card className="min-w-0 border-0 shadow-sm bg-card">
           <CardContent className="space-y-3 p-4 md:p-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider md:text-xs">
                 Overall Return
               </CardDescription>
               <CardTitle
                 className={cn(
                   "w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl",
-                  metrics.gain >= 0 ? "text-emerald-600" : "text-destructive"
+                  metrics.gain > 0
+                    ? "text-positive"
+                    : metrics.gain < 0
+                      ? "text-negative"
+                      : "text-foreground"
                 )}
               >
                 <InvestmentMetricCurrency value={metrics.gain} prefix={metrics.gain >= 0 ? "+" : ""} />
               </CardTitle>
             </div>
-            <div className="flex items-center text-[10px] md:text-sm truncate">
+            <div className="flex items-center text-tiny md:text-sm truncate">
               <span
                 className={cn(
                   "font-medium",
-                  metrics.gainPercent >= 0
-                    ? "text-emerald-600"
-                    : "text-destructive"
+                  metrics.gainPercent > 0
+                    ? "text-positive"
+                    : metrics.gainPercent < 0
+                      ? "text-negative"
+                      : "text-foreground"
                 )}
               >
                 {metrics.gainPercent >= 0 ? "+" : ""}
@@ -1501,14 +1510,14 @@ export default function Investments() {
         <Card className="min-w-0 border-0 shadow-sm bg-card">
           <CardContent className="space-y-3 p-4 md:p-5">
             <div className="space-y-1">
-              <CardDescription className="font-medium text-[10px] uppercase tracking-wider md:text-xs">
+              <CardDescription className="font-medium text-tiny uppercase tracking-wider md:text-xs">
                 Monthly SIPs
               </CardDescription>
-              <CardTitle className="w-full text-lg font-sans font-bold sm:text-xl xl:text-2xl">
+              <CardTitle className="w-full text-lg font-sans font-bold text-positive sm:text-xl xl:text-2xl">
                 <InvestmentMetricCurrency value={projection.currentSipCommitments} />
               </CardTitle>
             </div>
-            <div className="flex items-center text-[10px] md:text-sm truncate">
+            <div className="flex items-center text-tiny md:text-sm truncate">
               <span className="text-muted-foreground truncate">
                 Active contributions
               </span>
@@ -1516,18 +1525,19 @@ export default function Investments() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 border-0 shadow-sm bg-gradient-to-br from-primary to-primary/90 text-primary-foreground">
-          <CardContent className="space-y-3 p-4 md:p-5">
+        <Card className="relative min-w-0 overflow-hidden border-0 bg-card shadow-sm">
+          <div className="pointer-events-none absolute -right-8 -top-10 hidden h-24 w-24 rounded-full bg-muted/30 blur-2xl dark:block" aria-hidden="true" />
+          <CardContent className="relative z-10 space-y-3 p-4 md:p-5">
             <div className="space-y-1">
-              <CardDescription className="truncate font-medium text-[10px] uppercase tracking-wider text-primary-foreground/80 md:text-xs">
+              <CardDescription className="truncate font-medium text-tiny uppercase tracking-wider text-muted-foreground md:text-xs">
                 Proj. at Retirement (
                 {Math.max(0, Math.round(projection.yearsToRetirement))} yrs)
               </CardDescription>
-              <CardTitle className="w-full text-lg font-sans font-bold text-white sm:text-xl xl:text-2xl">
+              <CardTitle className="w-full text-lg font-sans font-bold text-foreground sm:text-xl xl:text-2xl">
                 <InvestmentMetricCurrency value={projection.projectedCorpus} />
               </CardTitle>
             </div>
-            <p className="text-[10px] md:text-sm text-primary-foreground/90 truncate">
+            <p className="truncate text-tiny text-muted-foreground md:text-sm">
               Based on expected returns
             </p>
           </CardContent>
@@ -1682,7 +1692,7 @@ export default function Investments() {
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                         <div className="flex min-w-0 items-start gap-3 pr-8 sm:gap-4 sm:pr-0">
-                          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:mt-1 sm:h-10 sm:w-10">
+                           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:mt-1 sm:h-10 sm:w-10">
                             <PiggyBank className="h-4 w-4 sm:h-5 sm:w-5" />
                           </div>
                           <div className="min-w-0">
@@ -1699,8 +1709,8 @@ export default function Investments() {
                                 <span className="inline-flex max-w-full flex-wrap items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
                                   {inv.autoManagedContribution
                                     ? "Salary-synced PF"
-                                    : "SIP"}
-                                  : {formatINR(displayedContribution)}/mo
+                                   : "SIP"}
+                                   : <span className="text-positive">{formatINR(displayedContribution)}</span>/mo
                                 </span>
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {status} · {scheduleText}
@@ -1716,8 +1726,8 @@ export default function Investments() {
                             ) : null}
                             {plannedLumpSum > 0 && (
                               <div className="mt-3 space-y-2">
-                                <p className="text-xs font-medium text-blue-700 dark:text-blue-400">
-                                  {formatINR(plannedLumpSum)} planned from dated funds
+                                 <p className="text-xs font-medium text-muted-foreground">
+                                   {formatINR(plannedLumpSum)} planned from dated funds
                                 </p>
                                 <div className="space-y-1.5">
                                   {validInvestmentAllocations.map((allocation) => {
@@ -1805,43 +1815,45 @@ export default function Investments() {
 
                       <div className="mt-1 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 border-t border-border/50 pt-3 text-xs sm:mt-2 sm:gap-4 sm:pt-4 sm:text-sm md:grid-cols-4">
                         <div className="min-w-0">
-                          <p className="mb-0.5 text-[10px] text-muted-foreground sm:mb-1 sm:text-sm">Invested</p>
-                          <p className="[overflow-wrap:anywhere] font-semibold">
+                          <p className="mb-0.5 text-tiny text-muted-foreground sm:mb-1 sm:text-sm">Invested</p>
+                          <p className="[overflow-wrap:anywhere] font-semibold text-positive">
                             {formatINR(inv.investedAmount)}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <p className="mb-0.5 text-[10px] text-muted-foreground sm:mb-1 sm:text-sm">
+                          <p className="mb-0.5 text-tiny text-muted-foreground sm:mb-1 sm:text-sm">
                             Current Value
                           </p>
-                          <p className="[overflow-wrap:anywhere] font-semibold">
+                          <p className="[overflow-wrap:anywhere] font-semibold text-positive">
                             {formatINR(inv.currentValue)}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <p className="mb-0.5 text-[10px] text-muted-foreground sm:mb-1 sm:text-sm">
+                          <p className="mb-0.5 text-tiny text-muted-foreground sm:mb-1 sm:text-sm">
                             Gain / Loss
                           </p>
                           <p
                             className={cn(
                               "[overflow-wrap:anywhere] font-semibold",
-                              gain >= 0
-                                ? "text-emerald-600"
-                                : "text-destructive"
+                              gain > 0
+                                ? "text-positive"
+                                : gain < 0
+                                  ? "text-negative"
+                                  : "text-foreground"
                             )}
                           >
                             {gain >= 0 ? "+" : ""}
                             {formatINR(gain)}{" "}
-                            <span className="text-[10px] opacity-80 font-normal sm:text-xs">
+                            <span className="text-tiny opacity-80 font-normal sm:text-xs">
                               ({gainPct.toFixed(2)}%)
                             </span>
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <p className="mb-0.5 text-[10px] text-muted-foreground sm:mb-1 sm:text-sm">
+                          <p className="mb-0.5 text-tiny text-muted-foreground sm:mb-1 sm:text-sm">
                             Proj. @ Retirement
                           </p>
-                          <p className="[overflow-wrap:anywhere] font-semibold text-primary">
+                          <p className="[overflow-wrap:anywhere] font-semibold text-foreground">
                             {formatINR(projVal)}
                           </p>
                         </div>
@@ -1955,7 +1967,7 @@ export default function Investments() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[95dvh] w-[calc(100%-2rem)] max-w-2xl rounded-xl p-6 flex flex-col gap-0">
+        <DialogContent className="w-[calc(100%-2rem-var(--app-safe-left)-var(--app-safe-right))] max-w-2xl rounded-xl p-6 flex flex-col gap-0 lg:w-[calc(100%-2rem)]">
           <DialogHeader className="shrink-0 pb-4">
             <DialogTitle>
               {editingId ? "Edit Investment" : "Add Investment"}
@@ -1979,7 +1991,7 @@ export default function Investments() {
                       <FormControl>
                         <Input
                           placeholder="e.g. Nifty 50 Index"
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -2006,7 +2018,7 @@ export default function Investments() {
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="text-blue-600 dark:text-blue-400 font-medium">
+                          <SelectTrigger className="text-secondary font-medium">
                             <SelectValue placeholder="Select class" />
                           </SelectTrigger>
                         </FormControl>
@@ -2035,7 +2047,7 @@ export default function Investments() {
                         <Input
                           type="number"
                           formatWithCommas
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -2054,7 +2066,7 @@ export default function Investments() {
                         <Input
                           type="number"
                           formatWithCommas
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -2086,7 +2098,7 @@ export default function Investments() {
                             "font-medium",
                             isLinkedEPF
                               ? "bg-muted text-muted-foreground"
-                              : "text-blue-600 dark:text-blue-400"
+                              : "text-secondary"
                           )}
                           {...field}
                         />
@@ -2114,7 +2126,7 @@ export default function Investments() {
                         <Input
                           type="number"
                           step="0.01"
-                          className="text-blue-600 dark:text-blue-400 font-medium"
+                          className="text-secondary font-medium"
                           {...field}
                         />
                       </FormControl>
@@ -2134,7 +2146,7 @@ export default function Investments() {
                           <FormControl>
                             <Input
                               type="date"
-                              className="text-blue-600 dark:text-blue-400 font-medium"
+                              className="text-secondary font-medium"
                               {...field}
                               value={field.value || ""}
                             />
@@ -2154,7 +2166,7 @@ export default function Investments() {
                             defaultValue={field.value}
                           >
                             <FormControl>
-                              <SelectTrigger className="text-blue-600 dark:text-blue-400 font-medium">
+                              <SelectTrigger className="text-secondary font-medium">
                                 <SelectValue placeholder="Select when to stop" />
                               </SelectTrigger>
                             </FormControl>
@@ -2177,7 +2189,7 @@ export default function Investments() {
                             <FormControl>
                               <Input
                                 type="date"
-                                className="text-blue-600 dark:text-blue-400 font-medium"
+                                className="text-secondary font-medium"
                                 {...field}
                                 value={field.value || ""}
                               />
@@ -2194,20 +2206,18 @@ export default function Investments() {
               {draftFeasibility && formValues.monthlyContribution > 0 && !isLinkedEPF && (
                 <div className={cn(
                   "p-3 rounded-lg border flex items-start gap-3 mt-4",
-                  draftFeasibility.feasible 
-                    ? "bg-emerald-50/50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400" 
-                    : "bg-amber-50/50 border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-400"
+                  "bg-muted/40 border-border text-muted-foreground"
                 )}>
                   {draftFeasibility.feasible ? (
-                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-500" />
+                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-muted-foreground" />
                   ) : (
-                    <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-500" />
+                    <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-muted-foreground" />
                   )}
                   <div className="text-sm">
                     {draftFeasibility.feasible ? (
                       <p><strong>Feasible:</strong> This contribution fits within your projected available surplus.</p>
                     ) : (
-                      <p><strong>Cash Flow Warning:</strong> You will face a shortfall of {formatINR(draftFeasibility.shortfall!.deficit)} in {format(draftFeasibility.shortfall!.date, "MMMM yyyy")} with this schedule. You can still save it, but consider adjusting the amount or dates.</p>
+                       <p><strong>Cash Flow Warning:</strong> You will face a shortfall of <span className="text-negative">{formatINR(draftFeasibility.shortfall!.deficit)}</span> in {format(draftFeasibility.shortfall!.date, "MMMM yyyy")} with this schedule. You can still save it, but consider adjusting the amount or dates.</p>
                     )}
                   </div>
                 </div>

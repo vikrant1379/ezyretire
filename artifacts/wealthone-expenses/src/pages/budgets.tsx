@@ -5,7 +5,10 @@ import { useRetirementInputs } from "@/hooks/use-retirement";
 import { formatINR } from "@/lib/utils";
 import {
   budgetTotalForMonth,
+  effectiveBudgetWindowAmount,
+  isBudgetExpense,
   isBudgetWindowActive,
+  nextYearlyBudgetOccurrence,
   parseDateOnly,
   validateBudgetSchedule,
   type Budget,
@@ -52,19 +55,24 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/wealthone-design-system/components/ui/dropdown-menu";
 import { useBudgets, useManageBudgetCategory, useUpdateBudget } from "@/hooks/use-budgets";
-import { useQuery } from "@tanstack/react-query";
-import { fetchFinancialData } from "@/lib/financial-api";
-import { FINANCIAL_DATA_KEY } from "@/hooks/use-financial-write";
+import { useUiPreferences } from "@/hooks/use-ui-preferences";
 import { Target, Pencil, Check, X, Plus, MoreHorizontal, MoreVertical, Archive, ArchiveRestore } from "lucide-react";
 import { CardSortControls } from "@/components/card-sort-controls";
 import type { SortDirection } from "@/lib/card-order";
+import { QueryErrorState } from "@/components/query-error-state";
+import { PlannedExpenses } from "@/components/planned-expenses";
+import { DownloadExcelButton } from "@/components/download-excel-button";
+import { buildBudgetReportSheets } from "@/lib/excel-report-builders";
+import { PlanningCostTools } from "@/components/planning-cost-tools";
 
 type BudgetSortBy = "category" | "limit" | "spent" | "remaining" | "usage";
 const BudgetCardSortControls = CardSortControls<BudgetSortBy>;
 
 export default function Budgets() {
-  const { data: budgets = [], isLoading: loadingBudgets } = useBudgets();
-  const { data: expenses = [], isLoading: loadingExpenses } = useExpenses();
+  const budgetsQuery = useBudgets();
+  const expensesQuery = useExpenses();
+  const { data: budgets = [], isLoading: loadingBudgets } = budgetsQuery;
+  const { data: expenses = [], isLoading: loadingExpenses } = expensesQuery;
   const { data: retirementInputs } = useRetirementInputs();
   const updateBudget = useUpdateBudget();
   const manageCategory = useManageBudgetCategory();
@@ -86,16 +94,13 @@ export default function Budgets() {
   const [archivedCategoriesOpen, setArchivedCategoriesOpen] = useState(false);
   const [sortBy, setSortBy] = useState<BudgetSortBy>("limit");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const { data: financialData } = useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
-  });
+  const { data: uiPreferences } = useUiPreferences();
 
   const monthStart = startOfMonth(new Date());
   const monthEnd = endOfMonth(new Date());
 
   const categories = useBudgetCategories();
-  const archivedCategories = (financialData?.uiPreferences.archivedPlanningCategories ?? [])
+  const archivedCategories = (uiPreferences?.archivedPlanningCategories ?? [])
     .filter(isCustomPlanningCategory)
     .map((category) => ({
       category,
@@ -106,7 +111,7 @@ export default function Budgets() {
 
   const categoryData = useMemo(() => {
     const currentMonthExpenses = expenses.filter(e => 
-      isWithinInterval(new Date(e.date), { start: monthStart, end: monthEnd }) && !e.reimbursable
+      isWithinInterval(new Date(e.date), { start: monthStart, end: monthEnd }) && isBudgetExpense(e)
     );
 
     return categories.map(category => {
@@ -127,6 +132,20 @@ export default function Budgets() {
       const upcomingWindow = budget?.windows
         ?.filter((window) => window.startDate && parseDateOnly(window.startDate) > monthEnd)
         .sort((left, right) => String(left.startDate).localeCompare(String(right.startDate)))[0];
+      const annualOccurrences = (budget?.windows ?? []).flatMap((window) => {
+        const date = nextYearlyBudgetOccurrence(window, monthStart, retirementDate);
+        return date ? [{
+          window,
+          date,
+          amount: effectiveBudgetWindowAmount(
+            window,
+            date,
+            currentInflation,
+            monthStart,
+            retirementDate,
+          ),
+        }] : [];
+      }).sort((left, right) => left.date.getTime() - right.date.getTime());
       
       const spent = currentMonthExpenses
         .filter(e => e.category === category)
@@ -149,6 +168,8 @@ export default function Budgets() {
         hasPlan: Boolean(budget?.windows?.some((window) => window.monthlyLimit > 0)),
         activeWindows,
         upcomingWindow,
+        annualOccurrences,
+        nextAnnualOccurrence: annualOccurrences[0],
       };
     }).sort((a, b) => b.limit - a.limit);
   }, [
@@ -160,6 +181,15 @@ export default function Budgets() {
     monthStart,
     retirementDate,
   ]);
+  const upcomingAnnualExpenses = useMemo(() =>
+    categoryData.flatMap((data) =>
+      data.annualOccurrences.map((occurrence) => ({ category: data.category, ...occurrence }))
+    ).sort((left, right) =>
+      left.date.getTime() - right.date.getTime()
+      || left.category.localeCompare(right.category)
+      || left.window.id.localeCompare(right.window.id)
+    ),
+  [categoryData]);
 
   const sortedCategoryData = useMemo(() => {
     const direction = sortDirection === "asc" ? 1 : -1;
@@ -183,7 +213,9 @@ export default function Budgets() {
 
     // Check if it has complex windows
     const rawWindows = data.rawBudget?.windows || [];
-    if (rawWindows.length > 1 || (rawWindows.length === 1 && (rawWindows[0].startDate || rawWindows[0].endMode !== "lifelong"))) {
+    if (rawWindows.length > 1 || (rawWindows.length === 1 && (
+      rawWindows[0].startDate || rawWindows[0].endMode !== "lifelong" || rawWindows[0].cadence === "yearly"
+    ))) {
       setShowAdvanced(true);
       setEditWindows(rawWindows.map((w: any) => ({
         id: w.id,
@@ -191,7 +223,9 @@ export default function Budgets() {
         startDate: w.startDate,
         endMode: w.endMode,
         endDate: w.endDate,
-        note: w.note
+        note: w.note,
+        cadence: w.cadence ?? "monthly",
+        annualMonth: w.annualMonth,
       })));
     } else {
       setShowAdvanced(false);
@@ -212,7 +246,9 @@ export default function Budgets() {
         startDate: w.startDate,
         endMode: w.endMode,
         endDate: w.endDate,
-        note: w.note
+        note: w.note,
+        cadence: w.cadence ?? "monthly",
+        annualMonth: w.annualMonth,
       }));
       if (payloadWindows.some((window) => window.endMode === "retirement") && !retirementDate) {
         toast({
@@ -247,6 +283,7 @@ export default function Budgets() {
       payloadWindows = [{
         id: editWindows[0]?.id || crypto.randomUUID(),
         monthlyLimit: limit,
+        cadence: "monthly",
         endMode: "lifelong"
       }];
     }
@@ -303,6 +340,7 @@ export default function Budgets() {
       windows: [{
         id: crypto.randomUUID(),
         monthlyLimit: 0,
+        cadence: "monthly",
         endMode: "lifelong",
       }],
     }, {
@@ -393,6 +431,10 @@ export default function Budgets() {
     );
   }
 
+  if (budgetsQuery.isError || expensesQuery.isError) {
+    return <QueryErrorState onRetry={() => budgetsQuery.refetch()} />;
+  }
+
   const totalBudget = categoryData.reduce((sum, c) => sum + c.limit, 0);
   const totalSpent = categoryData.reduce((sum, c) => sum + c.spent, 0);
 
@@ -479,6 +521,16 @@ export default function Budgets() {
       </div>
 
       <ExpenseModeSwitch />
+      <div className="flex justify-end">
+        <DownloadExcelButton
+          sheets={buildBudgetReportSheets(budgets)}
+          reportSlug="budget_plan_report"
+          size="sm"
+          mobileDirectDownload
+        />
+      </div>
+      <PlanningCostTools />
+      <PlannedExpenses />
 
       <Card className="bg-primary text-primary-foreground border-0 shadow-md">
         <CardContent className="flex flex-col items-start justify-between gap-4 p-4 md:flex-row md:items-center md:gap-6 md:p-8">
@@ -487,7 +539,7 @@ export default function Budgets() {
               <Target className="h-6 w-6 text-primary-foreground md:h-7 md:w-7" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-primary-foreground/80 md:text-sm">Total Monthly Budget</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-primary-foreground/80 md:text-sm">This Month&apos;s Budget</p>
               <p className="font-sans text-2xl font-bold leading-tight tabular-nums md:text-3xl">
                 {totalBudget > 0 ? formatINR(totalBudget) : "Not set yet"}
               </p>
@@ -496,7 +548,7 @@ export default function Budgets() {
           {totalBudget > 0 ? (
             <div className="w-full md:w-1/2 space-y-2">
               <div className="flex justify-between text-xs leading-5 tabular-nums md:text-sm">
-                <span>{formatINR(totalSpent)} spent</span>
+                 <span><span className="text-foreground">{formatINR(totalSpent)}</span> spent</span>
                 <span>{formatINR(Math.max(totalBudget - totalSpent, 0))} remaining</span>
               </div>
               <Progress
@@ -506,8 +558,8 @@ export default function Budgets() {
             </div>
           ) : (
             <p className="w-full text-xs leading-5 text-primary-foreground/90 md:w-1/2 md:text-sm md:leading-relaxed">
-              Set a limit on any category below. The total becomes the monthly lifestyle your
-              retirement corpus is planned to fund for the rest of your life.
+              Set monthly limits or yearly expenses on any category below. Retirement planning
+              accounts for each amount in the month when it is due.
             </p>
           )}
         </CardContent>
@@ -541,6 +593,30 @@ export default function Budgets() {
         )}
       </div>
 
+      {upcomingAnnualExpenses.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Upcoming yearly expenses</CardTitle>
+            <CardDescription>The full amount is included only in its due month.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border" aria-label="Upcoming yearly expenses">
+              {upcomingAnnualExpenses.map((expense) => (
+                <li key={`${expense.category}-${expense.window.id}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{expense.category}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Next due {format(expense.date, "MMMM yyyy")}
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-semibold tabular-nums">{formatINR(expense.amount)}</p>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
         {sortedCategoryData.map((data) => (
           <Card key={data.category} className={`relative border-0 shadow-sm transition-all ${data.overBudget && data.hasBudget ? 'border-l-4 border-l-destructive bg-destructive/5' : 'bg-card'}`}>
@@ -556,8 +632,8 @@ export default function Budgets() {
                     {data.category}
                   </CardTitle>
                   <CardDescription className="mt-0.5 truncate text-[13px] leading-5 tabular-nums">
-                    {data.hasBudget
-                      ? `${formatINR(data.spent)} of ${formatINR(data.limit)}`
+                     {data.hasBudget
+                       ? <><span className="text-foreground">{formatINR(data.spent)}</span> of {formatINR(data.limit)}</>
                       : data.hasPlan
                         ? "No budget is active this month"
                         : "No limit set"}
@@ -571,7 +647,7 @@ export default function Budgets() {
                     size="icon"
                     variant="ghost"
                     onClick={() => handleSave(data.category)}
-                    className="h-8 w-8 text-emerald-600"
+                    className="h-8 w-8 text-positive"
                     aria-label={`Save ${data.category} budget`}
                   >
                     <Check className="h-4 w-4" />
@@ -634,6 +710,7 @@ export default function Budgets() {
                             setEditWindows([{
                               id: crypto.randomUUID(),
                               monthlyLimit: Number(editAmount) || 0,
+                              cadence: "monthly",
                               endMode: "lifelong",
                             }]);
                           }
@@ -675,8 +752,8 @@ export default function Budgets() {
               ) : (
                 <div className="mt-1 space-y-2">
                   {data.activeWindows.length > 1 && (
-                    <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
-                      {data.activeWindows.length} periods overlap this month. Their amounts add to {formatINR(data.limit)}.
+                    <p className="rounded-md bg-warning px-2.5 py-2 text-xs text-warning">
+                       {data.activeWindows.length} periods overlap this month. Their amounts add to <span className="text-foreground">{formatINR(data.limit)}</span>.
                     </p>
                   )}
                   {data.activeWindows.some((window) => window.note) && (
@@ -684,23 +761,28 @@ export default function Budgets() {
                       {data.activeWindows.map((window) => window.note).filter(Boolean).join(" · ")}
                     </p>
                   )}
-                  {data.upcomingWindow?.startDate && (
-                    <p className="text-xs text-primary">
+                   {data.upcomingWindow?.startDate && (
+                     <p className="text-xs text-muted-foreground">
                       Next change: {format(parseDateOnly(data.upcomingWindow.startDate), "MMM yyyy")} · {formatINR(data.upcomingWindow.monthlyLimit)}/mo
                       {data.upcomingWindow.note ? ` · ${data.upcomingWindow.note}` : ""}
+                    </p>
+                  )}
+                  {data.nextAnnualOccurrence && (
+                     <p className="text-xs text-muted-foreground">
+                      Yearly: {formatINR(data.nextAnnualOccurrence.amount)} due {format(data.nextAnnualOccurrence.date, "MMMM yyyy")}
                     </p>
                   )}
                   <div className="mb-1 flex justify-between text-xs leading-5 tabular-nums">
                     <span className={data.overBudget && data.hasBudget ? "text-destructive font-medium" : "text-muted-foreground"}>
                       {data.hasBudget 
                         ? `${data.percentUsed.toFixed(0)}% used` 
-                        : (data.spent > 0 ? `${formatINR(data.spent)} spent` : "No spending")}
+                         : (data.spent > 0 ? <><span className="text-foreground">{formatINR(data.spent)}</span> spent</> : "No spending")}
                     </span>
                     {data.hasBudget && !data.overBudget && (
                       <span className="text-muted-foreground">{formatINR(data.remaining)} left</span>
                     )}
                     {data.overBudget && data.hasBudget && (
-                      <span className="text-destructive font-medium">{formatINR(data.spent - data.limit)} over limit</span>
+                       <span className="text-negative font-medium">{formatINR(data.spent - data.limit)} over limit</span>
                     )}
                   </div>
                   {data.hasBudget && (
@@ -717,7 +799,7 @@ export default function Budgets() {
       </div>
 
       <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl p-5 sm:p-6">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl p-5 sm:p-6">
           <DialogHeader className="pr-8 text-left">
             <DialogTitle className="text-xl leading-6">Add a planning category</DialogTitle>
             <DialogDescription className="text-sm leading-6">
@@ -776,7 +858,7 @@ export default function Budgets() {
       </Dialog>
 
       <Dialog open={archivedCategoriesOpen} onOpenChange={setArchivedCategoriesOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md rounded-xl p-5 sm:p-6">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-xl p-5 sm:p-6">
           <DialogHeader className="pr-8 text-left">
             <DialogTitle className="text-xl leading-6">Archived planning categories</DialogTitle>
             <DialogDescription className="text-sm leading-6">

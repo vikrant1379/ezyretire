@@ -99,9 +99,9 @@ export default function About() {
     <article className="space-y-12 md:space-y-20 pb-8 md:pb-12 animate-in fade-in duration-500" data-testid="page-about">
       <header className="relative isolate overflow-hidden rounded-2xl md:rounded-[2rem] border border-primary/15 bg-card px-4 md:px-6 py-10 md:py-12 shadow-sm sm:px-10 md:py-16 lg:px-16">
         <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 md:h-72 md:w-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 md:h-64 md:w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 md:h-64 md:w-64 rounded-full bg-positive-background blur-3xl" />
         <div className="relative max-w-3xl">
-          <div className="mb-4 md:mb-6 inline-flex items-center gap-1.5 md:gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] md:text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          <div className="mb-4 md:mb-6 inline-flex items-center gap-1.5 md:gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-tiny md:text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             <Sparkles className="h-3 w-3 md:h-3.5 md:w-3.5" aria-hidden="true" />
             A living plan for real life
           </div>
@@ -183,7 +183,7 @@ export default function About() {
 
       <section aria-labelledby="about-capabilities-heading" className="rounded-2xl md:rounded-[2rem] bg-muted/45 px-4 md:px-5 py-8 md:py-10 sm:px-8 lg:px-10">
         <div className="max-w-2xl">
-          <p className="text-[10px] md:text-sm font-semibold uppercase tracking-[0.18em] text-primary">One connected workspace</p>
+          <p className="text-tiny md:text-sm font-semibold uppercase tracking-[0.18em] text-primary">One connected workspace</p>
           <h2 id="about-capabilities-heading" className="mt-2 md:mt-3 font-serif text-2xl md:text-3xl font-semibold sm:text-4xl">
             Every view contributes to the same picture.
           </h2>
@@ -207,9 +207,9 @@ export default function About() {
       </section>
 
       <section aria-labelledby="about-trust-heading" className="grid gap-6 md:gap-8 lg:grid-cols-2">
-        <div className="rounded-2xl md:rounded-[2rem] border border-emerald-200/60 bg-emerald-50/60 p-5 md:p-7 dark:border-emerald-900/60 dark:bg-emerald-950/20 sm:p-9">
-          <ShieldCheck className="h-6 w-6 md:h-8 md:w-8 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
-          <p className="mt-4 md:mt-6 text-[10px] md:text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:text-emerald-300">
+        <div className="rounded-2xl border border-positive/60 bg-positive-background p-5 sm:p-9 md:rounded-[2rem] md:p-7 dark:border-positive/60 dark:bg-positive-background">
+          <ShieldCheck className="h-6 w-6 md:h-8 md:w-8 text-positive" aria-hidden="true" />
+          <p className="mt-4 md:mt-6 text-tiny md:text-sm font-semibold uppercase tracking-[0.18em] text-positive">
             Professional support
           </p>
           <h2 id="about-trust-heading" className="mt-2 md:mt-3 font-serif text-2xl md:text-3xl font-semibold">
@@ -219,8 +219,8 @@ export default function About() {
             ezyRetire gives you a useful starting point. When you are ready for the next step, we can connect you with the right professional for your needs.
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-emerald-200/80 bg-white/70 p-4 dark:border-emerald-900/70 dark:bg-emerald-950/35">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-300">
+            <div className="rounded-2xl border border-positive/80 bg-white/70 p-4 dark:border-positive/70 dark:bg-positive-background">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-positive text-positive dark:bg-positive-background dark:text-positive">
                 <BriefcaseBusiness className="h-4.5 w-4.5" aria-hidden="true" />
               </div>
               <h3 className="mt-3 font-semibold">Financial Advisors</h3>
@@ -228,8 +228,8 @@ export default function About() {
                 Guidance on financial planning, investments and retirement strategy.
               </p>
             </div>
-            <div className="rounded-2xl border border-emerald-200/80 bg-white/70 p-4 dark:border-emerald-900/70 dark:bg-emerald-950/35">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-300">
+            <div className="rounded-2xl border border-positive/80 bg-white/70 p-4 dark:border-positive/70 dark:bg-positive-background">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-positive text-positive dark:bg-positive-background dark:text-positive">
                 <Calculator className="h-4.5 w-4.5" aria-hidden="true" />
               </div>
               <h3 className="mt-3 font-semibold">Chartered Accountants (CAs)</h3>

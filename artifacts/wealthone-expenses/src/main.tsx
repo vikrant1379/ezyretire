@@ -1,4 +1,4 @@
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { useEffect, useState } from 'react';
 import { WifiOff, X } from 'lucide-react';
 
@@ -137,7 +137,7 @@ function OfflineStorageWarning() {
   return (
     <aside
       aria-label="Offline access unavailable"
-      className="fixed bottom-4 right-4 z-[110] flex max-w-sm items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 pr-10 text-amber-950 shadow-lg"
+      className="fixed bottom-4 right-4 z-[110] flex max-w-sm items-start gap-3 rounded-lg border border-warning/30 bg-warning p-4 pr-10 text-warning shadow-lg"
       data-testid="notice-offline-storage-unavailable"
       role="status"
     >
@@ -152,7 +152,7 @@ function OfflineStorageWarning() {
       </div>
       <button
         aria-label="Dismiss offline access notice"
-        className="absolute right-2 top-2 rounded p-1 text-amber-800 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-700"
+        className="absolute right-2 top-2 rounded p-1 text-warning hover:bg-warning focus:outline-none focus:ring-2 focus:ring-warning"
         data-testid="button-dismiss-offline-storage-warning"
         onClick={dismiss}
         type="button"
@@ -162,18 +162,34 @@ function OfflineStorageWarning() {
     </aside>
   );
 }
+export function MainApplication() {
+  return (
+    <ErrorBoundary>
+      <App />
+      <OfflineStorageWarning />
+    </ErrorBoundary>
+  );
+}
 
-createRoot(document.getElementById('root')!, {
+type RootWindow = Window & {
+  __ezyRetireRoot?: Root;
+};
+
+const rootWindow = window as RootWindow;
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('Application root element is missing');
+}
+
+const root = rootWindow.__ezyRetireRoot ?? createRoot(rootElement, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.
   onCaughtError: (error, errorInfo) => {
     console.error(error, errorInfo.componentStack);
   },
-}).render(
-  <ErrorBoundary>
-    <App />
-    <OfflineStorageWarning />
-  </ErrorBoundary>,
-);
+});
+rootWindow.__ezyRetireRoot = root;
+
+root.render(<MainApplication />);
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

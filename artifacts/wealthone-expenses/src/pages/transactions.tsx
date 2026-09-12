@@ -12,7 +12,7 @@ import { EditExpenseDialog } from "@/components/edit-expense-dialog";
 import { DataManager } from "@/components/data-manager";
 import { QuickAddExpense } from "@/components/quick-add-expense";
 import { ExpenseModeSwitch } from "@/components/expense-mode-switch";
-import { budgetTotalForMonth, getLinkedLoanName, type Expense } from "@/lib/storage";
+import { budgetTotalForMonth, getLinkedLoanName, isBudgetExpense, type Expense } from "@/lib/storage";
 import { getTargetRetirementMonth } from "@/lib/budget-helpers";
 import { Search, Pencil, Trash2, SlidersHorizontal, AlertCircle, Target, MoreVertical } from "lucide-react";
 import { Progress } from "@workspace/wealthone-design-system/components/ui/progress";
@@ -44,15 +44,19 @@ import {
 } from "@workspace/wealthone-design-system/components/ui/dropdown-menu";
 import { CardSortControls } from "@/components/card-sort-controls";
 import type { SortDirection } from "@/lib/card-order";
+import { QueryErrorState } from "@/components/query-error-state";
 
 type TransactionSortBy = "date" | "amount" | "merchant" | "category";
 const TransactionSortControls = CardSortControls<TransactionSortBy>;
 
 export default function Transactions() {
-  const { data: expenses = [], isLoading } = useExpenses();
-  const { data: budgets = [], isLoading: budgetsLoading } = useBudgets();
+  const expensesQuery = useExpenses();
+  const budgetsQuery = useBudgets();
+  const loansQuery = useLoans();
+  const { data: expenses = [], isLoading } = expensesQuery;
+  const { data: budgets = [], isLoading: budgetsLoading } = budgetsQuery;
   const { data: retirementInputs } = useRetirementInputs();
-  const { data: loans = [], isLoading: loansLoading } = useLoans();
+  const { data: loans = [], isLoading: loansLoading } = loansQuery;
   const deleteExpense = useDeleteExpense();
   const { toast } = useToast();
 
@@ -77,7 +81,7 @@ export default function Transactions() {
   );
   const totalSpent = expenses
     .filter((expense) =>
-      !expense.reimbursable
+      isBudgetExpense(expense)
       && isWithinInterval(new Date(expense.date), { start: monthStart, end: monthEnd })
     )
     .reduce((sum, expense) => sum + expense.amount, 0);
@@ -142,58 +146,63 @@ export default function Transactions() {
     );
   }
 
+  if (expensesQuery.isError || budgetsQuery.isError || loansQuery.isError) {
+    return <QueryErrorState onRetry={() => expensesQuery.refetch()} />;
+  }
+
   return (
     <div className="space-y-4 animate-in fade-in duration-500 pb-10 sm:space-y-6">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-4 md:flex md:items-end md:justify-between">
-        <div className="min-w-0 md:mr-auto">
-          <h1 className="text-3xl font-serif text-primary">Expenses</h1>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-4 md:gap-y-3">
+        <div className="min-w-0 md:col-start-1 md:row-start-1">
+          <h1 className="font-serif text-3xl leading-tight text-foreground">Expenses</h1>
           <p className="mt-1 max-w-xl text-sm leading-5 text-muted-foreground">
             Track daily spending and keep your monthly plan in view.
           </p>
         </div>
-        <div className="md:order-3">
+        <div className="md:col-span-2 md:row-start-2 md:justify-self-end">
           <DataManager loans={loans} expenses={sortedExpenses} />
         </div>
-        <div className="col-span-2 md:order-2">
+        <div className="col-span-2 md:col-span-1 md:col-start-2 md:row-start-1">
           <QuickAddExpense className="h-11 w-full text-base md:h-10 md:w-auto md:text-sm" />
         </div>
       </div>
 
       <ExpenseModeSwitch />
 
-      <section className="rounded-xl bg-primary p-5 text-primary-foreground shadow-md md:p-6">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+      <section className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-5 text-card-foreground shadow-sm md:p-6">
+
+        <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-foreground/15">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted/30 text-muted-foreground shadow-inner ring-1 ring-inset ring-border/50">
               <Target className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-primary-foreground/75">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 This month
               </p>
-              <p className="text-2xl font-bold">
+               <p className="financial-number text-3xl font-bold tracking-tight text-foreground">
                 {totalSpent > 0 ? formatINR(totalSpent) : "No spending yet"}
               </p>
-              <p className="text-xs text-primary-foreground/75">spent so far</p>
+              <p className="text-xs text-muted-foreground">spent so far</p>
             </div>
           </div>
 
           <div className="w-full space-y-3 md:max-w-md">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-primary-foreground/70">Monthly budget</p>
-                <p className="font-semibold">{totalBudget > 0 ? formatINR(totalBudget) : "Not set"}</p>
+                <p className="text-muted-foreground">This month&apos;s budget</p>
+                <p className="financial-number font-semibold text-foreground">{totalBudget > 0 ? formatINR(totalBudget) : "Not set"}</p>
               </div>
               <div className="text-right">
-                <p className="text-primary-foreground/70">Remaining</p>
-                <p className="font-semibold">{totalBudget > 0 ? formatINR(budgetRemaining) : "—"}</p>
+                <p className="text-muted-foreground">Remaining</p>
+                <p className={`financial-number font-semibold ${budgetRemaining >= 0 ? "text-foreground" : "text-negative"}`}>{totalBudget > 0 ? formatINR(budgetRemaining) : "—"}</p>
               </div>
             </div>
             {totalBudget > 0 && (
               <Progress
                 value={budgetUsed}
-                aria-label={`${Math.round(budgetUsed)}% of monthly budget used`}
-                className="h-2 bg-primary-foreground/20 [&>div]:bg-primary-foreground"
+                aria-label={`${Math.round(budgetUsed)}% of this month's budget used`}
+                className="h-2.5 bg-muted shadow-inner [&>div]:bg-primary"
               />
             )}
           </div>
@@ -216,13 +225,14 @@ export default function Transactions() {
             variant={activeFilterCount > 0 ? "secondary" : "outline"}
             className="shrink-0 gap-2 px-3 sm:hidden"
             onClick={() => setMobileFiltersOpen((open) => !open)}
+            aria-label="Filters"
             aria-expanded={mobileFiltersOpen}
             aria-controls="mobile-expense-filters"
           >
             <SlidersHorizontal className="h-4 w-4" />
             <span className="hidden min-[390px]:inline">Filters</span>
             {activeFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-primary-foreground">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-tiny font-bold text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
@@ -346,12 +356,12 @@ export default function Transactions() {
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       {expense.note && <span className="line-clamp-1">{expense.note}</span>}
                       {expense.linkedLoanId && (
-                        <Badge variant="secondary" className="h-5 max-w-full truncate px-1.5 text-[10px]">
+                        <Badge variant="secondary" className="h-5 max-w-full truncate px-1.5 text-tiny">
                           Loan EMI · {getLinkedLoanName(expense, loans)}
                         </Badge>
                       )}
                       {expense.reimbursable && (
-                        <span className="rounded bg-secondary/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-secondary-foreground">
+                        <span className="rounded bg-secondary/20 px-1.5 py-0.5 text-tiny font-medium uppercase tracking-wider text-secondary-foreground">
                           Reimbursable
                         </span>
                       )}
@@ -374,7 +384,7 @@ export default function Transactions() {
                           </Badge>
                         )}
                         {expense.reimbursable && (
-                          <span className="rounded bg-secondary/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-secondary-foreground">
+                          <span className="rounded bg-secondary/20 px-1.5 py-0.5 text-tiny font-medium uppercase tracking-wider text-secondary-foreground">
                             Reimbursable
                           </span>
                         )}
@@ -385,7 +395,7 @@ export default function Transactions() {
                     <span className="text-sm">{expense.category}</span>
                     <span className="text-xs text-muted-foreground">{expense.paymentMethod}</span>
                   </div>
-                  <div className="col-span-2 text-right font-sans font-semibold">
+                  <div className="col-span-2 text-right font-sans font-semibold text-foreground">
                     {formatINR(expense.amount)}
                   </div>
                   <div className="col-span-2 flex items-center justify-end gap-2">
@@ -462,7 +472,7 @@ export default function Transactions() {
           if (!open) setDeletingExpense(null);
         }}
       >
-        <AlertDialogContent className="bottom-0 left-0 top-auto w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-t-[28px] border-x-0 border-b-0 p-0 sm:bottom-auto sm:left-[50%] sm:top-[50%] sm:max-w-md sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-xl sm:border">
+        <AlertDialogContent className="bottom-0 left-0 top-auto [--dialog-safe-width:100%] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto overscroll-contain rounded-t-[28px] border-x-0 border-b-0 p-0 sm:bottom-auto sm:left-[50%] sm:top-[50%] sm:max-w-md sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-xl sm:border sm:[--dialog-safe-width:calc(100%-2rem)]">
           <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border sm:hidden" />
           <AlertDialogHeader className="items-center px-5 pb-4 pt-5 text-center sm:items-start sm:px-6 sm:pt-6 sm:text-left">
             <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive sm:h-10 sm:w-10">
@@ -490,7 +500,7 @@ export default function Transactions() {
             </div>
           )}
 
-          <AlertDialogFooter className="grid grid-cols-2 gap-3 border-t border-border bg-muted/20 p-4 sm:flex sm:px-6 sm:py-4">
+          <AlertDialogFooter className="grid grid-cols-2 gap-3 border-t border-border bg-muted/20 px-[calc(1rem+var(--app-safe-left))] pb-[calc(1rem+var(--app-safe-bottom))] pt-4 pr-[calc(1rem+var(--app-safe-right))] sm:flex sm:px-6 sm:py-4">
             <AlertDialogCancel className="mt-0 h-11 rounded-xl sm:h-10 sm:rounded-md">
               Keep it
             </AlertDialogCancel>

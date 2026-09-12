@@ -5,7 +5,7 @@ import {
   type MutationOptions,
   type QueryClient,
 } from "@tanstack/react-query";
-import { fetchFinancialData, updateFinancialData, type FinancialData } from "@/lib/financial-api";
+import { updateFinancialData, type FinancialData } from "@/lib/financial-api";
 import {
   ACCOUNT_SWITCH_SAVE_TITLE,
   accountSwitchSaveDescription,
@@ -15,11 +15,11 @@ import {
 import { defaultUiPreferences, type UiPreferences } from "@/lib/card-order";
 import { beginAccountSwitchSave } from "@/lib/account-switch-save-coordinator";
 import { useToast } from "@workspace/wealthone-design-system/hooks/use-toast";
+import { financialDataQueryOptions } from "@/lib/query-policy";
 
 export function useUiPreferences() {
   return useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
+    ...financialDataQueryOptions(),
     select: (data) => data.uiPreferences ?? defaultUiPreferences(),
   });
 }

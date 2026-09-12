@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { DatePickerInput } from '@workspace/wealthone-design-system/components/ui/date-picker-input';
+import { MonthPickerInput } from '@workspace/wealthone-design-system/components/ui/month-picker-input';
 import { Label } from '@workspace/wealthone-design-system/components/ui/label';
 
 const MIN_JAVASCRIPT_DATE = new Date(-8_640_000_000_000_000);
@@ -18,6 +19,9 @@ export default function DatePickerTestHarness() {
   );
   const [fullRangeDate, setFullRangeDate] = useState<Date | undefined>(
     new Date(2000, 0, 1),
+  );
+  const [budgetMonth, setBudgetMonth] = useState<Date | undefined>(
+    new Date(2026, 2, 1),
   );
 
   return (
@@ -59,6 +63,21 @@ export default function DatePickerTestHarness() {
           maxDate={MAX_JAVASCRIPT_DATE}
           showTodayShortcut={false}
         />
+      </section>
+
+      <section className="space-y-2">
+        <Label htmlFor="budget-month">Budget month</Label>
+        <MonthPickerInput
+          id="budget-month"
+          value={budgetMonth}
+          onChange={setBudgetMonth}
+          minMonth={new Date(2025, 1, 1)}
+          maxMonth={new Date(2027, 9, 1)}
+          optional
+        />
+        <output data-testid="budget-month-value">
+          {budgetMonth ? format(budgetMonth, 'yyyy-MM-dd') : 'empty'}
+        </output>
       </section>
 
       <section className="space-y-2">

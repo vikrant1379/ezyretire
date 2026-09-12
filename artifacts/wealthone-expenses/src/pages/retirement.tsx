@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { useRetirementInputs, useUpdateRetirementInputs } from "@/hooks/use-retirement";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useApplyRetirementScenario, useRetirementInputs, useUpdateRetirementInputs } from "@/hooks/use-retirement";
 import { useInvestments } from "@/hooks/use-investments";
 import { useIncomeSources } from "@/hooks/use-income";
 import { useExpenses } from "@/hooks/use-expenses";
@@ -17,44 +17,50 @@ import { Label } from "@workspace/wealthone-design-system/components/ui/label";
 import { Separator } from "@workspace/wealthone-design-system/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/wealthone-design-system/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/wealthone-design-system/components/ui/popover";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "@workspace/wealthone-design-system/components/ui/dialog";
-import { Info, AlertTriangle, CheckCircle2, ChevronDown, X } from "lucide-react";
+import { Info, AlertTriangle, CheckCircle2, ChevronDown, TrendingUp, Settings2, Wallet, Plus, Trash2 } from "lucide-react";
 import { calculatePlanningTimeline } from "@/lib/storage";
-import { Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, ComposedChart, Line, Legend } from "recharts";
+import { Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, ComposedChart, Line } from "recharts";
 import { useToast } from "@workspace/wealthone-design-system/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Link } from "wouter";
 import { format } from "date-fns";
 import { usePageLoadingState } from "@/components/layout";
+import { QueryErrorState } from "@/components/query-error-state";
+import { usePlannedExpenses } from "@/hooks/use-planned-expenses";
+import { useFinancialHealthData } from "@/hooks/use-financial-health";
+import { RetirementLifestyleEditor } from "@/components/retirement-lifestyle-editor";
+import type { PensionSource, RetirementLifestyle } from "@/lib/storage";
+import { RetirementSimulationTools } from "@/components/retirement-simulation-tools";
+import { trackEvent } from "@/lib/analytics";
+import {
+  getLifestylePreviewDimensions,
+  getPlannerOpenDimensions,
+  getRetirementPlanDimensions,
+} from "@/lib/retirement-analytics";
 
-const formatChartAmount = (value: number) => {
-  const amount = Math.abs(value);
-  if (amount >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
-  if (amount >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(value / 1000).toFixed(0)}K`;
-  return `₹${Math.round(value)}`;
-};
-
+import { formatChartAmount, formatMobileChartAmount } from "@/lib/retirement-chart-format";
 type TimelineChartPoint = Record<string, number> & {
   age: number;
   year: number;
 };
 
 export default function Retirement() {
-  const { data: inputs, isLoading: loadingInputs } = useRetirementInputs();
-  const { data: investments = [], isLoading: loadingInv } = useInvestments();
-  const { data: incomes = [], isLoading: loadingInc } = useIncomeSources();
-  const { data: expenses = [], isLoading: loadingExp } = useExpenses();
-  const { data: budgets = [], isLoading: loadingBudgets } = useBudgets();
-  const { data: loans = [], isLoading: loadingLoans } = useLoans();
+  const inputsQuery = useRetirementInputs();
+  const investmentsQuery = useInvestments();
+  const incomesQuery = useIncomeSources();
+  const expensesQuery = useExpenses();
+  const budgetsQuery = useBudgets();
+  const loansQuery = useLoans();
+  const plannedExpensesQuery = usePlannedExpenses();
+  const financialHealthQuery = useFinancialHealthData();
+  const { data: inputs, isLoading: loadingInputs } = inputsQuery;
+  const { data: investments = [], isLoading: loadingInv } = investmentsQuery;
+  const { data: incomes = [], isLoading: loadingInc } = incomesQuery;
+  const { data: expenses = [], isLoading: loadingExp } = expensesQuery;
+  const { data: budgets = [], isLoading: loadingBudgets } = budgetsQuery;
+  const { data: loans = [], isLoading: loadingLoans } = loansQuery;
+  const { data: plannedExpenses = [], isLoading: loadingPlannedExpenses } = plannedExpensesQuery;
   const updateInputs = useUpdateRetirementInputs();
+  const applyScenario = useApplyRetirementScenario();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const setPageLoading = usePageLoadingState();
@@ -66,15 +72,16 @@ export default function Retirement() {
     salaryGrowth: 8,
     monthlyContributionOverride: 0,
     investSurplus: false,
+    lifestyleChoice: "Comfortable" as RetirementLifestyle,
+    customLifestyleExpense: 0,
+    retirementSpendingAdjustmentPercent: 0,
+    pensionSources: [] as PensionSource[],
   });
 
-  const [isMonthlyPlanOpen, setIsMonthlyPlanOpen] = useState(false);
-  const [isReadinessOpen, setIsReadinessOpen] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
-  );
-  const [isChartInfoOpen, setIsChartInfoOpen] = useState(false);
+  const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+  const plannerOpened = useRef(false);
   const [chartView, setChartView] = useState<"corpus" | "lifestyle">("corpus");
-  const isRetirementLoading = loadingInputs || loadingInv || loadingInc || loadingExp || loadingBudgets || loadingLoans;
+  const isRetirementLoading = loadingInputs || loadingInv || loadingInc || loadingExp || loadingBudgets || loadingLoans || loadingPlannedExpenses || financialHealthQuery.isLoading;
 
   useEffect(() => {
     setPageLoading(isRetirementLoading);
@@ -90,6 +97,10 @@ export default function Retirement() {
         salaryGrowth: inputs.salaryGrowth,
         monthlyContributionOverride: inputs.monthlyContributionOverride || 0,
         investSurplus: false,
+        lifestyleChoice: inputs.lifestyleChoice ?? "Comfortable",
+        customLifestyleExpense: inputs.customLifestyleExpense ?? 0,
+        retirementSpendingAdjustmentPercent: inputs.retirementSpendingAdjustmentPercent ?? 0,
+        pensionSources: inputs.pensionSources ?? [],
       });
     }
   }, [inputs]);
@@ -100,6 +111,10 @@ export default function Retirement() {
     || localInputs.generalInflation !== inputs!.generalInflation
     || localInputs.salaryGrowth !== inputs!.salaryGrowth
     || localInputs.monthlyContributionOverride !== (inputs!.monthlyContributionOverride || 0)
+    || localInputs.lifestyleChoice !== (inputs!.lifestyleChoice ?? "Comfortable")
+    || localInputs.customLifestyleExpense !== (inputs!.customLifestyleExpense ?? 0)
+    || localInputs.retirementSpendingAdjustmentPercent !== (inputs!.retirementSpendingAdjustmentPercent ?? 0)
+    || JSON.stringify(localInputs.pensionSources) !== JSON.stringify(inputs!.pensionSources ?? [])
   );
 
   const handleSave = () => {
@@ -130,6 +145,17 @@ export default function Retirement() {
       ...localInputs,
     }, {
       onSuccess: () => {
+        trackEvent("retirement_plan_saved", getRetirementPlanDimensions({
+          lifestyle: localInputs.lifestyleChoice,
+          targetRetirementAge: localInputs.targetRetirementAge,
+          lifeExpectancy: localInputs.lifeExpectancy,
+          pensionSourceCount: localInputs.pensionSources.filter(
+            (pension) => Math.max(0, Number(pension.monthlyAmount) || 0) > 0,
+          ).length,
+          monthlyContributionOverride: localInputs.monthlyContributionOverride,
+          plannerOpened: plannerOpened.current,
+          fundingPercentage: corpusFundingPercentage,
+        }));
         toast({ title: "Retirement plan updated" });
       }
     });
@@ -141,11 +167,13 @@ export default function Retirement() {
     incomes,
     investments,
     loans,
+    plannedExpenses,
+    emergencyFund: financialHealthQuery.data?.emergencyFund,
     assumptions: {
       ...localInputs,
       dateOfBirth: inputs?.dateOfBirth || "",
     },
-  }), [localInputs, inputs?.dateOfBirth, investments, incomes, expenses, budgets, loans]);
+  }), [localInputs, inputs?.dateOfBirth, investments, incomes, expenses, budgets, loans, plannedExpenses, financialHealthQuery.data?.emergencyFund]);
 
   const timelineChartData = useMemo<TimelineChartPoint[]>(() => {
     const currentYear = new Date().getFullYear();
@@ -158,15 +186,6 @@ export default function Retirement() {
       };
     });
   }, [metrics.chartData, metrics.currentAge]);
-  const retirementChartPoint = useMemo(
-    () => timelineChartData.reduce((closest, point) =>
-      Math.abs(Number(point.age) - localInputs.targetRetirementAge)
-        < Math.abs(Number(closest.age) - localInputs.targetRetirementAge)
-        ? point
-        : closest
-    , timelineChartData[0]),
-    [localInputs.targetRetirementAge, timelineChartData],
-  );
 
   const readiness = useMemo(() => calculateRetirementReadiness({
     expenses,
@@ -174,11 +193,39 @@ export default function Retirement() {
     incomes,
     investments,
     loans,
+    plannedExpenses,
+    emergencyFund: financialHealthQuery.data?.emergencyFund,
     assumptions: {
       ...localInputs,
       dateOfBirth: inputs?.dateOfBirth || "",
     },
-  }), [localInputs, inputs?.dateOfBirth, investments, incomes, expenses, budgets, loans]);
+  }), [localInputs, inputs?.dateOfBirth, investments, incomes, expenses, budgets, loans, plannedExpenses, financialHealthQuery.data?.emergencyFund]);
+
+  const chartMargin = isMobile
+    ? { top: 8, right: 8, bottom: 4, left: 4 }
+    : { top: 20, right: 20, bottom: 20, left: 0 };
+  const ageTicks = isMobile
+    ? [...new Set([0, 1, 2, 3].map((index) =>
+      timelineChartData[Math.round(index * (timelineChartData.length - 1) / 3)]?.age,
+    ).filter((age): age is number => age !== undefined))]
+    : undefined;
+  const xAxisProps = {
+    tick: { fontSize: 12, fill: "hsl(var(--muted-foreground))" },
+    tickMargin: isMobile ? 4 : 12,
+    height: isMobile ? 22 : 30,
+    ticks: ageTicks,
+    interval: isMobile ? "preserveStartEnd" as const : "preserveEnd" as const,
+  };
+  const yAxisProps = {
+    tickFormatter: isMobile ? formatMobileChartAmount : formatChartAmount,
+    tick: { fontSize: isMobile ? 10 : 12, fill: "hsl(var(--muted-foreground))" },
+    tickMargin: isMobile ? 4 : 6,
+    width: isMobile ? 40 : 60,
+  };
+  const retirementLabelPosition = isMobile
+    && localInputs.targetRetirementAge - metrics.currentAge
+      < (localInputs.lifeExpectancy - metrics.currentAge) * 0.35
+    ? "insideTopLeft" : "insideTopRight";
 
   const setup = useMemo(
     () => getPlanSetup({ incomeSources: incomes, expenses, budgets, investments, loans }),
@@ -188,24 +235,31 @@ export default function Retirement() {
   const selectedTakeHomeInvestment = Math.round(localInputs.monthlyContributionOverride);
   const fullSurplusAmount = Math.round(metrics.unallocatedSurplus);
   const isUsingFullSurplus = fullSurplusAmount > 0 && selectedTakeHomeInvestment === fullSurplusAmount;
-  const timeline = calculatePlanningTimeline({
-    dateOfBirth: inputs?.dateOfBirth || "",
-    targetRetirementAge: localInputs.targetRetirementAge,
-    lifeExpectancy: localInputs.lifeExpectancy,
-  });
-  const targetRetirementYear = new Date().getFullYear()
-    + Math.round(localInputs.targetRetirementAge - metrics.currentAge);
-  const finalLifestyleExpense = Number(
-    metrics.chartData.at(-1)?.["Monthly Lifestyle Expense"] ?? 0,
-  );
-  const timeToRetirementLabel = metrics.monthsToRetirement === 0
-    ? "Less than 1 month"
-    : metrics.monthsToRetirement < 12
-      ? `${metrics.monthsToRetirement} ${metrics.monthsToRetirement === 1 ? "month" : "months"}`
-      : `${(metrics.monthsToRetirement / 12).toFixed(metrics.monthsToRetirement % 12 === 0 ? 0 : 1)} years`;
+
   const corpusFundingPercentage = metrics.requiredCorpus > 0
     ? Math.round((metrics.projectedCorpus / metrics.requiredCorpus) * 100)
     : 0;
+  const effectivePensionSources = localInputs.pensionSources.filter(
+    (pension) => Math.max(0, Number(pension.monthlyAmount) || 0) > 0,
+  );
+  const pensionStartAges = metrics.milestones.effectivePensionStartAges;
+
+  const handleLifestyleChange = (lifestyleChoice: RetirementLifestyle) => {
+    setLocalInputs((previous) => ({ ...previous, lifestyleChoice }));
+    trackEvent("retirement_lifestyle_previewed", getLifestylePreviewDimensions(lifestyleChoice));
+  };
+
+  const handlePlannerOpenChange = (open: boolean) => {
+    setIsPlannerOpen(open);
+    if (!open) return;
+
+    plannerOpened.current = true;
+    trackEvent(
+      "retirement_planner_opened",
+      getPlannerOpenDimensions(localInputs.lifestyleChoice, effectivePensionSources.length),
+    );
+  };
+
   const roiBreakdown = useMemo(() => {
     const holdings = investments.map((investment) => ({
       id: investment.id,
@@ -243,13 +297,19 @@ export default function Retirement() {
 
   if (isRetirementLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-[calc(100vh-100px)]">
         <div className="animate-pulse flex flex-col items-center">
-          <div className="h-8 w-8 bg-primary/20 rounded-full mb-4"></div>
-          <p className="text-muted-foreground">Calculating your future...</p>
+          <div className="h-10 w-10 bg-primary/20 rounded-full mb-4 flex items-center justify-center">
+            <TrendingUp className="w-5 h-5 text-primary opacity-50" />
+          </div>
+          <p className="text-muted-foreground font-medium">Calculating your future...</p>
         </div>
       </div>
     );
+  }
+
+  if ([inputsQuery, investmentsQuery, incomesQuery, expensesQuery, budgetsQuery, loansQuery, plannedExpensesQuery, financialHealthQuery].some((query) => query.isError)) {
+    return <QueryErrorState onRetry={() => inputsQuery.refetch()} />;
   }
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -260,23 +320,23 @@ export default function Retirement() {
         (item: any) => item.dataKey === "Monthly Lifestyle Expense",
       );
       return (
-        <div className="max-w-[calc(100vw-3rem)] space-y-1 rounded-lg border border-border bg-card p-2.5 text-xs shadow-xl sm:max-w-none sm:p-3 sm:text-sm">
-          <p className="font-semibold text-foreground mb-2">
+        <div data-testid="retirement-chart-tooltip" className={cn("space-y-1 rounded-lg border border-border/80 bg-background/95 backdrop-blur-sm p-3 text-xs shadow-xl", isMobile ? "w-full" : "p-4 text-sm")}>
+          <p className="font-serif text-foreground mb-3 border-b border-border/50 pb-2">
             Age {point?.age} · {point?.year}
           </p>
           {payload.map((p: any) => (
-            <div key={p.dataKey} className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground" style={{ color: p.color }}>{p.name}</span>
-              <span className="font-medium text-foreground">
+            <div key={p.dataKey} className={cn("flex items-center justify-between py-0.5", isMobile ? "gap-2" : "gap-6")}>
+              <span className="text-muted-foreground font-medium" style={{ color: p.color }}>{p.name}</span>
+              <span className="min-w-0 break-words text-right font-semibold text-foreground financial-number">
                 {formatINR(p.value)}
                 {p.dataKey === "Monthly Lifestyle Expense" ? "/mo" : ""}
               </span>
             </div>
           ))}
           {!includesLifestyleExpense && Number.isFinite(monthlyLifestyleExpense) && (
-            <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-1">
-              <span className="text-amber-600">Monthly Lifestyle Expense</span>
-              <span className="font-medium text-foreground">{formatINR(monthlyLifestyleExpense)}/mo</span>
+            <div className={cn("flex items-center justify-between border-t border-border/50 pt-2 mt-2", isMobile ? "gap-2" : "gap-6")}>
+              <span className="font-medium text-muted-foreground">Monthly Lifestyle</span>
+              <span className="min-w-0 break-words text-right font-semibold text-foreground financial-number">{formatINR(monthlyLifestyleExpense)}/mo</span>
             </div>
           )}
         </div>
@@ -286,977 +346,616 @@ export default function Retirement() {
   };
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-8 md:pb-12">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-8 md:pb-12 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border/40 pb-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif text-primary">Retirement Projection</h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-1">
-            Plan your future based on your current wealth and spending.
+          <h1 className="text-3xl md:text-4xl font-serif text-primary tracking-tight">Retirement Projection</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-2 font-medium">
+            Visualize your future wealth and fine-tune your lifestyle goals.
           </p>
         </div>
-        <Button onClick={handleSave} disabled={!hasUnsavedChanges || Boolean(metrics.affordabilityWarning)} className="hidden shadow-sm md:inline-flex">
+        <Button
+          onClick={handleSave}
+          disabled={!hasUnsavedChanges || Boolean(metrics.affordabilityWarning)}
+          className={cn(
+            "shadow-sm transition-all duration-300 font-semibold px-6",
+            hasUnsavedChanges ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground opacity-70"
+          )}
+        >
           {hasUnsavedChanges ? "Save Projection Plan" : "Plan Saved"}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 lg:items-start">
-        {/* Left assumptions rail — order-2 on mobile so the chart leads, sticky rail on desktop */}
-        <aside className="order-2 hidden lg:order-1 lg:col-span-1 lg:block lg:sticky lg:top-6">
-          <Card className="overflow-hidden border-0 bg-white shadow-md">
-            <CardHeader className="border-b border-border/60 bg-muted/20 p-5">
-              <div className="space-y-1.5">
-                <CardTitle className="font-serif text-lg">Retirement assumptions</CardTitle>
-                <CardDescription className="text-sm leading-relaxed">
-                  Change these values to update your projection instantly, then save your plan.
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 p-5 md:space-y-5">
-              {/* Timeline assumptions */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Target retirement age</Label>
-                  <Input
-                    data-testid="input-retirement-age"
-                    type="number"
-                    min="18"
-                    max="100"
-                    value={localInputs.targetRetirementAge}
-                    onChange={(event) => {
-                      setLocalInputs((previous) => ({ ...previous, targetRetirementAge: Number(event.target.value) }));
-                    }}
-                    className="h-9 font-medium"
-                  />
+      {!setup.canProjectRetirement ? (
+        <div className="space-y-5">
+          <RetirementLifestyleEditor
+            lifestyle={localInputs.lifestyleChoice}
+            customExpense={localInputs.customLifestyleExpense}
+            comfortableExpense={metrics.livingCostBaseline}
+            configured={Boolean(inputs?.lifestyleChoice)}
+            onLifestyleChange={handleLifestyleChange}
+            onCustomExpenseChange={(customLifestyleExpense) => setLocalInputs((previous) => ({ ...previous, customLifestyleExpense }))}
+          />
+          <PlanSetupPanel setup={setup} targetAge={localInputs.targetRetirementAge} />
+        </div>
+      ) : (
+        <>
+          {/* HERO SECTION */}
+          <div className="grid grid-cols-1 gap-5 lg:gap-6 xl:grid-cols-3" data-testid="retirement-main-results">
+            {/* KPI Cards */}
+            <div className="col-span-1 flex flex-col gap-5 lg:gap-6">
+              <Card className="bg-card border border-border/60 overflow-hidden relative shadow-md" aria-live="polite">
+                <div className="absolute -top-4 -right-4 p-4 opacity-10 pointer-events-none text-muted-foreground">
+                  <TrendingUp className="w-40 h-40" />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Life expectancy</Label>
-                  <Input
-                    data-testid="input-life-expectancy"
-                    type="number"
-                    min="40"
-                    max="125"
-                    value={localInputs.lifeExpectancy}
-                    onChange={(event) => {
-                      setLocalInputs((previous) => ({ ...previous, lifeExpectancy: Number(event.target.value) }));
-                    }}
-                    className="h-9 font-medium"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider flex justify-between">
-                    Inflation (%)
-                    <span className="text-foreground font-medium">{localInputs.generalInflation}%</span>
-                  </Label>
-                  <Input
-                    type="number" step="0.1"
-                    value={localInputs.generalInflation}
-                    onChange={(e) => { setLocalInputs(p => ({ ...p, generalInflation: Number(e.target.value) })); }}
-                    className="h-9 text-blue-600 dark:text-blue-400 font-medium"
-                  />
-                </div>
-              </div>
+                <CardContent className="p-6 md:p-8 relative z-10 flex flex-col justify-center h-full min-h-[220px]">
+                  <p className="text-muted-foreground text-tiny font-semibold uppercase tracking-widest">Projected Corpus</p>
+                  <p
+                    className="text-4xl md:text-5xl font-serif mt-2 font-medium financial-number tracking-tight"
+                    data-testid="result-projected-corpus"
+                  >
+                    {formatINR(metrics.projectedCorpus)}
+                  </p>
 
-              <Separator />
-
-              {/* Surplus / additional SIP */}
-              <div className="space-y-3">
-                {metrics.unallocatedSurplus > 0 && (
-                  <>
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-xs font-medium text-emerald-800">
-                          We still have <span className="text-base font-bold">+{formatINR(metrics.unallocatedSurplus)}/mo</span> as surplus
-                        </p>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="How the available surplus is calculated"
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
-                            >
-                              <Info className="h-3.5 w-3.5" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="w-[min(300px,calc(100vw-2rem))] p-3 text-xs leading-relaxed">
-                            This confirmed surplus uses current income and living-cost values only, after active EMIs and existing SIP commitments. Growth and inflation assumptions do not increase this investable amount.
-                          </PopoverContent>
-                        </Popover>
-                      </div>
+                  <div className="mt-8 space-y-2">
+                    <div className="flex justify-between gap-4 text-sm">
+                      <span className="font-medium text-muted-foreground">Required corpus</span>
+                      <span className="font-semibold financial-number" data-testid="result-required-corpus">
+                        {formatINR(metrics.requiredCorpus)}
+                      </span>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setLocalInputs((previous) => ({
-                          ...previous,
-                          monthlyContributionOverride: isUsingFullSurplus ? 0 : fullSurplusAmount,
-                          investSurplus: false,
-                        }));
-                      }}
-                      className="h-8 w-full border-emerald-300 bg-white text-xs text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900"
-                    >
-                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                      {isUsingFullSurplus
-                        ? "Remove surplus"
-                        : "Use surplus"}
-                    </Button>
-                  </>
-                )}
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider">Additional SIP from this surplus (₹/mo)</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="How the SIP return is calculated"
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-[min(360px,calc(100vw-2rem))] space-y-3 p-4">
-                      <div>
-                        <p className="text-sm font-semibold">Projected SIP return: {(metrics.averageExpectedReturn * 100).toFixed(2)}% p.a.</p>
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          This SIP joins your combined portfolio. Its ROI is the {roiBreakdown.method === "current-value weighted" ? "current-value weighted average" : roiBreakdown.method === "equal weighted" ? "simple average" : "default assumption"} of the expected returns in Investments.
-                        </p>
+                    <div className="flex justify-between gap-4 text-sm">
+                      <span className="font-medium text-muted-foreground">Expense at retirement</span>
+                      <span className="font-semibold financial-number" data-testid="result-retirement-expense">
+                        {formatINR(metrics.expenseAtRetirement)}/mo
+                      </span>
+                    </div>
+                    {effectivePensionSources.length > 0 && (
+                      <div className="flex justify-between gap-4 text-sm">
+                        <span className="font-medium text-muted-foreground">Pensions scheduled</span>
+                        <span className="text-right font-semibold">
+                          {effectivePensionSources.length} {effectivePensionSources.length === 1 ? "source" : "sources"}
+                          {" · "}
+                          {pensionStartAges.length === 1 ? "age" : "ages"} {pensionStartAges.join(", ")}
+                        </span>
                       </div>
-                      {roiBreakdown.entries.length > 0 ? (
-                        <div className="space-y-2">
-                          {roiBreakdown.entries.map((entry) => (
-                            <div key={entry.id} className="rounded-md bg-muted/60 p-2 text-xs">
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="min-w-0 truncate font-medium">{entry.name}</span>
-                                <span className="shrink-0">{entry.expectedReturn.toFixed(2)}% ROI</span>
-                              </div>
-                              <p className="mt-1 text-muted-foreground">
-                                {roiBreakdown.method === "current-value weighted"
-                                  ? `${formatINR(entry.currentValue)} ÷ ${formatINR(roiBreakdown.totalValue)} = ${(entry.weight * 100).toFixed(2)}% weight; × ${entry.expectedReturn.toFixed(2)}% ROI = ${entry.roiContribution.toFixed(2)}%`
-                                  : `${(entry.weight * 100).toFixed(2)}% weight × ${entry.expectedReturn.toFixed(2)}% ROI = ${entry.roiContribution.toFixed(2)}%`}
-                              </p>
-                            </div>
-                          ))}
-                          <div className="flex items-center justify-between border-t pt-2 text-xs font-semibold">
-                            <span>Blended expected return</span>
-                            <span>{(metrics.averageExpectedReturn * 100).toFixed(2)}% p.a.</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
-                          No investments are recorded yet, so the projection uses the default 12.00% annual return.
-                        </p>
-                      )}
-                      <p className="text-[10px] leading-relaxed text-muted-foreground">
-                        Expected returns are planning assumptions, not guaranteed returns. Update an investment’s expected return to change this blended rate.
+                    )}
+                    <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-muted-foreground transition-all duration-1000"
+                        style={{ width: `${Math.min(100, corpusFundingPercentage)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground text-right font-semibold tracking-wide">{corpusFundingPercentage}% FUNDED</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-2 gap-5 lg:gap-6 flex-1">
+                <Card className="border-border/60 shadow-sm bg-card transition-all hover:border-primary/30 min-h-[160px]">
+                  <CardContent className="p-4 md:p-6 flex flex-col justify-center items-center text-center h-full">
+                    <span className="text-xl md:text-2xl font-serif text-foreground financial-number text-balance">
+                      {metrics.monthsToRetirement === 0
+                        ? "Retirement reached"
+                        : [
+                            Math.floor(metrics.monthsToRetirement / 12) > 0
+                              ? `${Math.floor(metrics.monthsToRetirement / 12)}y`
+                              : "",
+                            metrics.monthsToRetirement % 12 > 0
+                              ? `${metrics.monthsToRetirement % 12}m`
+                              : "",
+                          ].filter(Boolean).join(" ")}
+                    </span>
+                    <span className="text-tiny text-muted-foreground uppercase tracking-wider mt-2 font-bold">Time to retirement</span>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/60 shadow-sm bg-card transition-all hover:border-primary/30 min-h-[160px]">
+                  <CardContent className="p-4 md:p-6 flex flex-col justify-center items-center text-center h-full">
+                     <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2 shadow-inner bg-muted text-muted-foreground">
+                       {metrics.cashFlowFeasible ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                    </div>
+                    <span className="text-tiny text-muted-foreground uppercase tracking-wider font-bold text-balance">
+                      {metrics.monthsToRetirement === 0 ? 'Pre-retirement cash flow' : metrics.cashFlowFeasible ? 'No monthly cash gap' : 'First monthly cash gap'}
+                    </span>
+                    {metrics.firstCashFlowShortfall && (
+                      <p className="mt-2 text-sm">
+                        <strong className="financial-number text-negative">{formatINR(metrics.firstCashFlowShortfall.deficit)}</strong>
+                        <span className="text-muted-foreground"> in {format(metrics.firstCashFlowShortfall.date, "MMM yyyy")}</span>
                       </p>
-                    </PopoverContent>
-                  </Popover>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground text-balance">
+                      {metrics.monthsToRetirement === 0
+                        ? "Not applicable once retirement is reached."
+                        : metrics.cashFlowFeasible
+                          ? "Projected income covers expenses, EMIs and planned contributions before retirement."
+                          : "Income falls below expenses, EMIs and planned contributions before retirement."}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <Card
+              className="col-span-1 flex min-h-[350px] h-full flex-col overflow-hidden border-border/60 bg-card shadow-sm xl:col-span-2"
+              data-testid="retirement-projection-chart"
+              aria-label={`Retirement projection chart. Required corpus ${formatINR(metrics.requiredCorpus)} and retirement expense ${formatINR(metrics.expenseAtRetirement)} per month.`}
+              aria-describedby="retirement-milestone-summary"
+            >
+              <CardHeader className="py-3 px-5 border-b border-border/40 bg-muted/20">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <CardTitle className="text-lg font-serif">Wealth Trajectory</CardTitle>
+                  <div
+                    className="flex rounded-md border border-border/50 bg-background p-1 text-tiny font-semibold tracking-wide shadow-inner"
+                    role="tablist"
+                    aria-label="Retirement chart view"
+                  >
+                    <button
+                      type="button"
+                      className={cn("px-4 py-1.5 rounded transition-all", chartView === "corpus" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                      onClick={() => setChartView("corpus")}
+                      role="tab"
+                      aria-selected={chartView === "corpus"}
+                      aria-controls="retirement-chart-panel"
+                    >
+                      CORPUS
+                    </button>
+                    <button
+                      type="button"
+                      className={cn("px-4 py-1.5 rounded transition-all", chartView === "lifestyle" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                      onClick={() => setChartView("lifestyle")}
+                      role="tab"
+                      aria-selected={chartView === "lifestyle"}
+                      aria-controls="retirement-chart-panel"
+                    >
+                      LIFESTYLE
+                    </button>
+                  </div>
                 </div>
-                <Input
-                  type="number"
-                  formatWithCommas
-                  min="0"
-                  step="1"
-                  value={selectedTakeHomeInvestment}
-                  onChange={(e) => {
-                    setLocalInputs((previous) => ({
-                      ...previous,
-                      monthlyContributionOverride: Math.round(Number(e.target.value)),
-                      investSurplus: false,
-                    }));
-                  }}
-                  className={cn(
-                    "h-9 text-blue-600 dark:text-blue-400 font-medium",
-                    metrics.affordabilityWarning && "border-amber-500 focus-visible:ring-amber-500",
-                  )}
-                  aria-describedby={metrics.affordabilityWarning ? "surplus-investment-warning" : undefined}
-                />
-                <p className="text-[10px] text-muted-foreground leading-tight">Existing SIPs and salary-linked PF are already included. Enter any additional amount to preview it; only an affordable amount can be saved.</p>
-                {metrics.affordabilityWarning && (
-                  <div id="surplus-investment-warning" role="alert" className="flex items-start gap-2 rounded-md bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>{metrics.affordabilityWarning} Reduce the SIP to stay within today’s affordable surplus.</span>
-                  </div>
-                )}
-                {!metrics.cashFlowFeasible && !metrics.affordabilityWarning && metrics.firstCashFlowShortfall && (
-                  <div role="alert" className="flex items-start gap-2 rounded-md bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>While affordable today, this plan creates a future shortfall of {formatINR(metrics.firstCashFlowShortfall.deficit)} in {format(metrics.firstCashFlowShortfall.date, "MMM yyyy")}.</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground leading-relaxed flex gap-2">
-                <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-                <p>Affordability and investment opportunities use current confirmed income and living costs, changing only for recorded schedules. Long-term retirement estimates apply your inflation input and a fixed 8% annual post-retirement return assumption; income growth remains informational only. Not financial advice.</p>
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
-
-        {/* Right panel — chart-first */}
-        <div className="order-1 flex flex-col gap-6 lg:order-2 lg:col-span-3">
-          {!setup.canProjectRetirement ? (
-            <PlanSetupPanel setup={setup} targetAge={localInputs.targetRetirementAge} />
-          ) : (
-          <>
-          {/* Top KPI row */}
-          <div className="grid grid-cols-3 gap-2 md:gap-4">
-            <Card className="border-0 shadow-sm bg-white">
-              <CardContent className="flex h-full min-w-0 flex-col gap-1 p-2.5 md:p-5">
-                <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground md:text-xs md:tracking-wider">
-                  <span className="md:hidden">Expense</span>
-                  <span className="hidden md:inline">Expense @ Retirement</span>
-                </span>
-                <span className="truncate font-sans text-sm font-bold md:text-2xl">
-                  <span className="md:hidden">{formatChartAmount(metrics.expenseAtRetirement)}<span className="text-[9px] font-medium">/mo</span></span>
-                  <span className="hidden md:inline">{formatINR(metrics.expenseAtRetirement)}/mo</span>
-                </span>
-                <span className="mt-auto pt-1 text-[9px] leading-tight text-muted-foreground md:hidden">
-                  At age {localInputs.targetRetirementAge} · inflated
-                </span>
-                <span className="mt-1 hidden text-xs text-muted-foreground md:inline">Inflation-adjusted planning estimate</span>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-sm bg-white">
-              <CardContent className="flex h-full min-w-0 flex-col gap-1 p-2.5 md:p-5">
-                <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground md:text-xs md:tracking-wider">
-                  <span className="md:hidden">Needed</span>
-                  <span className="hidden md:inline">Required Corpus</span>
-                </span>
-                <span className="truncate font-sans text-sm font-bold text-primary md:text-2xl">
-                  <span className="md:hidden">{formatChartAmount(metrics.requiredCorpus)}</span>
-                  <span className="hidden md:inline">{formatINR(metrics.requiredCorpus)}</span>
-                </span>
-                <span className="mt-auto pt-1 text-[9px] leading-tight text-muted-foreground md:hidden">
-                  Funds {timeline.yearsInRetirement} retirement years
-                </span>
-                <span className="mt-1 hidden text-xs text-muted-foreground md:inline">To sustain lifestyle till {localInputs.lifeExpectancy}</span>
-              </CardContent>
-            </Card>
-
-            <Card className={cn("border-0 shadow-sm", metrics.gap > 0 ? "bg-white" : "bg-emerald-50")}>
-              <CardContent className="flex h-full min-w-0 flex-col gap-1 p-2.5 md:p-5">
-                <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground md:text-xs md:tracking-wider">
-                  <span className="md:hidden">Projected</span>
-                  <span className="hidden md:inline">Accumulated Corpus</span>
-                </span>
-                <span className={cn("truncate font-sans text-sm font-bold md:text-2xl", metrics.gap > 0 ? "" : "text-emerald-700")}>
-                  <span className="md:hidden">{formatChartAmount(metrics.projectedCorpus)}</span>
-                  <span className="hidden md:inline">{formatINR(metrics.projectedCorpus)}</span>
-                </span>
-                <span className={cn(
-                  "mt-auto pt-1 text-[9px] font-semibold leading-tight md:hidden",
-                  metrics.gap > 0 ? "text-destructive" : "text-emerald-700",
-                )}>
-                  {corpusFundingPercentage}% funded
-                </span>
-                <span className={cn("flex min-w-0 items-center gap-0.5 text-[8px] font-medium md:mt-1 md:gap-1 md:text-xs", metrics.gap > 0 ? "text-destructive" : "text-emerald-600")}>
-                  {metrics.gap > 0 ? (
+              </CardHeader>
+              <CardContent
+                id="retirement-chart-panel"
+                className={cn("retirement-projection-chart flex flex-1 flex-col p-0", isMobile ? "mt-2 min-h-[330px]" : "mt-4 min-h-[350px]")}
+                role="tabpanel"
+                aria-label={chartView === "corpus" ? "Retirement corpus projection" : "Retirement lifestyle projection"}
+              >
+                <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pb-2 text-tiny text-muted-foreground" data-testid="retirement-chart-legend">
+                  {chartView === "corpus" ? (
                     <>
-                      <AlertTriangle className="h-2.5 w-2.5 shrink-0 md:h-3 md:w-3" />
-                      <span className="truncate md:hidden">Short {formatChartAmount(metrics.gap)}</span>
-                      <span className="hidden md:inline">Shortfall: {formatINR(metrics.gap)}</span>
+                      <span>Base corpus</span>
+                      <span>Optimistic (+2%)</span>
+                      <span>Pessimistic (-2%)</span>
+                      <span>Corpus needed</span>
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="h-2.5 w-2.5 shrink-0 md:h-3 md:w-3" />
-                      <span className="truncate md:hidden">+{formatChartAmount(Math.abs(metrics.gap))}</span>
-                      <span className="hidden md:inline">Surplus: {formatINR(Math.abs(metrics.gap))}</span>
+                      <span>Lifestyle expense</span>
+                      <span>Pension income</span>
+                      <span>Net retirement outflow</span>
                     </>
                   )}
-                </span>
+                </div>
+                <div className="min-h-[300px] flex-1" style={isMobile ? { touchAction: "pan-y" } : undefined}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    {chartView === "corpus" ? (
+                    <ComposedChart data={timelineChartData} margin={chartMargin}>
+                      <defs>
+                        <linearGradient id="colorCorpus" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                      <XAxis dataKey="age" {...xAxisProps} tickLine={false} axisLine={false} minTickGap={30} />
+                      <YAxis {...yAxisProps} tickLine={false} axisLine={false} />
+                      <RechartsTooltip content={<CustomTooltip />} isAnimationActive={!isMobile} position={isMobile ? { x: 8, y: 32 } : undefined} wrapperStyle={isMobile ? { width: "calc(100% - 16px)" } : undefined} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                      <Area type="monotone" dataKey="Base Scenario" name="Base corpus" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorCorpus)" activeDot={{ r: 6, fill: 'hsl(var(--primary))', stroke: 'hsl(var(--background))', strokeWidth: 2 }} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="Optimistic (+2% ret)" name="Optimistic corpus" stroke="hsl(var(--optimistic-corpus))" strokeWidth={2} dot={false} strokeDasharray="5 5" isAnimationActive={false} />
+                      <Line type="monotone" dataKey="Pessimistic (-2% ret)" name="Pessimistic corpus" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={false} strokeDasharray="5 5" isAnimationActive={false} />
+                      <Line type="monotone" dataKey="Lifestyle Corpus Needed" name="Corpus needed" stroke="hsl(var(--chart-5))" strokeWidth={2.5} dot={false} strokeDasharray="8 4" isAnimationActive={false} />
+                      {metrics.requiredCorpus > 0 && (
+                        <ReferenceLine y={metrics.requiredCorpus} stroke={isMobile ? 'hsl(var(--muted-foreground))' : 'hsl(var(--destructive))'} strokeDasharray="3 3" strokeOpacity={0.7} label={{ position: 'insideTopLeft', value: 'Required', fill: isMobile ? 'hsl(var(--foreground))' : 'hsl(var(--destructive))', fontSize: 11, fontWeight: 600 }} />
+                      )}
+                      <ReferenceLine x={localInputs.targetRetirementAge} stroke={isMobile ? 'hsl(var(--muted-foreground))' : 'hsl(var(--accent))'} strokeDasharray="4 4" strokeWidth={1.5} label={{ position: retirementLabelPosition, value: 'Retirement', fill: isMobile ? 'hsl(var(--foreground))' : 'hsl(var(--accent))', fontSize: 11, fontWeight: 600 }} />
+                    </ComposedChart>
+                  ) : (
+                    <ComposedChart data={timelineChartData} margin={chartMargin}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                      <XAxis dataKey="age" {...xAxisProps} tickLine={false} axisLine={false} minTickGap={30} />
+                      <YAxis {...yAxisProps} tickLine={false} axisLine={false} />
+                      <RechartsTooltip content={<CustomTooltip />} isAnimationActive={!isMobile} position={isMobile ? { x: 8, y: 32 } : undefined} wrapperStyle={isMobile ? { width: "calc(100% - 16px)" } : undefined} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                      <Line type="stepAfter" dataKey="Monthly Lifestyle Expense" name="Lifestyle expense" stroke="hsl(var(--chart-5))" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                      <Line type="stepAfter" dataKey="Monthly Pension Income" name="Pension income" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} strokeDasharray="5 5" isAnimationActive={false} />
+                      <Line type="stepAfter" dataKey="Net Retirement Outflow" name="Net retirement outflow" stroke="hsl(var(--destructive))" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                      <ReferenceLine x={localInputs.targetRetirementAge} stroke={isMobile ? 'hsl(var(--muted-foreground))' : 'hsl(var(--accent))'} strokeDasharray="4 4" strokeWidth={1.5} label={{ position: retirementLabelPosition, value: 'Retirement', fill: isMobile ? 'hsl(var(--foreground))' : 'hsl(var(--accent))', fontSize: 11, fontWeight: 600 }} />
+                    </ComposedChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
           </div>
-
-          {/* The retirement graph — the heart of the app, visible at first glance */}
-          <Card className="border-0 shadow-md bg-white">
-            <CardHeader className="p-4 pb-2 md:p-6 md:pb-4">
-              <div className="w-full">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-1.5">
-                  <CardTitle className="font-serif text-base md:whitespace-nowrap md:text-lg">Retirement Projection Timeline</CardTitle>
-                <Dialog open={isChartInfoOpen} onOpenChange={setIsChartInfoOpen}>
-                  <DialogTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Explain the retirement chart lines"
-                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Info className="h-4 w-4" />
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent
-                    className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md gap-0 overflow-y-auto overscroll-contain rounded-xl p-0 [&>button]:hidden"
-                  >
-                    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-background px-4 py-3">
-                      <DialogTitle className="text-left text-sm font-semibold">
-                        What each chart line means
-                      </DialogTitle>
-                      <DialogClose asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0 rounded-full"
-                          aria-label="Close chart explanation"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </DialogClose>
-                    </div>
-                    <div className="space-y-3 p-4 pt-3">
-                    <DialogDescription className="text-left text-xs leading-relaxed text-muted-foreground">
-                       Blue, green, and red show how much you may have. Orange shows how much you would need at that age.
-                    </DialogDescription>
-                    <div className="space-y-3 text-xs">
-                      <div className="grid grid-cols-[40px_1fr] gap-2.5">
-                        <span className="mt-2 h-[3px] rounded-full bg-primary" />
-                        <div>
-                          <p className="font-medium text-foreground">Accumulated Corpus — Base</p>
-                          <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                             How much your investments are projected to be worth using your planned contributions and expected returns. It grows before retirement, then funds your expenses afterward.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[40px_1fr] gap-2.5">
-                        <span className="mt-2 h-0 border-t-2 border-dashed border-emerald-500" />
-                        <div>
-                          <p className="font-medium text-emerald-600">Accumulated Corpus — Optimistic (+2%)</p>
-                          <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                             How much you may have if annual investment returns are 2 percentage points higher than the base assumption.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[40px_1fr] gap-2.5">
-                        <span className="mt-2 h-0 border-t-2 border-dashed border-rose-500" />
-                        <div>
-                          <p className="font-medium text-rose-600">Accumulated Corpus — Pessimistic (-2%)</p>
-                          <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                             How much you may have if annual investment returns are 2 percentage points lower than the base assumption.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[40px_1fr] gap-2.5">
-                        <span className="mt-2 h-0 border-t-[3px] border-dashed border-amber-600" />
-                        <div>
-                          <p className="font-medium text-amber-600">Lifestyle Corpus Needed</p>
-                          <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                             How much you would need at each age to pay all remaining lifestyle expenses after applying your inflation assumption. This is a planning estimate and total balance, not a monthly expense.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[40px_1fr] gap-2.5">
-                        <span className="mx-auto h-7 w-0 border-l-2 border-dashed border-primary" />
-                        <div>
-                          <p className="font-medium text-primary">Retirement marker</p>
-                          <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                             The age when planned contributions stop and withdrawals for retirement expenses begin.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="border-t pt-2 text-[10px] leading-relaxed text-muted-foreground">
-                       A scenario line above orange means the plan is funded at that age. These are planning estimates, not guaranteed outcomes.
-                    </p>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                  </div>
-                <div
-                  role="tablist"
-                  aria-label="Retirement chart view"
-                  className="grid w-full grid-cols-2 rounded-lg border border-border bg-muted/50 p-1 md:inline-flex md:w-auto md:flex-row"
-                >
-                  <Button
-                    type="button"
-                    role="tab"
-                    aria-selected={chartView === "corpus"}
-                    variant={chartView === "corpus" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 min-w-0 flex-1 px-2 py-1 text-[11px] md:h-9 md:flex-none md:whitespace-nowrap md:px-3 md:text-sm"
-                    onClick={() => setChartView("corpus")}
-                  >
-                    <span className="md:hidden">Corpus</span>
-                    <span className="hidden md:inline">Corpus Accumulation</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    role="tab"
-                    aria-selected={chartView === "lifestyle"}
-                    variant={chartView === "lifestyle" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 min-w-0 flex-1 px-2 py-1 text-[11px] md:h-9 md:flex-none md:whitespace-nowrap md:px-3 md:text-sm"
-                    onClick={() => setChartView("lifestyle")}
-                  >
-                    <span className="md:hidden">Monthly expense</span>
-                    <span className="hidden md:inline">Monthly Lifestyle Expense</span>
-                  </Button>
-                  </div>
-                </div>
-                <CardDescription className="mt-2 max-w-3xl text-xs leading-relaxed md:mt-3 md:text-sm">
-                  {chartView === "corpus"
-                    ? "Compare the corpus you may accumulate with the corpus needed at every age. Above the orange line means funded."
-                    : "See the inflation-adjusted monthly lifestyle cost used in the retirement forecast."}
-                </CardDescription>
+          <section
+            id="retirement-milestone-summary"
+            className="sr-only"
+            data-testid="retirement-milestone-summary"
+            aria-labelledby="retirement-milestone-summary-title"
+          >
+            <h2 id="retirement-milestone-summary-title">Retirement projection milestones</h2>
+            <dl>
+              <div>
+                <dt>At retirement age {metrics.milestones.retirementAge}, projected corpus</dt>
+                <dd>{formatINR(metrics.milestones.projectedCorpusAtRetirement)}</dd>
               </div>
-            </CardHeader>
-            <CardContent className="px-2 pb-4 pt-0 md:px-6 md:pb-6">
-              {chartView === "lifestyle" && (
-                <div className="mb-3 grid grid-cols-3 gap-2 md:mb-4 md:gap-3">
-                  <div className="min-w-0 rounded-xl border border-border/60 bg-muted/30 px-2.5 py-2.5 md:px-4 md:py-3">
-                    <p className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground md:text-xs">Today</p>
-                    <p className="mt-1 truncate text-sm font-bold text-foreground md:text-lg">
-                      <span className="md:hidden">{formatChartAmount(metrics.livingCostBaseline)}<span className="text-[9px] font-medium">/mo</span></span>
-                      <span className="hidden md:inline">{formatINR(metrics.livingCostBaseline)}/mo</span>
-                    </p>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-amber-200 bg-amber-50/60 px-2.5 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20 md:px-4 md:py-3">
-                    <p className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground md:text-xs">
-                      <span className="md:hidden">Retire · {targetRetirementYear}</span>
-                      <span className="hidden md:inline">At retirement · {targetRetirementYear}</span>
-                    </p>
-                    <p className="mt-1 truncate text-sm font-bold text-amber-700 dark:text-amber-400 md:text-lg">
-                      <span className="md:hidden">{formatChartAmount(metrics.expenseAtRetirement)}<span className="text-[9px] font-medium">/mo</span></span>
-                      <span className="hidden md:inline">{formatINR(metrics.expenseAtRetirement)}/mo</span>
-                    </p>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-border/60 bg-muted/30 px-2.5 py-2.5 md:px-4 md:py-3">
-                    <p className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground md:text-xs">
-                      Age {localInputs.lifeExpectancy}
-                    </p>
-                    <p className="mt-1 truncate text-sm font-bold text-foreground md:text-lg">
-                      <span className="md:hidden">{formatChartAmount(finalLifestyleExpense)}<span className="text-[9px] font-medium">/mo</span></span>
-                      <span className="hidden md:inline">{formatINR(finalLifestyleExpense)}/mo</span>
-                    </p>
-                  </div>
-                </div>
-              )}
-              {chartView === "corpus" && (
-                <div className="-mx-2 flex flex-nowrap items-center justify-start gap-4 overflow-x-auto px-2 pb-3 pt-1 text-[11px] text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:justify-center md:px-0 md:pb-4 md:text-xs">
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="h-0.5 w-4 bg-primary rounded-full"></span>
-                    <span>Corpus (Base)</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="h-0 border-t-2 border-dashed border-emerald-500 w-4"></span>
-                    <span>Corpus (+2%)</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="h-0 border-t-2 border-dashed border-rose-500 w-4"></span>
-                    <span>Corpus (-2%)</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="h-0 border-t-[3px] border-dashed border-amber-600 w-4"></span>
-                    <span>Corpus Needed</span>
-                  </div>
-                </div>
-              )}
-
-              {chartView === "corpus" && retirementChartPoint && (
-                <div className="mb-2 grid grid-cols-2 gap-2 px-1 sm:hidden">
-                  <div className="rounded-lg bg-primary/5 px-3 py-2">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Projected at {localInputs.targetRetirementAge}
-                    </p>
-                    <p className="mt-0.5 truncate text-sm font-bold text-primary">
-                      {formatINR(Number(retirementChartPoint["Base Scenario"]) || 0)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/20">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Needed at {localInputs.targetRetirementAge}
-                    </p>
-                    <p className="mt-0.5 truncate text-sm font-bold text-amber-700 dark:text-amber-400">
-                      {formatINR(Number(retirementChartPoint["Lifestyle Corpus Needed"]) || 0)}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className={cn("w-full", chartView === "lifestyle" ? "h-[320px] md:h-[410px]" : "h-[350px] min-[480px]:h-[390px] md:h-[500px]")}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={timelineChartData}
-                    margin={isMobile
-                      ? { top: 12, right: 2, left: -10, bottom: 18 }
-                      : { top: 20, right: 12, left: 0, bottom: 22 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey={chartView === "corpus" ? "age" : "year"}
-                      tickFormatter={(value) => chartView === "corpus" ? `${value}y` : String(value)}
-                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                      tickLine={false}
-                      axisLine={{ stroke: "hsl(var(--border))" }}
-                      interval={isMobile
-                        ? Math.max(0, Math.ceil(timelineChartData.length / 5) - 1)
-                        : "preserveStartEnd"}
-                      minTickGap={isMobile ? 8 : 16}
-                      label={{
-                        value: chartView === "corpus" ? "Age" : "Calendar year",
-                        position: "insideBottom",
-                        offset: -12,
-                        fill: "hsl(var(--muted-foreground))",
-                        fontSize: isMobile ? 9 : 10,
-                      }}
-                    />
-                    <YAxis
-                      yAxisId={chartView}
-                      tickFormatter={formatChartAmount}
-                      tick={{ fontSize: isMobile ? 9 : 11, fill: "hsl(var(--muted-foreground))" }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickCount={isMobile ? 5 : undefined}
-                      width={isMobile ? 44 : 52}
-                    />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <ReferenceLine
-                      yAxisId={chartView}
-                      x={chartView === "corpus" ? localInputs.targetRetirementAge : targetRetirementYear}
-                      stroke="hsl(var(--primary))"
-                      strokeDasharray="3 3"
-                      label={{
-                        position: "insideTopLeft",
-                        value: isMobile ? "Retire" : "Retirement",
-                        fill: "hsl(var(--primary))",
-                        fontSize: isMobile ? 9 : 11,
-                        offset: isMobile ? 6 : 10,
-                      }}
-                    />
-
-                    {chartView === "corpus" && (
-                      <Area yAxisId="corpus" type="monotone" dataKey="Base Scenario" name="Accumulated Corpus (Base)" fill="hsl(var(--primary)/0.2)" stroke="hsl(var(--primary))" strokeWidth={isMobile ? 2.5 : 3} />
-                    )}
-                    {chartView === "corpus" && (
-                      <Line yAxisId="corpus" type="monotone" dataKey="Optimistic (+2% ret)" name="Accumulated Corpus (+2%)" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                    )}
-                    {chartView === "corpus" && (
-                      <Line yAxisId="corpus" type="monotone" dataKey="Pessimistic (-2% ret)" name="Accumulated Corpus (-2%)" stroke="#f43f5e" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                    )}
-                    {chartView === "corpus" && (
-                      <Line
-                        yAxisId="corpus"
-                        type="monotone"
-                        dataKey="Lifestyle Corpus Needed"
-                        name="Corpus Needed"
-                        stroke="#d97706"
-                        strokeWidth={2.5}
-                        dot={false}
-                        strokeDasharray="8 4"
-                      />
-                    )}
-                    {chartView === "lifestyle" && (
-                      <Area
-                        yAxisId="lifestyle"
-                        type="monotone"
-                        dataKey="Monthly Lifestyle Expense"
-                        name="Monthly Lifestyle Expense"
-                        fill="#f59e0b"
-                        fillOpacity={0.18}
-                        stroke="#d97706"
-                        strokeWidth={3}
-                        dot={false}
-                        activeDot={{ r: 5 }}
-                      />
-                    )}
-                  </ComposedChart>
-                </ResponsiveContainer>
+              <div>
+                <dt>Required corpus at retirement</dt>
+                <dd>{formatINR(metrics.milestones.requiredCorpusAtRetirement)}</dd>
               </div>
+              <div>
+                <dt>Projected corpus depletion</dt>
+                <dd>
+                  {metrics.milestones.depletionAge === null
+                    ? `Not projected through life expectancy age ${localInputs.lifeExpectancy}`
+                    : `Age ${metrics.milestones.depletionAge}`}
+                </dd>
+              </div>
+              <div>
+                <dt>Effective pension start ages</dt>
+                <dd>
+                  {pensionStartAges.length > 0
+                    ? pensionStartAges.join(", ")
+                    : "No pension income affects this forecast"}
+                </dd>
+              </div>
+            </dl>
+          </section>
 
-              <div className="mt-3 border-t border-border/70 px-1 pt-4 lg:hidden">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Quick assumptions</h3>
-                    <p className="text-[11px] text-muted-foreground">Change a value to update the chart instantly.</p>
-                  </div>
-                  {hasUnsavedChanges && (
-                    <span className="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700">
-                      Unsaved
-                    </span>
-                  )}
-                </div>
+          {/* LIFESTYLE EDITOR */}
+          <RetirementLifestyleEditor
+            lifestyle={localInputs.lifestyleChoice}
+            customExpense={localInputs.customLifestyleExpense}
+            comfortableExpense={metrics.livingCostBaseline}
+            configured={Boolean(inputs?.lifestyleChoice)}
+            onLifestyleChange={handleLifestyleChange}
+            onCustomExpenseChange={(customLifestyleExpense) => setLocalInputs((previous) => ({ ...previous, customLifestyleExpense }))}
+          />
 
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-retirement-age" className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Retire at
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="quick-retirement-age"
-                        type="number"
-                        inputMode="numeric"
-                        min="18"
-                        max="100"
-                        value={localInputs.targetRetirementAge}
-                        onChange={(event) => setLocalInputs((previous) => ({
-                          ...previous,
-                          targetRetirementAge: Number(event.target.value),
-                        }))}
-                        className="h-10 pr-10 font-semibold"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">age</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-life-expectancy" className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Plan until
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="quick-life-expectancy"
-                        type="number"
-                        inputMode="numeric"
-                        min="40"
-                        max="125"
-                        value={localInputs.lifeExpectancy}
-                        onChange={(event) => setLocalInputs((previous) => ({
-                          ...previous,
-                          lifeExpectancy: Number(event.target.value),
-                        }))}
-                        className="h-10 pr-10 font-semibold"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">age</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inflation" className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Inflation
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="quick-inflation"
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        max="30"
-                        step="0.1"
-                        value={localInputs.generalInflation}
-                        onChange={(event) => setLocalInputs((previous) => ({
-                          ...previous,
-                          generalInflation: Number(event.target.value),
-                        }))}
-                        className="h-10 pr-8 font-semibold text-blue-600"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">%</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-additional-sip" className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Extra SIP / mo
-                    </Label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-muted-foreground">₹</span>
-                      <Input
-                        id="quick-additional-sip"
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        step="1"
-                        value={selectedTakeHomeInvestment}
-                        onChange={(event) => setLocalInputs((previous) => ({
-                          ...previous,
-                          monthlyContributionOverride: Math.round(Number(event.target.value)),
-                          investSurplus: false,
-                        }))}
-                        className={cn(
-                          "h-10 pl-7 font-semibold text-blue-600",
-                          metrics.affordabilityWarning && "border-amber-500 focus-visible:ring-amber-500",
-                        )}
-                        aria-describedby={metrics.affordabilityWarning ? "quick-sip-warning" : undefined}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {metrics.affordabilityWarning && (
-                  <p id="quick-sip-warning" role="alert" className="mt-2 text-[11px] leading-relaxed text-amber-700">
-                    {metrics.affordabilityWarning}
-                  </p>
-                )}
-
-                <Button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!hasUnsavedChanges || Boolean(metrics.affordabilityWarning)}
-                  className="mt-3 h-10 w-full shadow-sm"
-                >
-                  {hasUnsavedChanges ? "Save and keep exploring" : "Plan saved"}
+          {/* SECONDARY PLANNER AREA */}
+          <Collapsible
+            open={isPlannerOpen}
+            onOpenChange={handlePlannerOpenChange}
+            className="space-y-6 border-t border-border/40 pt-8"
+            data-testid="retirement-detailed-planner"
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="font-serif text-2xl text-foreground">Detailed planner</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Pensions, assumptions, what-if comparisons, purchasing power and SIP step-ups.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {effectivePensionSources.length > 0
+                    ? `${effectivePensionSources.length} pension ${effectivePensionSources.length === 1 ? "source is" : "sources are"} modeled separately from the later of its configured start age or retirement.`
+                    : "No pension income currently affects this forecast."}
+                  {" "}
+                  Current assumptions: retirement at {localInputs.targetRetirementAge}, {localInputs.generalInflation}% inflation.
+                </p>
+              </div>
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="outline" className="shrink-0" aria-label={isPlannerOpen ? "Close detailed planner" : "Open detailed planner"}>
+                  {isPlannerOpen ? "Close planner" : "Open detailed planner"}
+                  <ChevronDown className={cn("ml-2 h-4 w-4 transition-transform", isPlannerOpen && "rotate-180")} />
                 </Button>
+              </CollapsibleTrigger>
+            </div>
+
+            <CollapsibleContent>
+              <div className="mb-5 grid gap-4 md:grid-cols-2">
+                <Card className="border-border/60 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="font-serif text-base">Retirement outlook</CardTitle>
+                    <CardDescription>What the current plan may support.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Target age</p>
+                      <p className="font-semibold">{readiness.targetAge}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Current plan supports</p>
+                      <p className="font-semibold">
+                        {readiness.currentPlanRetirementAge === null
+                          ? "Not yet funded"
+                          : `Age ${readiness.currentPlanRetirementAge}`}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/60 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="font-serif text-base">Connected monthly plan</CardTitle>
+                    <CardDescription>The cash flow feeding this projection.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Net income</p>
+                       <p className="font-semibold financial-number text-positive">{formatINR(metrics.netMonthlyIncome)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Modeled contribution</p>
+                       <p className="font-semibold financial-number text-positive">{formatINR(metrics.modeledMonthlyContribution)}</p>
+                    </div>
+                     <div>
+                       <p className="text-xs text-muted-foreground">Current commitments</p>
+                        <p className="font-semibold financial-number text-positive">{formatINR(metrics.currentSipCommitments)}</p>
+                     </div>
+                     <div>
+                       <p className="text-xs text-muted-foreground">Remaining surplus</p>
+                       <p className={cn("font-semibold financial-number", metrics.unallocatedSurplus > 0 ? "text-warning" : metrics.unallocatedSurplus < 0 ? "text-negative" : "text-foreground")}>{formatINR(metrics.unallocatedSurplus)}</p>
+                     </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
+               {(metrics.gap > 0 || metrics.depletionAge || metrics.firstCashFlowShortfall) && (
+                 <Card className="mb-5 border-border bg-muted/40 shadow-sm" data-testid="retirement-action-guidance">
+                   <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 font-serif text-base text-muted-foreground">
+                       <AlertTriangle className="h-4 w-4" />
+                       Actionable shortfall guidance
+                     </CardTitle>
+                   </CardHeader>
+                   <CardContent className="space-y-2 text-sm text-muted-foreground">
+                     {metrics.gap > 0 && (
+                       <p>
+                         {metrics.monthsToRetirement === 0
+                            ? <>Lump sum needed today: <strong className="text-negative">{formatINR(metrics.requiredLumpSumToday)}</strong>.</>
+                            : <>Extra SIP needed from today: <strong className="text-negative">{formatINR(metrics.extraSipRequired)}/month</strong>.</>}
+                       </p>
+                     )}
+                     {metrics.depletionAge && (
+                       <p>At the current pace, the retirement corpus may deplete around age <strong>{metrics.depletionAge}</strong>.</p>
+                     )}
+                     {metrics.firstCashFlowShortfall && (
+                       <p role="alert">
+                         The first projected cash-flow shortfall is <strong className="text-negative">{formatINR(metrics.firstCashFlowShortfall.deficit)}</strong> in{" "}
+                         <strong>{format(metrics.firstCashFlowShortfall.date, "MMM yyyy")}</strong>.
+                       </p>
+                     )}
+                   </CardContent>
+                 </Card>
+               )}
+              <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:gap-6 xl:grid-cols-3">
 
-          {metrics.gap > 0 && (
-            <Card className="border border-destructive/20 shadow-sm bg-destructive/5 overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-1 h-full bg-destructive"></div>
-              <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div>
-                  <h3 className="text-lg font-serif font-semibold text-destructive mb-1">Action Required</h3>
-                  <p className="text-sm text-destructive/80">
-                    To reach your target corpus of {formatINR(metrics.requiredCorpus)} by age {localInputs.targetRetirementAge}, you need to increase your investments.
-                  </p>
-                  {metrics.depletionAge && (
-                    <p className="text-xs text-destructive mt-2 font-medium flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      At current rate, funds may deplete around age {metrics.depletionAge}.
-                    </p>
-                  )}
-                </div>
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-destructive/10 text-center min-w-[200px]">
-                  {metrics.monthsToRetirement === 0 ? (
-                    <>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Lump Sum Needed</p>
-                      <p className="text-2xl font-sans font-bold text-destructive">{formatINR(metrics.requiredLumpSumToday)}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">Retirement starts in less than one month</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Extra SIP Needed</p>
-                      <p className="text-2xl font-sans font-bold text-destructive">+{formatINR(metrics.extraSipRequired)}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
-                      <p className="text-[10px] text-muted-foreground mt-1">Starting today</p>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              {/* 1. Core Assumptions */}
+              <Card className="border-border/60 shadow-sm bg-card flex flex-col xl:row-span-2">
+                <CardHeader className="py-4 border-b border-border/40 bg-muted/20">
+                  <CardTitle className="text-base font-serif flex items-center gap-2">
+                     <Settings2 className="w-4 h-4 text-primary" />
+                     Core Assumptions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 space-y-6 flex-1">
+                   <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="retirement-target-age" className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Target Age</Label>
+                       <Input
+                          id="retirement-target-age"
+                         data-testid="input-retirement-age"
+                         type="number" min="18" max="100"
+                         value={localInputs.targetRetirementAge}
+                         onChange={(e) => setLocalInputs(p => ({ ...p, targetRetirementAge: Number(e.target.value)}))}
+                         className="h-9 font-medium shadow-sm bg-background"
+                       />
+                     </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="retirement-life-expectancy" className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Life Expectancy</Label>
+                       <Input
+                          id="retirement-life-expectancy"
+                         data-testid="input-life-expectancy"
+                         type="number" min="40" max="125"
+                         value={localInputs.lifeExpectancy}
+                         onChange={(e) => setLocalInputs(p => ({ ...p, lifeExpectancy: Number(e.target.value)}))}
+                         className="h-9 font-medium shadow-sm bg-background"
+                       />
+                     </div>
+                   </div>
+                   <div className="space-y-1.5">
+                        <Label htmlFor="retirement-inflation-rate" className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold flex justify-between">
+                         Inflation Rate
+                         <span className="text-foreground">{localInputs.generalInflation}%</span>
+                       </Label>
+                       <Input
+                          id="retirement-inflation-rate"
+                         type="number" step="0.1"
+                         value={localInputs.generalInflation}
+                         onChange={(e) => setLocalInputs(p => ({ ...p, generalInflation: Number(e.target.value)}))}
+                         className="h-9 text-primary font-medium shadow-sm bg-background"
+                       />
+                   </div>
 
-          {metrics.gap <= 0 && (
-            <Card className="border border-emerald-500/20 shadow-sm bg-emerald-500/5 overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-              <CardContent className="p-6 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-serif font-semibold text-emerald-700 mb-1">On Track!</h3>
-                  <p className="text-sm text-emerald-600/80">
-                    Your current corpus and SIPs are sufficient to reach your required corpus by age {localInputs.targetRetirementAge}. Keep it up!
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                   <Separator />
 
-          <Collapsible open={isReadinessOpen} onOpenChange={setIsReadinessOpen} asChild>
-            <Card className="relative border border-primary/10 bg-gradient-to-r from-primary/[0.04] to-emerald-500/[0.04] shadow-sm">
-              <CardHeader className={cn("pr-16", isReadinessOpen ? "pb-3" : "pb-6")}>
-                <div className="min-w-0 space-y-1.5 flex-1">
-                  <CardTitle className="text-lg font-serif">Your retirement outlook</CardTitle>
-                  {!isReadinessOpen && (
-                    <div className="mt-2 space-y-2.5">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-lg border border-primary/10 bg-white/60 px-3 py-2.5">
-                          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Until retirement</p>
-                          <p data-testid="text-retirement-years-to-retirement" className="mt-0.5 text-base font-bold text-foreground">
-                            {timeToRetirementLabel}
-                          </p>
-                        </div>
-                        <div className="rounded-lg border border-primary/10 bg-white/60 px-3 py-2.5">
-                          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Retirement span</p>
-                          <p data-testid="text-retirement-years-in-retirement" className="mt-0.5 text-base font-bold text-foreground">
-                            {timeline.yearsInRetirement} years
-                          </p>
-                        </div>
-                      </div>
-                      {readiness.assumptionsValid ? (
-                        <div className="divide-y divide-primary/10 rounded-lg border border-primary/10 bg-white/45 px-3 text-sm">
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2 text-xs sm:text-sm">
-                            <span className="min-w-0 text-muted-foreground">
-                              Current plan{" "}
-                              <strong className="text-foreground">
-                              {readiness.currentPlanRetirementAge === null ? "not yet funded" : `supports age ${readiness.currentPlanRetirementAge}`}
-                              </strong>
-                            </span>
-                            <span className="whitespace-nowrap text-muted-foreground">
-                              Target age{" "}
-                              <strong className="text-foreground">{Math.round(readiness.targetAge)}</strong>
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 py-2">
-                            <span className="text-muted-foreground">With full surplus</span>
-                            <strong className="text-right text-emerald-700">
-                              {readiness.fullSurplusRetirementAge === null ? "Still falls short" : `Could support age ${readiness.fullSurplusRetirementAge}`}
-                            </strong>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="rounded-lg border border-primary/10 bg-white/45 px-3 py-2.5 text-sm leading-relaxed text-muted-foreground">
-                          Correct the date of birth and retirement ages to see your outlook.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <div className="absolute right-4 top-4 md:right-6 md:top-6">
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 rounded-full"
-                    aria-label={isReadinessOpen ? "Collapse retirement outlook" : "Expand retirement outlook"}
-                  >
-                    <ChevronDown className={cn("h-5 w-5 transition-transform duration-200", isReadinessOpen && "rotate-180")} />
-                  </Button>
-                </CollapsibleTrigger>
-              </div>
-              <CollapsibleContent>
-                <CardContent className="pt-0">
-                  {readiness.assumptionsValid ? (
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div className="rounded-xl border bg-white/80 p-4">
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Your goal</p>
-                        <p className="mt-2 text-sm leading-relaxed">
-                          You want to retire at age <strong className="text-base text-foreground">{Math.round(readiness.targetAge)}</strong> and fund your lifestyle until age {Math.round(readiness.lifeExpectancy)}.
-                        </p>
-                      </div>
-                      <div className={cn(
-                        "rounded-xl border p-4",
-                        readiness.targetIsFunded ? "border-emerald-200 bg-emerald-50/80" : "border-amber-200 bg-amber-50/80",
-                      )}>
-                        <p className={cn(
-                          "text-xs font-medium uppercase tracking-wider",
-                          readiness.targetIsFunded ? "text-emerald-700" : "text-amber-700",
-                        )}>At your current pace</p>
-                        <p className="mt-2 text-sm leading-relaxed">
-                          {readiness.currentPlanRetirementAge === null ? (
-                            <>Your current plan is not projected to fully fund retirement before age {Math.round(readiness.lifeExpectancy)}.</>
-                          ) : readiness.currentPlanRetirementAge <= readiness.targetAge ? (
-                            <>You are on track for your goal and may be ready by age <strong className="text-base">{readiness.currentPlanRetirementAge}</strong>.</>
-                          ) : (
-                            <>Your current investments may support retirement around age <strong className="text-base">{readiness.currentPlanRetirementAge}</strong>.</>
-                          )}
-                        </p>
-                        {!readiness.targetIsFunded && (
-                          <p className="mt-2 border-t border-amber-200 pt-2 text-xs leading-relaxed text-amber-800">
-                            {readiness.monthsToRetirement === 0 ? (
-                              <>
-                                Retirement starts in less than one month, so a monthly SIP cannot close the gap. You would need about{" "}
-                                <strong>{formatINR(readiness.requiredLumpSumTodayAtTarget)} as a lump sum today</strong>, or a later retirement age.
-                              </>
-                            ) : (
-                              <>To retire at {Math.round(readiness.targetAge)}, invest about <strong>{formatINR(readiness.extraSipRequiredAtTarget)}/month more</strong> starting now.</>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
-                        <p className="text-xs font-medium uppercase tracking-wider text-emerald-700">If you invest the surplus</p>
-                        <p className="mt-2 text-sm leading-relaxed">
-                          {readiness.unallocatedSurplus <= 0 ? (
-                            <>There is no remaining monthly surplus available to model as an additional SIP.</>
-                          ) : readiness.fullSurplusRetirementAge === null ? (
-                            <>Investing your remaining <strong>{formatINR(readiness.unallocatedSurplus)}/month</strong> improves the plan, but does not fully fund retirement before age {Math.round(readiness.lifeExpectancy)}.</>
-                          ) : (
-                            <>Investing your remaining <strong>{formatINR(readiness.unallocatedSurplus)}/month</strong> could make retirement affordable around age <strong className="text-base text-emerald-800">{readiness.fullSurplusRetirementAge}</strong>.</>
-                          )}
-                        </p>
-                      </div>
-                      <div className="mt-4">
-                        <Button asChild size="sm" variant="outline">
-                          <Link href="/advice">Book consultation</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2 rounded-lg bg-destructive/5 p-3 text-sm text-destructive">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>Enter a valid date of birth, target retirement age, and life expectancy to calculate this summary.</span>
-                    </div>
-                  )}
-                  <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                    Ages are planning estimates based on your recorded investments and contributions, expected returns, confirmed current cash flow, loan payoff dates, and your inflation assumption. Income growth is shown only in the informational surplus outlook.
-                  </p>
+                   <div className="space-y-4">
+                     <h4 className="text-tiny uppercase tracking-wider text-foreground font-bold">Additional Investments</h4>
+
+                     {metrics.unallocatedSurplus > 0 && (
+                       <div className="rounded-lg border border-border bg-muted/40 p-3">
+                         <div className="flex items-center justify-between gap-2">
+                           <p className="text-tiny font-medium text-muted-foreground">
+                              Surplus: <span className="text-sm font-bold ml-1 text-warning">+{formatINR(metrics.unallocatedSurplus)}</span><span className="opacity-70">/mo</span>
+                           </p>
+                           <Button
+                             type="button"
+                             variant="outline"
+                             size="sm"
+                             onClick={() => setLocalInputs(p => ({ ...p, monthlyContributionOverride: isUsingFullSurplus ? 0 : fullSurplusAmount, investSurplus: false }))}
+                              className="h-7 px-3 text-tiny border-border text-foreground hover:bg-muted shrink-0"
+                           >
+                             {isUsingFullSurplus ? "Remove" : "Use All"}
+                           </Button>
+                         </div>
+                       </div>
+                     )}
+
+                     <div className="space-y-2">
+                       <div className="flex items-center justify-between">
+                          <Label htmlFor="retirement-extra-sip" className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Extra SIP (₹/mo)</Label>
+                         <Popover>
+                           <PopoverTrigger asChild>
+                             <button type="button" className="text-tiny text-muted-foreground hover:text-foreground font-medium flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-full border border-border/50 transition-colors">
+                               <TrendingUp className="w-3 h-3" />
+                               {(metrics.averageExpectedReturn * 100).toFixed(1)}% ROI
+                             </button>
+                           </PopoverTrigger>
+                           <PopoverContent align="end" className="w-[320px] p-4 space-y-3">
+                              <p className="text-sm font-semibold">Projected SIP Return: {(metrics.averageExpectedReturn * 100).toFixed(2)}% p.a.</p>
+                              <p className="text-xs text-muted-foreground">Blended from your current investments.</p>
+                           </PopoverContent>
+                         </Popover>
+                       </div>
+                       <Input
+                          id="retirement-extra-sip"
+                         type="number"
+                         min="0"
+                         step="1"
+                         value={selectedTakeHomeInvestment}
+                         onChange={(e) => setLocalInputs(p => ({ ...p, monthlyContributionOverride: Math.round(Number(e.target.value)), investSurplus: false }))}
+                         className={cn(
+                           "h-9 font-medium shadow-sm bg-background text-secondary",
+                           metrics.affordabilityWarning && "border-warning/30 focus-visible:ring-warning",
+                         )}
+                       />
+                       {metrics.affordabilityWarning && (
+                         <div className="flex items-start gap-1.5 p-2 bg-warning-background rounded border border-warning/30 dark:border-warning/30 mt-2 text-tiny text-warning">
+                           <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                           <p className="leading-tight">{metrics.affordabilityWarning}</p>
+                         </div>
+                       )}
+                     </div>
+                   </div>
                 </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+              </Card>
 
-          <Collapsible open={isMonthlyPlanOpen} onOpenChange={setIsMonthlyPlanOpen} asChild>
-            <Card className="relative border-0 shadow-sm bg-white">
-              <CardHeader className={cn("pr-16", isMonthlyPlanOpen ? "pb-3" : "pb-6")}>
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <CardTitle className="text-lg font-serif">Connected monthly plan</CardTitle>
-                  <CardDescription className="break-words">
-                    Your retirement baseline updates from budgets and non-reimbursable ledger spending.
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <div className="absolute right-4 top-4 md:right-6 md:top-6">
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 rounded-full"
-                    aria-label={isMonthlyPlanOpen ? "Collapse connected monthly plan" : "Expand connected monthly plan"}
-                  >
-                    <ChevronDown className={cn("h-5 w-5 transition-transform duration-200", isMonthlyPlanOpen && "rotate-180")} />
-                  </Button>
-                </CollapsibleTrigger>
-              </div>
-              <CollapsibleContent>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-                    <div><p className="text-xs text-muted-foreground">Net income</p><p className="font-semibold">{formatINR(metrics.netMonthlyIncome)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Actual monthly average</p><p className="font-semibold">{formatINR(metrics.actualAverageSpending)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Monthly budget plan</p><p className="font-semibold">{formatINR(metrics.budgetTotal)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Retirement lifestyle plan</p><p className="font-semibold text-primary">{formatINR(metrics.livingCostBaseline)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Active loan EMIs</p><p className="font-semibold">{formatINR(metrics.activeEmi)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Cash surplus before SIPs</p><p className="font-semibold">{formatINR(metrics.availableSurplus)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Salary-linked PF</p><p className="font-semibold">{formatINR(metrics.linkedPFContribution)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Non-linked SIP commitments</p><p className="font-semibold">{formatINR(metrics.nonLinkedSipCommitments)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Remaining surplus</p><p className="font-semibold text-emerald-700">{formatINR(metrics.unallocatedSurplus)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Selected additional SIP</p><p className="font-semibold">{formatINR(metrics.selectedTakeHomeInvestment)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Modeled additional SIP</p><p className="font-semibold">{formatINR(metrics.effectiveTakeHomeInvestment)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Total take-home investment</p><p className="font-semibold">{formatINR(metrics.modeledTakeHomeContribution)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Modeled contribution</p><p className="font-semibold">{formatINR(metrics.modeledMonthlyContribution)}</p></div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
-                    <span>
-                      <strong className="text-foreground capitalize">{metrics.baselineDriver}</strong> define the retirement lifestyle.
-                      {" "}Cash-flow affordability uses {formatINR(metrics.cashFlowCostBaseline)} (the higher of plan and actuals); actuals use {metrics.actualAverageMethod}.
-                    </span>
-                    <span>Income sources grow using their individual rates (current weighted rate: {metrics.effectiveIncomeGrowthRate.toFixed(2)}%); EMIs stop at modeled payoff.</span>
-                  </div>
-                  {metrics.oneTimeIncomeBeforeRetirement > 0 && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Future one-time income included once before retirement: {formatINR(metrics.oneTimeIncomeBeforeRetirement)}.
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Loan EMIs come from Loans and should not be entered again as ordinary ledger expenses.
-                  </p>
-                  {metrics.affordabilityWarning && (
-                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      <span>{metrics.affordabilityWarning} The projection caps the modeled additional SIP at today’s affordable surplus.</span>
+              {/* 2. Pensions */}
+              <Card className="border-border/60 shadow-sm bg-card flex flex-col xl:row-span-2">
+                <CardHeader className="py-4 border-b border-border/40 bg-muted/20">
+                  <CardTitle className="text-base font-serif flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-primary" />
+                      <span>Pensions</span>
                     </div>
-                  )}
-                  {!metrics.assumptionsValid && (
-                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-destructive/5 p-3 text-xs text-destructive">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      <span>Check date of birth and ages. The estimate has safely clamped invalid age ranges.</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLocalInputs(p => ({ ...p, pensionSources: [...p.pensionSources, { id: crypto.randomUUID(), name: "", monthlyAmount: 0, startAge: localInputs.targetRetirementAge, annualEscalationRate: 0 }] }))}
+                      className="h-7 text-xs px-2.5 bg-background shadow-sm"
+                      data-testid="button-add-pension"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 overflow-y-auto max-h-[500px] custom-scrollbar bg-muted/5">
+                  {localInputs.pensionSources.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[250px] text-center text-muted-foreground p-6">
+                      <div className="w-12 h-12 rounded-full bg-background border border-border/50 flex items-center justify-center mb-3 shadow-sm">
+                        <Wallet className="w-5 h-5 opacity-40" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">No pensions added</p>
+                      <p className="text-xs mt-1.5 max-w-[200px] leading-relaxed">Add guaranteed income like government pensions or EPF annuities.</p>
+                    </div>
+                  ) : (
+                    <div className="p-4 space-y-4">
+                      {localInputs.pensionSources.map((pension, index) => {
+                         const update = (patch: Partial<PensionSource>) =>
+                           setLocalInputs(p => ({ ...p, pensionSources: p.pensionSources.map(item => item.id === pension.id ? { ...item, ...patch } : item) }));
+                         return (
+                           <div key={pension.id} className="relative rounded-xl border border-border/70 bg-background p-4 shadow-sm group hover:border-primary/40 transition-colors" data-testid={`row-pension-${pension.id}`}>
+                              <Button
+                                type="button" size="icon" variant="ghost"
+                                className="absolute right-2 top-2 h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setLocalInputs(p => ({ ...p, pensionSources: p.pensionSources.filter(item => item.id !== pension.id) }))}
+                                data-testid={`button-remove-pension-${pension.id}`}
+                                 aria-label={`Remove ${pension.name || `pension ${index + 1}`}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <div className="space-y-3.5 pr-6">
+                                <div className="space-y-1.5">
+                                   <Label htmlFor={`pension-name-${pension.id}`} className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Source Name</Label>
+                                     <Input id={`pension-name-${pension.id}`} value={pension.name} onChange={e => update({name: e.target.value})} className="h-8 text-xs shadow-none bg-muted/30 focus:bg-background" data-testid={`input-pension-name-${pension.id}`} placeholder="e.g. EPF Pension" />
+                                </div>
+                                <div className="space-y-1.5">
+                                   <Label htmlFor={`pension-amount-${pension.id}`} className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Monthly Amount (Today's ₹)</Label>
+                                  <div className="relative">
+                                    <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground font-medium text-xs pointer-events-none">₹</span>
+                                     <Input id={`pension-amount-${pension.id}`} type="number" min={0} value={pension.monthlyAmount} onChange={e => update({monthlyAmount: Math.max(0, Number(e.target.value) || 0)})} className="h-8 text-xs shadow-none pl-6 font-medium bg-muted/30 focus:bg-background" data-testid={`input-pension-amount-${pension.id}`} />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1.5">
+                                     <Label htmlFor={`pension-start-age-${pension.id}`} className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Starts At Age</Label>
+                                     <Input id={`pension-start-age-${pension.id}`} type="number" min={18} max={120} value={pension.startAge ?? localInputs.targetRetirementAge} onChange={e => update({startAge: Number(e.target.value) || localInputs.targetRetirementAge})} className="h-8 text-xs shadow-none bg-muted/30 focus:bg-background" data-testid={`input-pension-age-${pension.id}`} />
+                                     {(pension.startAge ?? localInputs.targetRetirementAge) < localInputs.targetRetirementAge && (
+                                       <p className="text-tiny leading-tight text-muted-foreground">
+                                         Takes effect at retirement age {localInputs.targetRetirementAge}.
+                                       </p>
+                                     )}
+                                  </div>
+                                  <div className="space-y-1.5">
+                                     <Label htmlFor={`pension-escalation-${pension.id}`} className="text-tiny uppercase tracking-wider text-muted-foreground font-semibold">Escalation %</Label>
+                                     <Input id={`pension-escalation-${pension.id}`} type="number" min={0} max={50} step="0.1" value={pension.annualEscalationRate} onChange={e => update({annualEscalationRate: Math.max(0, Number(e.target.value) || 0)})} className="h-8 text-xs shadow-none bg-muted/30 focus:bg-background" data-testid={`input-pension-escalation-${pension.id}`} />
+                                  </div>
+                                </div>
+                              </div>
+                           </div>
+                         );
+                      })}
                     </div>
                   )}
                 </CardContent>
-              </CollapsibleContent>
-            </Card>
+              </Card>
+
+              {/* 3,4,5. Simulation Tools */}
+              {inputs && (
+                <RetirementSimulationTools
+                  baselineInputs={inputs}
+                  baselineMetrics={calculateRetirementProjection({
+                    expenses,
+                    budgets,
+                    incomes,
+                    investments,
+                    loans,
+                    plannedExpenses,
+                    emergencyFund: financialHealthQuery.data?.emergencyFund,
+                    assumptions: inputs,
+                  })}
+                  projectionData={{
+                    expenses,
+                    budgets,
+                    incomes,
+                    investments,
+                    loans,
+                    plannedExpenses,
+                    emergencyFund: financialHealthQuery.data?.emergencyFund,
+                  }}
+                  onApply={async (nextInputs) => {
+                    const savedInputs = await applyScenario.mutateAsync(nextInputs);
+                    toast({ title: "What-if applied to your saved plan" });
+                    return savedInputs;
+                  }}
+                  applyBlockedReason={hasUnsavedChanges
+                    ? "Save or discard unsaved changes before applying a scenario."
+                    : undefined}
+                />
+              )}
+
+              </div>
+            </CollapsibleContent>
           </Collapsible>
-          </>
-          )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

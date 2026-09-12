@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { fetchFinancialData } from "@/lib/financial-api";
-import { useFinancialWrite, FINANCIAL_DATA_KEY } from "@/hooks/use-financial-write";
+import { useFinancialWrite } from "@/hooks/use-financial-write";
+import { financialDataQueryOptions } from "@/lib/query-policy";
 import { type Investment } from "@/lib/storage";
 import { applyCustomOrder, dropId, prependId, defaultUiPreferences } from "@/lib/card-order";
 
@@ -8,8 +8,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export function useInvestments() {
   return useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
+    ...financialDataQueryOptions(),
     select: (data) => applyCustomOrder(data.investments, data.uiPreferences?.investmentOrder ?? []),
   });
 }

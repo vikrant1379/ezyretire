@@ -1,16 +1,15 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { fetchFinancialData, managePlanningCategory } from "@/lib/financial-api";
+import { managePlanningCategory } from "@/lib/financial-api";
 import {
   useFinancialOperation,
   useFinancialWrite,
-  FINANCIAL_DATA_KEY,
 } from "@/hooks/use-financial-write";
+import { financialDataQueryOptions } from "@/lib/query-policy";
 import { type Budget } from "@/lib/storage";
 
 export function useBudgets() {
   return useQuery({
-    queryKey: FINANCIAL_DATA_KEY,
-    queryFn: fetchFinancialData,
+    ...financialDataQueryOptions(),
     select: (data) => data.budgets,
   });
 }

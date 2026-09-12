@@ -10,7 +10,17 @@ test("production build exposes complete install metadata and valid icons", async
   await page.goto("/");
 
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/site.webmanifest");
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#312e81");
+  const canonicalThemeColor = await page.evaluate(() => {
+    const background = window.getComputedStyle(document.documentElement)
+      .getPropertyValue("--background")
+      .trim();
+    if (!background) throw new Error("The canonical --background theme token is unavailable.");
+    return `hsl(${background})`;
+  });
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
+    "content",
+    canonicalThemeColor,
+  );
   await expect(page.locator('meta[name="application-name"]')).toHaveAttribute("content", "ezyRetire");
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "ezyRetire");
@@ -20,18 +30,26 @@ test("production build exposes complete install metadata and valid icons", async
   expect(manifestResponse.ok()).toBe(true);
   expect(manifestResponse.headers()["content-type"]).toContain("manifest");
   const manifest = await manifestResponse.json();
-  expect(manifest).toMatchObject({
-    name: "ezyRetire",
-    short_name: "ezyRetire",
-    id: "/",
-    start_url: "/",
-    scope: "/",
-    display: "standalone",
-    background_color: "#fffaf2",
-    theme_color: "#312e81",
-  });
+  expect(manifest.background_color).toBe(manifest.theme_color);
 
+  const offlineResponse = await request.get("/offline.html");
+  expect(offlineResponse.ok()).toBe(true);
+  const offlineHtml = await offlineResponse.text();
+  expect(offlineHtml).toContain(
+    `<meta name="theme-color" content="${manifest.theme_color}" />`,
+  );
+  expect(offlineHtml).toContain(
+    `--offline-background: ${manifest.background_color};`,
+  );
+  expect(offlineHtml).toMatch(
+    /\bbody\s*\{[\s\S]*?\bbackground:\s*var\(--offline-background\)\s*;/,
+  );
+
+  const brandEvidenceResponse = await request.get("/brand-assets.json");
+  expect(brandEvidenceResponse.ok()).toBe(true);
+  const brandEvidence = await brandEvidenceResponse.json();
   expect(manifest.icons).toHaveLength(expectedIcons.size);
+
   for (const icon of manifest.icons) {
     const expected = expectedIcons.get(icon.src);
     expect(expected, `unexpected manifest icon ${icon.src}`).toBeDefined();
@@ -40,6 +58,13 @@ test("production build exposes complete install metadata and valid icons", async
       type: "image/png",
       purpose: expected!.purpose,
     });
+    expect(brandEvidence.assets).toContainEqual(expect.objectContaining({
+      file: icon.src.slice(1),
+      width: expected!.width,
+      height: expected!.height,
+      purpose: expected!.purpose,
+      sourceMarker: "ezyretire-black-silver-launcher-supplied-v2",
+    }));
     const response = await request.get(icon.src);
     expect(response.ok(), `${icon.src} is available`).toBe(true);
     expect(response.headers()["content-type"]).toContain("image/png");
@@ -66,6 +91,13 @@ test("production build exposes complete install metadata and valid icons", async
       }),
   );
   expect(appleIcon).toEqual({ width: 180, height: 180 });
+  expect(brandEvidence.assets).toContainEqual(expect.objectContaining({
+    file: "apple-touch-icon.png",
+    width: 180,
+    height: 180,
+    purpose: "apple-touch-and-splash",
+    sourceMarker: "ezyretire-black-silver-launcher-supplied-v2",
+  }));
 });
 
 test("service worker controls the production scope, cleans old caches, and serves offline navigation", async ({
@@ -123,6 +155,47 @@ test("service worker controls the production scope, cleans old caches, and serve
   await expect(page).toHaveURL(/\/offline-readiness-check$/);
   await expect(page.locator("html")).toHaveAttribute("data-recovery-state", "idle");
   await expect(page).toHaveTitle("ezyRetire — Offline");
+});
+
+test("an existing installation receives the canonical offline colors after updating", async ({
+  context,
+  page,
+}) => {
+  await page.goto("/safari-storage-check-setup.html");
+  await page.evaluate(async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    await navigator.serviceWorker.register("/legacy-sw.js", { scope: "/" });
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL))
+    .toContain("/legacy-sw.js");
+  await expect
+    .poll(() => page.evaluate(() => caches.keys()))
+    .toContain("ezyretire-static-v4");
+
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  });
+  await expect
+    .poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL))
+    .toMatch(/\/sw\.js$/);
+  await expect
+    .poll(() => page.evaluate(() => caches.keys()))
+    .toContain("ezyretire-static-v5");
+  await expect
+    .poll(() => page.evaluate(() => caches.keys()))
+    .not.toContain("ezyretire-static-v4");
+
+  await context.setOffline(true);
+  await page.goto("/offline-upgrade-check");
+  await expect(page).toHaveTitle("ezyRetire — Offline");
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#f9faf8");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(249, 250, 248)");
 });
 
 test("offline recovery stops waiting when the availability check never responds", async ({
@@ -319,26 +392,24 @@ test("warns once while online and still fails safely when Cache Storage is block
     const register = serviceWorkerPrototype.register;
     serviceWorkerPrototype.register = function (scriptURL: string | URL, options?: RegistrationOptions) {
       const url = new URL(String(scriptURL), window.location.href);
-      if (url.pathname === "/sw.js") url.searchParams.set("deny-cache-storage", "");
+      if (url.pathname === "/sw.js") url.searchParams.set("mutable-cache-storage", "");
       return register.call(this, url.href, options);
     };
   });
   await page.goto("/");
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
-  await page.evaluate(() => {
-    window.localStorage.removeItem("ezyretire:offline-storage-unavailable");
-  });
   await page.reload();
-  await expect(page).toHaveTitle("ezyRetire — Track, plan, retire");
   await expect
     .poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL))
-    .toContain("deny-cache-storage");
+    .toContain("mutable-cache-storage");
 
-  const warning = page.getByRole("status", { name: "Offline access unavailable" });
+    const warning = page.getByRole("status", { name: "Offline access unavailable" });
   await expect(warning).toContainText(
     "Your browser privacy settings prevent ezyRetire from saving its offline page.",
   );
-  await expect(page.getByRole("heading", { name: "Welcome to ezyRetire" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => (
       window as typeof window & { analyticsEvents: string[] }
@@ -356,14 +427,17 @@ test("warns once while online and still fails safely when Cache Storage is block
   page.on("request", (request) => {
     if (
       request.isNavigationRequest()
-      && new URL(request.url()).pathname === "/cache-storage-blocked-recovery"
+      && new URL(request.url()).pathname === "/cache-storage-revoked-recovery"
     ) {
       blockedNavigationAttempts += 1;
     }
   });
 
+  await page.evaluate(() => {
+    navigator.serviceWorker.controller?.postMessage("revoke-cache-storage");
+  });
   await context.setOffline(true);
-  await expect(page.goto("/cache-storage-blocked-recovery")).rejects.toThrow();
+  await expect(page.goto("/cache-storage-revoked-recovery")).rejects.toThrow();
   await page.waitForTimeout(1500);
   const settledNavigationAttempts = blockedNavigationAttempts;
   await page.waitForTimeout(1000);
@@ -385,7 +459,9 @@ test("warns once while online and still fails safely when Cache Storage is block
   await page.reload();
   await expect(page).toHaveTitle("ezyRetire — Track, plan, retire");
   await expect(warning).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Welcome to ezyRetire" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
 });
 
 test("updates the offline storage warning when privacy settings change mid-session", async ({
@@ -418,7 +494,7 @@ test("updates the offline storage warning when privacy settings change mid-sessi
     .poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL))
     .toContain("mutable-cache-storage");
 
-  const warning = page.getByRole("status", { name: "Offline access unavailable" });
+    const warning = page.getByRole("status", { name: "Offline access unavailable" });
   await expect(warning).toBeHidden();
 
   await page.evaluate(() => {
@@ -429,7 +505,9 @@ test("updates the offline storage warning when privacy settings change mid-sessi
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect(warning).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Welcome to ezyRetire" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
 
   await page.evaluate(() => {
     navigator.serviceWorker.controller?.postMessage({
@@ -537,7 +615,9 @@ test("keeps a current confirmed offline storage warning visible when local stora
   page.on("pageerror", (error) => pageErrors.push(error));
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Welcome to ezyRetire" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("ezyretire:offline-storage-availability", {
       detail: { available: false },

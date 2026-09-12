@@ -241,11 +241,11 @@ test("signing out during a save cannot carry the change into the next signed-in 
     window.history.pushState(null, "", "/profile");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /Sign out/i }).click();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByLabel("Email").fill(secondUser.email);
+  await page.getByLabel("Email address").fill(secondUser.email);
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("6-digit sign-in code").fill("123456");
   await page.getByRole("button", { name: "Verify and continue" }).click();
@@ -314,11 +314,11 @@ test("signing out during a preference save shows one warning without changing th
     window.history.pushState(null, "", "/profile");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /Sign out/i }).click();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByLabel("Email").fill(secondUser.email);
+  await page.getByLabel("Email address").fill(secondUser.email);
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("6-digit sign-in code").fill("123456");
   await page.getByRole("button", { name: "Verify and continue" }).click();
@@ -390,11 +390,11 @@ test("a rejected old preference save cannot roll back the next account", async (
     window.history.pushState(null, "", "/profile");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /Sign out/i }).click();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByLabel("Email").fill(secondUser.email);
+  await page.getByLabel("Email address").fill(secondUser.email);
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("6-digit sign-in code").fill("123456");
   await page.getByRole("button", { name: "Verify and continue" }).click();
@@ -475,11 +475,11 @@ test("signing out during a save still invalidates the account when session stora
     window.history.pushState(null, "", "/profile");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /Sign out/i }).click();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByLabel("Email").fill(secondUser.email);
+  await page.getByLabel("Email address").fill(secondUser.email);
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("6-digit sign-in code").fill("123456");
   await page.getByRole("button", { name: "Verify and continue" }).click();
@@ -557,11 +557,11 @@ test("signing out during a save survives session storage being revoked mid-sessi
     window.history.pushState(null, "", "/profile");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /Sign out/i }).click();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByLabel("Email").fill(secondUser.email);
+  await page.getByLabel("Email address").fill(secondUser.email);
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("6-digit sign-in code").fill("123456");
   await page.getByRole("button", { name: "Verify and continue" }).click();

@@ -1,0 +1,1 @@
+import{t as n}from"./constructFrom-rJN6zrQ_.js";function c(e){const t=n(e),s=t.getMonth();return t.setFullYear(t.getFullYear(),s+1,0),t.setHours(23,59,59,999),t}function f(e){const t=n(e);return t.setDate(1),t.setHours(0,0,0,0),t}function m(e,t){const s=+n(e),[o,r]=[+n(t.start),+n(t.end)].sort((a,i)=>a-i);return s>=o&&s<=r}export{c as e,m as i,f as s};

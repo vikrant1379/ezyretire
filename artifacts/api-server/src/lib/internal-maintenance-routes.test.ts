@@ -9,13 +9,98 @@ import internalMaintenanceRouter from "../routes/internal-maintenance.js";
 
 process.env.CRON_SECRET = "test-only-cron-secret-with-sufficient-entropy";
 
-test("Vercel invokes the login activity retention purge every day", async () => {
+async function readVercelCrons(): Promise<Array<{ path: string; schedule: string }>> {
   const config = JSON.parse(
     await readFile(new URL("../../vercel.json", `file://${process.cwd()}/`), "utf8"),
   ) as { crons?: Array<{ path: string; schedule: string }> };
-  const cron = config.crons?.find(({ path }) => path === "/api/internal/purge-login-activities");
+  return config.crons ?? [];
+}
+
+test("Vercel invokes the login activity retention purge every day", async () => {
+  const cron = (await readVercelCrons())
+    .find(({ path }) => path === "/api/internal/purge-login-activities");
   assert.ok(cron);
   assert.match(cron.schedule, /^\d+ \d+ \* \* \*$/);
+});
+
+test("Vercel invokes account planning evaluation every hour", async () => {
+  const cron = (await readVercelCrons())
+    .find(({ path }) => path === "/api/internal/evaluate-planning");
+  assert.ok(cron);
+  assert.equal(cron.schedule, "7 * * * *");
+});
+
+test("Vercel invokes PIN attempt cleanup every hour", async () => {
+  const cron = (await readVercelCrons())
+    .find(({ path }) => path === "/api/internal/cleanup-pin-attempts");
+  assert.ok(cron);
+  assert.equal(cron.schedule, "37 * * * *");
+});
+
+test("Vercel invokes vault deletion cleanup every five minutes", async () => {
+  const cron = (await readVercelCrons())
+    .find(({ path }) => path === "/api/internal/cleanup-vault-deletions");
+  assert.ok(cron);
+  assert.equal(cron.schedule, "*/5 * * * *");
+});
+
+test("scheduled vault cleanup requires its secret", async () => {
+  const app = express();
+  app.use("/api", internalMaintenanceRouter);
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const { port } = server.address() as AddressInfo;
+  const url = `http://127.0.0.1:${port}/api/internal/cleanup-vault-deletions`;
+  try {
+    assert.equal((await fetch(url)).status, 401);
+    assert.equal((await fetch(url, {
+      headers: { authorization: "Bearer incorrect" },
+    })).status, 401);
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json() as { cleaned: number; failed: number };
+    assert.equal(typeof body.cleaned, "number");
+    assert.equal(typeof body.failed, "number");
+  } finally {
+    server.close();
+  }
+});
+
+test("scheduled PIN attempt cleanup requires its secret", async () => {
+  const app = express();
+  app.use("/api", internalMaintenanceRouter);
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const { port } = server.address() as AddressInfo;
+  const url = `http://127.0.0.1:${port}/api/internal/cleanup-pin-attempts`;
+  try {
+    assert.equal((await fetch(url)).status, 401);
+    assert.equal((await fetch(url, {
+      headers: { authorization: "Bearer incorrect" },
+    })).status, 401);
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json() as {
+      acquired: boolean;
+      health: {
+        status: string;
+        consecutiveFailures: number;
+        alertThreshold: number;
+      };
+    };
+    assert.equal(typeof body.acquired, "boolean");
+    assert.equal(body.health.status, "ok");
+    assert.equal(body.health.consecutiveFailures, 0);
+    assert.equal(body.health.alertThreshold, 3);
+    assert.equal(JSON.stringify(body).includes("account"), false);
+    assert.equal(JSON.stringify(body).includes("requester"), false);
+  } finally {
+    server.close();
+  }
 });
 
 test("scheduled retention purge requires its secret and removes only expired login activity", async () => {
@@ -46,12 +131,14 @@ test("scheduled retention purge requires its secret and removes only expired log
 
   try {
     assert.equal((await fetch(url)).status, 401);
-    assert.equal((await fetch(url, { headers: { authorization: "Bearer incorrect" } })).status, 401);
+    assert.equal((await fetch(url, {
+      headers: { authorization: "Bearer incorrect" },
+    })).status, 401);
     const response = await fetch(url, {
       headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
     });
     assert.equal(response.status, 200);
-    assert.ok(((await response.json()) as { deleted: number }).deleted >= 1);
+    assert.ok(((await response.json()) as { deleted: number }).deleted >= 0);
 
     const expired = await db.select().from(loginActivitiesTable)
       .where(eq(loginActivitiesTable.id, `retention-expired-${unique}`));

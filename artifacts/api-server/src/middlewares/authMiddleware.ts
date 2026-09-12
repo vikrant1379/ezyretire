@@ -1,6 +1,9 @@
 import type { AuthUser } from "@workspace/api-zod";
 import { type NextFunction, type Request, type Response } from "express";
 import * as oidc from "openid-client";
+import { accountDeletionRequestsTable, db, usersTable } from "@workspace/db";
+import { and, eq, or, sql } from "drizzle-orm";
+import { accountHash } from "../lib/account-compliance.js";
 import {
   clearSession,
   getOidcConfig,
@@ -70,6 +73,21 @@ export async function authMiddleware(
 
   const refreshed = await refreshIfExpired(sid, session);
   if (!refreshed) {
+    await clearSession(res, sid);
+    next();
+    return;
+  }
+  const [validUser] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(eq(usersTable.id, refreshed.user.id)).limit(1);
+  const [denied] = await db.select({ id: accountDeletionRequestsTable.id })
+    .from(accountDeletionRequestsTable).where(and(
+      or(
+        eq(accountDeletionRequestsTable.userId, refreshed.user.id),
+        eq(accountDeletionRequestsTable.accountHash, accountHash(refreshed.user.id)),
+      ),
+      sql`${accountDeletionRequestsTable.status} in ('processing', 'blocked', 'completed')`,
+    )).limit(1);
+  if (!validUser || denied) {
     await clearSession(res, sid);
     next();
     return;

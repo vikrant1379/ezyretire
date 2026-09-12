@@ -1,5 +1,11 @@
-import { GetCurrentAuthUserResponse } from "@workspace/api-zod";
-import { db, emailOtpChallengesTable, usersTable } from "@workspace/db";
+import {
+  GetCurrentAuthUserResponse,
+  LoginWithAccountPinBody,
+  LoginWithAccountPinResponse,
+  SetupAccountPinBody,
+  SetupAccountPinResponse,
+} from "@workspace/api-zod";
+import { accountDeletionRequestsTable, db, emailOtpChallengesTable, mobileOtpChallengesTable, pinLoginAttemptsTable, usersTable } from "@workspace/db";
 import crypto from "crypto";
 import { and, count, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
@@ -7,6 +13,7 @@ import * as oidc from "openid-client";
 import {
   clearSession,
   createSession,
+  deleteSession,
   getSession,
   getOidcConfig,
   getSessionId,
@@ -22,6 +29,7 @@ import {
   getSafeReturnTo,
   type BrowserLoginIntent,
 } from "../lib/auth-redirect.js";
+import { isValidOptionalPhone, normalizeOptionalPhone } from "../lib/auth-profile-input.js";
 import { getEnv } from "../lib/env.js";
 import {
   createOtpCode,
@@ -39,10 +47,37 @@ import {
   sendLoginCode,
 } from "../lib/email-otp.js";
 import { recordLoginActivity, type LoginMethod } from "../lib/login-activity.js";
+import { accountEmailHash, accountHash, withAccountWriteFence } from "../lib/account-compliance.js";
+import {
+  createAccountPinHash,
+  DUMMY_ACCOUNT_PIN_HASH,
+  isValidAccountPin,
+  verifyAccountPin,
+} from "../lib/account-pin.js";
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
+const OTP_INDETERMINATE_RETRY_MS = 3_000;
+const PIN_LOCK_MS = 15 * 60 * 1000;
+const PIN_MAX_ACCOUNT_ATTEMPTS = 5;
+const PIN_MAX_NETWORK_ATTEMPTS = 20;
+const PIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const PIN_STEP_UP_MAX_AGE_MS = 10 * 60 * 1000;
+const PASSKEY_STEP_UP_COOKIE = "__Host-ezyretire-passkey-step-up";
+const PASSKEY_STEP_UP_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "strict" as const,
+  path: "/",
+};
 const router: IRouter = Router();
 
+type RequesterQueue = {
+  pending: number;
+  tail: Promise<void>;
+};
+const pinRequesterQueues = new Map<string, RequesterQueue>();
+
+const otpRequesterQueues = new Map<string, RequesterQueue>();
 function profileInput(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -67,8 +102,58 @@ function sessionUser(user: typeof usersTable.$inferSelect) {
   };
 }
 
-async function createCredentialSession(res: Response, user: typeof usersTable.$inferSelect) {
-  const session = await createSession({ user: sessionUser(user) });
+function passkeyStepUpBinding(challengeId: string, sid: string): string {
+  const secret = getEnv("SESSION_SECRET");
+  if (!secret || secret.length < 32) throw new Error("SESSION_SECRET must contain at least 32 characters");
+  const signature = crypto
+    .createHmac("sha256", secret)
+    .update(`${challengeId}:${sid}`)
+    .digest("base64url");
+  return `${challengeId}.${signature}`;
+}
+
+function hasValidPasskeyStepUpBinding(req: Request, challengeId: string): boolean {
+  const sid = getSessionId(req);
+  const binding = req.cookies?.[PASSKEY_STEP_UP_COOKIE];
+  if (!sid || typeof binding !== "string") return false;
+  const expected = passkeyStepUpBinding(challengeId, sid);
+  const actualBuffer = Buffer.from(binding);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length
+    && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+async function createCredentialSession(
+  req: Request,
+  res: Response,
+  user: typeof usersTable.$inferSelect,
+  emailStepUp = false,
+) {
+  const session = await withAccountWriteFence(user.id, async () => {
+    const [current] = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(eq(usersTable.id, user.id)).limit(1);
+    const [denied] = await db.select({ id: accountDeletionRequestsTable.id })
+      .from(accountDeletionRequestsTable).where(and(
+        eq(accountDeletionRequestsTable.accountHash, accountHash(user.id)),
+        sql`${accountDeletionRequestsTable.status} in ('processing', 'blocked', 'completed')`,
+      )).limit(1);
+    if (!current || denied) throw new Error("ACCOUNT_DELETION_IN_PROGRESS");
+    const nextSession: SessionData = {
+      user: sessionUser(user),
+      authenticatedAt: Date.now(),
+      ...(emailStepUp
+        ? { emailStepUp: { userId: user.id, verifiedAt: Date.now(), method: "email_otp" as const } }
+        : {}),
+    };
+    const currentSid = getSessionId(req);
+    const currentSession = emailStepUp && currentSid ? await getSession(currentSid) : null;
+    if (currentSid && currentSession?.user.id === user.id) {
+      const rotatedSid = await createSession({ ...currentSession, ...nextSession });
+      await deleteSession(currentSid);
+      return rotatedSid;
+    }
+    return createSession(nextSession);
+  });
   res.cookie(SESSION_COOKIE, session, {
     httpOnly: true,
     secure: true,
@@ -167,25 +252,42 @@ router.patch("/auth/profile", async (req, res): Promise<void> => {
   const fullName = profileInput(req.body?.fullName);
   const dateOfBirth = profileInput(req.body?.dateOfBirth);
   const gender = profileInput(req.body?.gender);
-  const phone = profileInput(req.body?.phone);
+  const phone = normalizeOptionalPhone(req.body?.phone);
   const onboardingCompleted = req.body?.onboardingCompleted === true;
-  if (fullName.length < 2 || fullName.length > 100 || !isValidDate(dateOfBirth) || !gender || phone.replace(/\D/g, "").length < 7) {
-    res.status(400).json({ error: "Complete your name, date of birth, gender, and a valid mobile number" });
+  if (fullName.length < 2 || fullName.length > 100 || !isValidDate(dateOfBirth) || !gender) {
+    res.status(400).json({ error: "Complete your name, date of birth, and gender" });
+    return;
+  }
+  if (!isValidOptionalPhone(phone)) {
+    res.status(400).json({ error: "Enter a valid mobile number" });
     return;
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set({
-      fullName,
-      dateOfBirth,
-      gender,
-      phone,
-      onboardingCompleted,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.id, req.user.id))
-    .returning();
+  const [user] = await db.transaction(async (tx) => {
+    const [existingUser] = await tx.select().from(usersTable)
+      .where(eq(usersTable.id, req.user.id)).for("update");
+    if (!existingUser) return [];
+    const phoneChanged = existingUser.phone !== phone;
+    if (phoneChanged) {
+      await tx.update(mobileOtpChallengesTable).set({ consumedAt: new Date() })
+        .where(and(
+          eq(mobileOtpChallengesTable.userId, req.user.id),
+          isNull(mobileOtpChallengesTable.consumedAt),
+        ));
+    }
+    return tx.update(usersTable)
+      .set({
+        fullName,
+        dateOfBirth,
+        gender,
+        phone,
+        phoneVerifiedAt: phoneChanged ? null : existingUser.phoneVerifiedAt,
+        onboardingCompleted,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, req.user.id))
+      .returning();
+  });
   if (!user) {
     res.status(404).json({ error: "Account not found" });
     return;
@@ -200,8 +302,147 @@ router.patch("/auth/profile", async (req, res): Promise<void> => {
   res.json({ user: sessionUser(user) });
 });
 
+router.post("/auth/pin/setup", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated() || !req.user) {
+    res.status(401).json({ error: "Login required" });
+    return;
+  }
+  const body = SetupAccountPinBody.safeParse(req.body);
+  if (!body.success || !isValidAccountPin(body.data.pin)) {
+    res.status(400).json({ error: "Enter a 4-digit PIN" });
+    return;
+  }
+  const { pin } = body.data;
+  const sid = getSessionId(req);
+  const session = sid ? await getSession(sid) : null;
+  const stepUp = session?.emailStepUp;
+  if (
+    !stepUp
+    || stepUp.userId !== req.user.id
+    || Date.now() - stepUp.verifiedAt > PIN_STEP_UP_MAX_AGE_MS
+  ) {
+    res.status(403).json({ error: "Verify your email again before setting a PIN" });
+    return;
+  }
+  const pinHash = await createAccountPinHash(pin);
+  const [user] = await db.update(usersTable).set({
+    pinHash,
+    pinFailedAttempts: 0,
+    pinLockedUntil: null,
+    updatedAt: new Date(),
+  }).where(eq(usersTable.id, req.user.id)).returning();
+  if (!user) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  res.json(SetupAccountPinResponse.parse({
+    user: sessionUser(user),
+    pinConfigured: true,
+  }));
+});
+
+router.post("/auth/pin/login", async (req, res): Promise<void> => {
+  const body = LoginWithAccountPinBody.safeParse(req.body);
+  const email = normalizeOtpEmail(body.success ? body.data.email : "");
+  const pin = body.success ? body.data.pin : "";
+  if (!body.success || !isValidOtpEmail(email) || !isValidAccountPin(pin)) {
+    res.status(400).json({ error: "Enter your 4-digit PIN" });
+    return;
+  }
+  const requesterHash = hashRequester(req.ip || "unknown");
+  const emailHash = accountEmailHash(email);
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - PIN_ATTEMPT_WINDOW_MS);
+  const result = await withRequesterAdmission(
+    pinRequesterQueues,
+    requesterHash,
+    PIN_MAX_NETWORK_ATTEMPTS,
+    () => db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${requesterHash}))`);
+      const [{ requestCount }] = await tx.select({ requestCount: count() })
+        .from(pinLoginAttemptsTable)
+        .where(and(
+          eq(pinLoginAttemptsTable.requesterHash, requesterHash),
+          eq(pinLoginAttemptsTable.succeeded, false),
+          gt(pinLoginAttemptsTable.createdAt, windowStart),
+        ));
+      if (requestCount >= PIN_MAX_NETWORK_ATTEMPTS) {
+        return { status: "network_locked" as const };
+      }
+
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${emailHash}))`);
+      const [user] = await tx.select().from(usersTable).where(eq(usersTable.email, email)).for("update");
+      const valid = await verifyAccountPin(pin, user?.pinHash ?? DUMMY_ACCOUNT_PIN_HASH);
+      const locked = Boolean(user?.pinLockedUntil && user.pinLockedUntil > now);
+      if (!user || !user.pinHash || !valid || locked) {
+        await tx.insert(pinLoginAttemptsTable).values({
+          accountHash: emailHash,
+          requesterHash,
+          succeeded: false,
+        });
+        if (user && !locked) {
+          const attempts = user.pinFailedAttempts + 1;
+          await tx.update(usersTable).set({
+            pinFailedAttempts: attempts >= PIN_MAX_ACCOUNT_ATTEMPTS ? 0 : attempts,
+            pinLockedUntil: attempts >= PIN_MAX_ACCOUNT_ATTEMPTS
+              ? new Date(now.getTime() + PIN_LOCK_MS)
+              : null,
+            updatedAt: now,
+          }).where(eq(usersTable.id, user.id));
+        }
+        return { status: locked ? "locked" as const : "invalid" as const };
+      }
+      await tx.update(usersTable).set({
+        pinFailedAttempts: 0,
+        pinLockedUntil: null,
+        updatedAt: now,
+      }).where(eq(usersTable.id, user.id));
+      await tx.insert(pinLoginAttemptsTable).values({
+        accountHash: emailHash,
+        requesterHash,
+        succeeded: true,
+      });
+      return { status: "verified" as const, user };
+    }),
+  );
+  if (result.status === "network_locked") {
+    res.status(429).json({ error: "Too many PIN attempts. Try again in 15 minutes." });
+    return;
+  }
+  if (result.status !== "verified") {
+    res.status(result.status === "locked" ? 429 : 401).json({
+      error: result.status === "locked"
+        ? "Too many PIN attempts. Try again in 15 minutes or reset your PIN."
+        : "That PIN is incorrect. Try again or reset your PIN.",
+      reason: result.status,
+    });
+    return;
+  }
+  try {
+    await createCredentialSession(req, res, result.user);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ACCOUNT_DELETION_IN_PROGRESS") {
+      res.status(423).json({ error: "Account deletion is in progress", reason: "deletion_in_progress" });
+      return;
+    }
+    throw error;
+  }
+  await safelyRecordLogin(req, result.user.id, "pin");
+  res.json(LoginWithAccountPinResponse.parse({ user: sessionUser(result.user) }));
+});
+
 router.post("/auth/otp/request", async (req, res): Promise<void> => {
-  const email = normalizeOtpEmail(req.body?.email);
+  const purpose = req.body?.purpose;
+  if (purpose !== undefined && purpose !== "passkey_management") {
+    res.status(400).json({ error: "Unsupported email verification purpose" });
+    return;
+  }
+  const passkeyManagement = purpose === "passkey_management";
+  if (passkeyManagement && (!req.isAuthenticated() || !req.user?.email)) {
+    res.status(401).json({ error: "Sign in again before verifying passkey management" });
+    return;
+  }
+  const email = normalizeOtpEmail(passkeyManagement ? req.user?.email : req.body?.email);
   if (!isValidOtpEmail(email)) {
     res.status(400).json({
       error: hasMultipleOtpEmailAddresses(email)
@@ -213,7 +454,11 @@ router.post("/auth/otp/request", async (req, res): Promise<void> => {
 
   const requesterHash = hashRequester(req.ip || "unknown");
   const now = new Date();
-  const issuance = await db.transaction(async (tx) => {
+  const issuance = await withRequesterAdmission(
+    otpRequesterQueues,
+    requesterHash,
+    OTP_MAX_REQUESTS_PER_NETWORK,
+    () => db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${email}))`);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${requesterHash}))`);
     const [latest] = await tx
@@ -264,7 +509,8 @@ router.post("/auth/otp/request", async (req, res): Promise<void> => {
       maxAttempts: OTP_MAX_ATTEMPTS,
     });
     return { status: "issued" as const, id, code };
-  });
+    }),
+  );
 
   if (issuance.status === "throttled") {
     res.status(429).json({
@@ -273,7 +519,7 @@ router.post("/auth/otp/request", async (req, res): Promise<void> => {
     });
     return;
   }
-  if (issuance.status === "network-limited") {
+  if (issuance.status === "network-limited" || issuance.status === "network_locked") {
     res.status(429).json({ error: "Too many code requests. Please wait a few minutes and try again." });
     return;
   }
@@ -285,7 +531,7 @@ router.post("/auth/otp/request", async (req, res): Promise<void> => {
     if (deliveryError?.indeterminate) {
       await db
         .update(emailOtpChallengesTable)
-        .set({ resendAvailableAt: new Date(Date.now() + 3_000) })
+        .set({ resendAvailableAt: new Date(Date.now() + OTP_INDETERMINATE_RETRY_MS) })
         .where(eq(emailOtpChallengesTable.id, issuance.id));
     } else {
       await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.id, issuance.id));
@@ -302,7 +548,12 @@ router.post("/auth/otp/request", async (req, res): Promise<void> => {
       : deliveryError?.category === "quota"
         ? "Email delivery is temporarily busy. Please try again later."
         : "Email delivery is temporarily unavailable. Please try again in a moment.";
-    res.status(503).json({ error: userMessage });
+    res.status(503).json({
+      error: userMessage,
+      ...(deliveryError?.indeterminate
+        ? { retryAfterSeconds: Math.ceil(OTP_INDETERMINATE_RETRY_MS / 1000) }
+        : {}),
+    });
     return;
   }
   await db.transaction(async (tx) => {
@@ -320,6 +571,19 @@ router.post("/auth/otp/request", async (req, res): Promise<void> => {
       .set({ deliveredAt: new Date() })
       .where(eq(emailOtpChallengesTable.id, issuance.id));
   });
+  if (passkeyManagement) {
+    const sid = getSessionId(req);
+    if (!sid) {
+      res.status(401).json({ error: "Sign in again before verifying passkey management" });
+      return;
+    }
+    res.cookie(PASSKEY_STEP_UP_COOKIE, passkeyStepUpBinding(issuance.id, sid), {
+      ...PASSKEY_STEP_UP_COOKIE_OPTIONS,
+      maxAge: OTP_TTL_MS,
+    });
+  } else {
+    res.clearCookie(PASSKEY_STEP_UP_COOKIE, PASSKEY_STEP_UP_COOKIE_OPTIONS);
+  }
 
   res.json({
     message: "If the address can receive email, a sign-in code is on its way.",
@@ -353,6 +617,12 @@ router.post("/auth/otp/verify", async (req, res): Promise<void> => {
         .where(eq(emailOtpChallengesTable.id, challenge.id));
       return { status: attempts >= challenge.maxAttempts ? "exhausted" as const : "wrong" as const };
     }
+    const [deletedIdentity] = await tx.select({ id: accountDeletionRequestsTable.id })
+      .from(accountDeletionRequestsTable).where(and(
+        eq(accountDeletionRequestsTable.emailHash, accountEmailHash(challenge.email)),
+        sql`${accountDeletionRequestsTable.status} in ('processing', 'blocked', 'completed')`,
+      )).limit(1);
+    if (deletedIdentity) return { status: "deleted" as const };
 
     const verifiedAt = new Date();
     await tx
@@ -376,6 +646,10 @@ router.post("/auth/otp/verify", async (req, res): Promise<void> => {
   });
 
   if (result.status !== "verified") {
+    if (result.status === "deleted") {
+      res.status(410).json({ error: "This account was permanently deleted and cannot be restored." });
+      return;
+    }
     const messages = {
       invalid: "This code has already been used or is no longer available. Request a new code.",
       expired: "This code has expired. Request a new code to continue.",
@@ -385,9 +659,38 @@ router.post("/auth/otp/verify", async (req, res): Promise<void> => {
     res.status(401).json({ error: messages[result.status], reason: result.status });
     return;
   }
-  await createCredentialSession(res, result.user);
+  const passkeyStepUpCookie = req.cookies?.[PASSKEY_STEP_UP_COOKIE];
+  const passkeyStepUpAttempt = typeof passkeyStepUpCookie === "string"
+    && passkeyStepUpCookie.startsWith(`${challengeId}.`);
+  const passkeyStepUpAuthorized = passkeyStepUpAttempt
+    && req.isAuthenticated()
+    && req.user.id === result.user.id
+    && hasValidPasskeyStepUpBinding(req, challengeId);
+  if (passkeyStepUpAttempt && !passkeyStepUpAuthorized) {
+    res.clearCookie(PASSKEY_STEP_UP_COOKIE, PASSKEY_STEP_UP_COOKIE_OPTIONS);
+    res.status(401).json({
+      error: "Sign in again before verifying passkey management",
+      reason: "passkey_step_up_session_changed",
+    });
+    return;
+  }
+  try {
+    await createCredentialSession(req, res, result.user, passkeyStepUpAuthorized);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ACCOUNT_DELETION_IN_PROGRESS") {
+      res.status(423).json({ error: "Account deletion is in progress", reason: "deletion_in_progress" });
+      return;
+    }
+    throw error;
+  }
+  res.clearCookie(PASSKEY_STEP_UP_COOKIE, PASSKEY_STEP_UP_COOKIE_OPTIONS);
   await safelyRecordLogin(req, result.user.id, "email_otp");
-  res.json({ user: sessionUser(result.user), needsProfile: !result.user.onboardingCompleted });
+  res.json({
+    user: sessionUser(result.user),
+    needsProfile: !result.user.onboardingCompleted,
+    pinConfigured: Boolean(result.user.pinHash),
+    passkeyStepUpAuthorized,
+  });
 });
 
 // Password authentication is intentionally retired for consumer accounts.
@@ -406,7 +709,7 @@ router.get("/admin/login", async (req, res): Promise<void> => {
 router.get("/callback", async (req, res): Promise<void> => {
   const loginIntent: BrowserLoginIntent =
     req.cookies?.login_intent === "admin" ? "admin" : "user";
-  const returnTo = getSafeReturnTo(req.cookies?.return_to);
+  const returnTo = getSafeReturnTo(req.query.returnTo);
   const verifier = req.cookies?.code_verifier;
   const nonce = req.cookies?.nonce;
   const expectedState = req.cookies?.state;
@@ -439,42 +742,48 @@ router.get("/callback", async (req, res): Promise<void> => {
       profileImageUrl:
         ((claims.profile_image_url || claims.picture) as string | undefined) ?? null,
     };
-    const [dbUser] = await db
-      .insert(usersTable)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: usersTable.id,
-        set: { ...userData, updatedAt: new Date() },
-      })
-      .returning();
-    const isAdmin = isAdminIdentity(dbUser.id, dbUser.email);
-
-    if (loginIntent === "admin" && !isAdmin) {
+    const login = await withAccountWriteFence(userData.id, async () => {
+      const [deletedIdentity] = await db.select({ id: accountDeletionRequestsTable.id })
+        .from(accountDeletionRequestsTable).where(and(
+          eq(accountDeletionRequestsTable.accountHash, accountHash(userData.id)),
+          sql`${accountDeletionRequestsTable.status} in ('processing', 'blocked', 'completed')`,
+        )).limit(1);
+      if (deletedIdentity) return undefined;
+      const [dbUser] = await db
+        .insert(usersTable)
+        .values(userData)
+        .onConflictDoUpdate({
+          target: usersTable.id,
+          set: { ...userData, updatedAt: new Date() },
+        })
+        .returning();
+      const isAdmin = isAdminIdentity(dbUser.id, dbUser.email);
+      if (loginIntent === "admin" && !isAdmin) return { unauthorized: true as const };
+      const now = Math.floor(Date.now() / 1000);
+      const session: SessionData = {
+        user: {
+          id: dbUser.id, email: dbUser.email, profileImageUrl: dbUser.profileImageUrl,
+          fullName: dbUser.fullName, dateOfBirth: dbUser.dateOfBirth, gender: dbUser.gender,
+          phone: dbUser.phone, onboardingCompleted: dbUser.onboardingCompleted, isAdmin,
+        },
+        authenticatedAt: Date.now(),
+        access_token: tokens.access_token, refresh_token: tokens.refresh_token,
+        expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
+      };
+      return { dbUser, sid: await createSession(session) };
+    });
+    if (!login) {
+      clearOidcCookies(res);
+      res.redirect(getCallbackFailureRedirect(loginIntent, returnTo));
+      return;
+    }
+    if ("unauthorized" in login) {
       clearOidcCookies(res);
       res.redirect(getAdminAuthorizationFailureRedirect(returnTo));
       return;
     }
-
-    const now = Math.floor(Date.now() / 1000);
-    const session: SessionData = {
-      user: {
-        id: dbUser.id,
-        email: dbUser.email,
-        profileImageUrl: dbUser.profileImageUrl,
-        fullName: dbUser.fullName,
-        dateOfBirth: dbUser.dateOfBirth,
-        gender: dbUser.gender,
-        phone: dbUser.phone,
-        onboardingCompleted: dbUser.onboardingCompleted,
-        isAdmin,
-      },
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-    };
-    const sid = await createSession(session);
-    setCookie(res, SESSION_COOKIE, sid, SESSION_TTL);
-    await safelyRecordLogin(req, dbUser.id, "oidc");
+    setCookie(res, SESSION_COOKIE, login.sid, SESSION_TTL);
+    await safelyRecordLogin(req, login.dbUser.id, "oidc");
     clearOidcCookies(res);
     res.redirect(returnTo);
   } catch (error) {
@@ -494,3 +803,38 @@ router.get("/logout", async (req, res): Promise<void> => {
 });
 
 export default router;
+
+async function withRequesterAdmission<T>(
+  queues: Map<string, RequesterQueue>,
+  requesterHash: string,
+  maxPending: number,
+  operation: () => Promise<T>,
+): Promise<T | { status: "network_locked" }> {
+  let queue = queues.get(requesterHash);
+  if (!queue) {
+    queue = { pending: 0, tail: Promise.resolve() };
+    queues.set(requesterHash, queue);
+  }
+  if (queue.pending >= maxPending) {
+    return { status: "network_locked" };
+  }
+
+  queue.pending += 1;
+  const predecessor = queue.tail;
+  let release!: () => void;
+  const turn = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  queue.tail = predecessor.then(() => turn);
+
+  await predecessor;
+  try {
+    return await operation();
+  } finally {
+    queue.pending -= 1;
+    release();
+    if (queue.pending === 0 && queues.get(requesterHash) === queue) {
+      queues.delete(requesterHash);
+    }
+  }
+}

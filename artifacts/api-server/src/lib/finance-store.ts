@@ -2,23 +2,48 @@ import {
   budgetsTable,
   db,
   expensesTable,
+  bankStatementImportProvenanceTable,
+  incomeReceiptsTable,
   incomeSourcesTable,
   investmentsTable,
   loansTable,
+  mobileOtpChallengesTable,
+  receiptReviewsTable,
   retirementPlansTable,
   salaryDetailsTable,
   type StoredBudgetSchedule,
+  type StoredPlanningData,
   userProfilesTable,
   usersTable,
 } from "@workspace/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import crypto from "crypto";
+import { FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT } from "./request-limits.js";
 
 export type FinancialDataResponse = {
   expenses: unknown[];
   budgets: unknown[];
   incomeSources: unknown[];
+  incomeReceipts: unknown[];
   investments: unknown[];
   loans: unknown[];
+  plannedExpenses: unknown[];
+  netWorthSnapshots: unknown[];
+  emergencyFund: {
+    targetMonths: number;
+    reserveBalance: number;
+    monthlyContribution: number;
+  };
+  goals: StoredPlanningData["goals"];
+  reminders: StoredPlanningData["customReminders"];
+  notificationPreferences: NonNullable<StoredPlanningData["notificationPreferences"]>;
+  notifications: StoredPlanningData["notificationState"];
+  pushSubscriptions: Array<Omit<NonNullable<StoredPlanningData["pushSubscriptions"]>[number], "p256dh" | "auth">>;
+  monthlyReports: StoredPlanningData["monthlyReportSnapshots"];
+  monthlyReportEmailFailures: Record<string, {
+    category: "report_too_large" | "email_unavailable" | "temporary";
+    failedAt: string;
+  }>;
   retirementInputs: {
     dateOfBirth: string;
     targetRetirementAge: number;
@@ -27,6 +52,10 @@ export type FinancialDataResponse = {
     salaryGrowth: number;
     monthlyContributionOverride?: number;
     investSurplus: boolean;
+    lifestyleChoice?: "Basic" | "Comfortable" | "Premium" | "Custom";
+    customLifestyleExpense?: number;
+    retirementSpendingAdjustmentPercent?: number;
+    pensionSources: unknown[];
   };
   profileInputs: {
     fullName?: string;
@@ -34,6 +63,14 @@ export type FinancialDataResponse = {
     email?: string;
     phone?: string;
     onboardingCompleted?: boolean;
+    onboardingProgress?: {
+      currentStep: number;
+      completedSteps: number[];
+      skippedSteps: number[];
+      firstProjectionSaved?: boolean;
+      dismissed?: boolean;
+      rerunInProgress?: boolean;
+    };
     dateOfBirth: string;
     targetRetirementAge: number;
     lifeExpectancy: number;
@@ -47,8 +84,200 @@ export type FinancialDataResponse = {
     investmentSort: { by: string; direction: string };
     loanSort: { by: string; direction: string };
     incomeSort: { by: string; direction: string };
+    dashboardTourDismissed: boolean;
   };
 };
+
+export type BankStatementImportRow = {
+  importId: string;
+  sourceRowId: string;
+  bank: string;
+  parserVersion: string;
+  date: string;
+  amount: number;
+  category: string;
+  merchant: string;
+  paymentMethod: string;
+  note?: string;
+  reimbursable?: boolean;
+  recurring?: boolean;
+};
+
+export const FINANCIAL_SAVE_SIZE_LIMIT_CODE = "FINANCIAL_SAVE_SIZE_LIMIT";
+
+export class FinancialSaveSizeLimitError extends Error {
+  readonly code = FINANCIAL_SAVE_SIZE_LIMIT_CODE;
+  readonly status = 413;
+
+  constructor(
+    readonly actualBytes: number,
+    readonly limitBytes: number,
+  ) {
+    super("This change would make your financial data too large to save. Remove older expenses or reduce the change and try again.");
+    this.name = "FinancialSaveSizeLimitError";
+  }
+}
+
+const BULK_INSERT_ROW_CHUNK_SIZE = 500;
+
+function rowChunks<Row>(rows: Row[]): Row[][] {
+  const chunks: Row[][] = [];
+  for (let offset = 0; offset < rows.length; offset += BULK_INSERT_ROW_CHUNK_SIZE) {
+    chunks.push(rows.slice(offset, offset + BULK_INSERT_ROW_CHUNK_SIZE));
+  }
+  return chunks;
+}
+
+/**
+ * Conservative upper projection for saveFinancialDataForGeneration in the web
+ * client. Monthly reports are the only intentionally omitted section. It keeps
+ * every other server section and also materializes the client's optional
+ * contribution default, so it is never a few bytes smaller than either the
+ * immediate post-mutation document or the normalized post-reload document.
+ */
+export function financialSaveMutationDocument(data: FinancialDataResponse) {
+  const { monthlyReports: _monthlyReports, ...transportDocument } = data;
+  return {
+    ...transportDocument,
+    retirementInputs: {
+      ...transportDocument.retirementInputs,
+      monthlyContributionOverride:
+        transportDocument.retirementInputs.monthlyContributionOverride ?? 0,
+    },
+  };
+}
+
+export async function importBankStatementExpenses(
+  user: typeof usersTable.$inferSelect,
+  incoming: BankStatementImportRow[],
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
+): Promise<{ added: unknown[]; duplicateCount: number; data: FinancialDataResponse }> {
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    const provenance = await tx.select({
+      importId: bankStatementImportProvenanceTable.importId,
+      sourceRowId: bankStatementImportProvenanceTable.sourceRowId,
+    }).from(bankStatementImportProvenanceTable)
+      .where(eq(bankStatementImportProvenanceTable.userId, user.id));
+    const keys = new Set(provenance.map((row) => `${row.importId}|${row.sourceRowId}`));
+    const seen = new Set<string>();
+    const added: typeof expensesTable.$inferSelect[] = [];
+    const additions: Array<{
+      expense: typeof expensesTable.$inferSelect;
+      source: BankStatementImportRow;
+    }> = [];
+    let duplicateCount = 0;
+    for (const row of incoming) {
+      const key = `${row.importId}|${row.sourceRowId}`;
+      if (keys.has(key) || seen.has(key)) {
+        duplicateCount++;
+        continue;
+      }
+      seen.add(key);
+      const inserted = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        loanId: null,
+        date: row.date.slice(0, 10),
+        amount: row.amount.toFixed(2),
+        category: row.category.trim(),
+        merchant: row.merchant.trim(),
+        paymentMethod: row.paymentMethod.trim(),
+        note: row.note?.trim() ?? "",
+        reimbursable: row.reimbursable === true,
+        recurring: row.recurring === true,
+        createdAt: new Date(),
+      };
+      const expense = inserted as typeof expensesTable.$inferSelect;
+      added.push(expense);
+      additions.push({ expense, source: row });
+    }
+    const profile = await tx.select().from(userProfilesTable)
+      .where(eq(userProfilesTable.userId, user.id)).limit(1);
+    const plan = await tx.select().from(retirementPlansTable)
+      .where(eq(retirementPlansTable.userId, user.id)).limit(1);
+    const expenses = await tx.select().from(expensesTable)
+      .where(eq(expensesTable.userId, user.id));
+    const budgets = await tx.select().from(budgetsTable)
+      .where(eq(budgetsTable.userId, user.id));
+    const incomeSources = await tx.select().from(incomeSourcesTable)
+      .where(eq(incomeSourcesTable.userId, user.id));
+    const incomeReceipts = await tx.select().from(incomeReceiptsTable)
+      .where(eq(incomeReceiptsTable.userId, user.id));
+    const investments = await tx.select().from(investmentsTable)
+      .where(eq(investmentsTable.userId, user.id));
+    const loans = await tx.select().from(loansTable)
+      .where(eq(loansTable.userId, user.id));
+    const salary = incomeSources.length === 0
+      ? []
+      : await tx.select().from(salaryDetailsTable).where(inArray(
+        salaryDetailsTable.incomeSourceId,
+        incomeSources.map((source) => source.id),
+      ));
+    const data = buildFinancialData(user, {
+      profile: profile[0],
+      plan: plan[0],
+      expenses: [...expenses, ...added],
+      budgets,
+      incomeSources,
+      incomeReceipts,
+      salary,
+      investments,
+      loans,
+    });
+    for (const chunk of rowChunks(additions.map(({ expense }) => expense))) {
+      await tx.insert(expensesTable).values(chunk);
+    }
+    const provenanceRows = additions.map(({ expense, source }) => ({
+        userId: user.id,
+        importId: source.importId,
+        sourceRowId: source.sourceRowId,
+        bank: source.bank,
+        parserVersion: source.parserVersion,
+        expenseId: expense.id,
+    }));
+    for (const chunk of rowChunks(provenanceRows)) {
+      await tx.insert(bankStatementImportProvenanceTable).values(chunk);
+    }
+    await assertCanonicalMutationAdmission(
+      tx,
+      user,
+      admissionBaseline,
+      financialDocumentAdmissionLimit,
+    );
+    return { added, duplicateCount, data };
+  });
+  return result;
+}
+
+export class FinancialRestoreCollisionError extends Error {
+  readonly code = "FINANCIAL_RESTORE_ID_COLLISION";
+
+  constructor() {
+    super("One or more backup expense IDs are unavailable for this account");
+    this.name = "FinancialRestoreCollisionError";
+  }
+}
+
+export type FinancialRestoreAccountMutation = {
+  fullName?: string;
+  gender?: string | null;
+  phone?: string | null;
+  dateOfBirth?: string;
+  onboardingCompleted?: boolean;
+};
+
+export function financialLifecycleLockKey(userId: string): string {
+  return `financial-lifecycle:${userId}`;
+}
+
+type PlanningDataWithReportDelivery = StoredPlanningData & {
+  monthlyReportEmailDeliveries?: Record<string, string>;
+};
+
+export type MonthlyReportEmailFailureCategory =
+  "report_too_large" | "email_unavailable" | "temporary";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -135,6 +364,391 @@ function asIdList(value: unknown): string[] {
   return ids;
 }
 
+function onboardingProgress(value: unknown) {
+  if (!isRecord(value)) return undefined;
+  const stepList = (item: unknown) => Array.isArray(item)
+    ? [...new Set(item.map(Number).filter((step) => Number.isInteger(step) && step >= 1 && step <= 8))]
+    : [];
+  return {
+    currentStep: Math.max(1, Math.min(8, Math.round(asNumber(value.currentStep, 1)))),
+    completedSteps: stepList(value.completedSteps),
+    skippedSteps: stepList(value.skippedSteps),
+    firstProjectionSaved: asBoolean(value.firstProjectionSaved),
+    dismissed: asBoolean(value.dismissed),
+    rerunInProgress: asBoolean(value.rerunInProgress),
+  };
+}
+
+function plannedExpenses(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).flatMap((expense) => {
+    const name = asString(expense.name).trim();
+    const expectedDate = calendarDate(expense.expectedDate);
+    const amount = Math.max(0, asNumber(expense.amount));
+    if (!name || !expectedDate || amount <= 0) return [];
+    return [omitEmpty({
+      id: rowId(expense.id),
+      name,
+      category: asString(expense.category, "Other") || "Other",
+      amount,
+      expectedDate,
+      customInflationRate: asOptionalNonNegativeNumber(expense.customInflationRate),
+      createdAt: asString(expense.createdAt) || new Date().toISOString(),
+    })];
+  });
+}
+
+function normalizeNetWorthSnapshots(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  const byMonth = new Map<string, {
+    month: string;
+    assets: number;
+    liabilities: number;
+    netWorth: number;
+    healthScore?: number;
+  }>();
+  value.filter(isRecord).forEach((snapshot) => {
+    const month = normalizeMonth(snapshot.month);
+    const assets = asOptionalNonNegativeNumber(snapshot.assets);
+    const liabilities = asOptionalNonNegativeNumber(snapshot.liabilities);
+    if (!month || assets === undefined || liabilities === undefined) return;
+    byMonth.set(month, {
+      month,
+      assets,
+      liabilities,
+      netWorth: assets - liabilities,
+      ...(asOptionalNonNegativeNumber(snapshot.healthScore) !== undefined
+        ? { healthScore: Math.min(100, asOptionalNonNegativeNumber(snapshot.healthScore)!) }
+        : {}),
+    });
+  });
+  return [...byMonth.values()].sort((left, right) => left.month.localeCompare(right.month));
+}
+
+function normalizeEmergencyFund(value: unknown, legacy: Record<string, unknown> = {}) {
+  const record = isRecord(value) ? value : {};
+  return {
+    targetMonths: asOptionalNonNegativeNumber(record.targetMonths ?? legacy.emergencyTargetMonths) ?? 6,
+    reserveBalance: asOptionalNonNegativeNumber(record.reserveBalance ?? legacy.emergencyReserveBalance) ?? 0,
+    monthlyContribution:
+      asOptionalNonNegativeNumber(record.monthlyContribution ?? legacy.emergencyMonthlyContribution) ?? 0,
+  };
+}
+
+const notificationTypes = new Set([
+  "budget", "retirement", "goal", "upcoming", "milestone", "tax", "anomaly",
+]);
+
+function timestamp(value: unknown, fallback = new Date().toISOString()): string {
+  if (typeof value !== "string") return fallback;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : fallback;
+}
+
+function normalizeGoals(value: unknown): NonNullable<StoredPlanningData["goals"]> {
+  if (!Array.isArray(value)) return [];
+  const byId = new Map<string, NonNullable<StoredPlanningData["goals"]>[number]>();
+  value.filter(isRecord).forEach((goal, index) => {
+    const id = asString(goal.id).trim();
+    const name = asString(goal.name).trim();
+    const targetDate = normalizeDateOnly(goal.targetDate);
+    if (!id || !name || !targetDate || name.length > 160) return;
+    const createdAt = timestamp(goal.createdAt);
+    byId.set(id, {
+      id,
+      name,
+      targetAmount: Math.max(0, asNumber(goal.targetAmount)),
+      currentAmount: Math.max(0, asNumber(goal.currentAmount)),
+      targetDate,
+      priority: Math.max(1, Math.min(1000, Math.round(asNumber(goal.priority, index + 1)))),
+      monthlyAllocation: Math.max(0, asNumber(goal.monthlyAllocation)),
+      annualInflationRate: Math.max(
+        0,
+        Math.min(25, asNumber(goal.annualInflationRate ?? goal.inflationRate)),
+      ),
+      createdAt,
+    });
+  });
+  return [...byId.values()].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
+}
+
+function normalizeReminders(value: unknown): NonNullable<StoredPlanningData["customReminders"]> {
+  if (!Array.isArray(value)) return [];
+  const byId = new Map<string, NonNullable<StoredPlanningData["customReminders"]>[number]>();
+  value.filter(isRecord).forEach((reminder) => {
+    const id = asString(reminder.id).trim();
+    const title = asString(reminder.title).trim();
+    const date = normalizeDateOnly(reminder.date ?? reminder.dueDate);
+    if (!id || !title || title.length > 160 || !date) return;
+    const recurrence = reminder.recurrence === "monthly" || reminder.recurrence === "yearly"
+      ? reminder.recurrence
+      : "none";
+    const createdAt = timestamp(reminder.createdAt);
+    const amount = asOptionalNonNegativeNumber(reminder.amount);
+    byId.set(id, omitEmpty({
+      id,
+      title,
+      date,
+      amount,
+      notes: asString(reminder.notes).trim().slice(0, 1000) || undefined,
+      recurrence,
+      enabled: reminder.enabled !== false && reminder.completed !== true,
+      createdAt,
+    }));
+  });
+  return [...byId.values()].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+}
+
+function normalizeNotificationPreferences(
+  value: unknown,
+): NonNullable<StoredPlanningData["notificationPreferences"]> {
+  const record = isRecord(value) ? value : {};
+  const types = isRecord(record.types) ? record.types : {};
+  const quiet = isRecord(record.quietHours) ? record.quietHours : {};
+  const time = (item: unknown, fallback: string) =>
+    typeof item === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(item) ? item : fallback;
+  let timeZone = asString(record.timeZone, "Asia/Kolkata").trim() || "Asia/Kolkata";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format();
+  } catch {
+    timeZone = "UTC";
+  }
+  return {
+    enabled: asBoolean(record.enabled, true),
+    inApp: asBoolean(record.inApp, true),
+    push: asBoolean(record.push),
+    types: Object.fromEntries([...notificationTypes].map((type) => [type, asBoolean(types[type], true)])),
+    quietHours: {
+      start: time(quiet.start, "22:00"),
+      end: time(quiet.end, "07:00"),
+    },
+    weeklyDigest: asBoolean(record.weeklyDigest),
+    monthlyReportEmail: asBoolean(record.monthlyReportEmail),
+    digestDay: Math.max(0, Math.min(6, Math.round(asNumber(record.digestDay, 1)))),
+    timeZone,
+  };
+}
+
+function normalizeNotificationState(value: unknown): NonNullable<StoredPlanningData["notificationState"]> {
+  if (!Array.isArray(value)) return [];
+  const byKey = new Map<string, NonNullable<StoredPlanningData["notificationState"]>[number]>();
+  value.filter(isRecord).forEach((item) => {
+    const id = asString(item.id).trim();
+    const dedupeKey = asString(item.dedupeKey ?? item.eventKey).trim();
+    const type = asString(item.type).trim();
+    const title = asString(item.title).trim();
+    const message = asString(item.message).trim();
+    if (!id || !dedupeKey || !notificationTypes.has(type) || !title || !message) return;
+    const createdAt = timestamp(item.createdAt);
+    byKey.set(dedupeKey, omitEmpty({
+      id, dedupeKey, type, title: title.slice(0, 160), message: message.slice(0, 1000),
+      createdAt,
+      deliverAfter: timestamp(item.deliverAfter, createdAt),
+      channels: Array.isArray(item.channels)
+        ? item.channels.filter((channel) => channel === "in-app" || channel === "push")
+        : ["in-app"],
+      readAt: item.readAt ? timestamp(item.readAt) : undefined,
+      dismissedAt: item.dismissedAt ? timestamp(item.dismissedAt) : undefined,
+      inAppDeliveredAt: item.inAppDeliveredAt ? timestamp(item.inAppDeliveredAt) : undefined,
+      pushDeliveredAt: item.pushDeliveredAt ? timestamp(item.pushDeliveredAt) : undefined,
+      emailDeliveredAt: item.emailDeliveredAt ? timestamp(item.emailDeliveredAt) : undefined,
+    }));
+  });
+  return [...byKey.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 500);
+}
+
+function mergeNotificationState(
+  current: unknown,
+  incoming: unknown,
+): NonNullable<StoredPlanningData["notificationState"]> {
+  const existing = normalizeNotificationState(current);
+  const existingByKey = new Map(existing.map((item) => [item.dedupeKey, item]));
+  const incomingItems = normalizeNotificationState(incoming);
+  const incomingKeys = new Set(incomingItems.map((item) => item.dedupeKey));
+  return normalizeNotificationState([
+    ...incomingItems.map((item) => {
+    const existing = existingByKey.get(item.dedupeKey);
+    return {
+      ...item,
+      readAt: existing?.readAt ?? item.readAt,
+      dismissedAt: existing?.dismissedAt ?? item.dismissedAt,
+      inAppDeliveredAt: existing?.inAppDeliveredAt ?? item.inAppDeliveredAt,
+      pushDeliveredAt: existing?.pushDeliveredAt ?? item.pushDeliveredAt,
+      emailDeliveredAt: existing?.emailDeliveredAt ?? item.emailDeliveredAt,
+    };
+    }),
+    ...existing.filter((item) => !incomingKeys.has(item.dedupeKey)),
+  ]);
+}
+
+export function isSupportedPushEndpoint(endpointValue: unknown): boolean {
+  if (typeof endpointValue !== "string" || endpointValue.length > 2048) return false;
+  try {
+    const url = new URL(endpointValue);
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+    const host = url.hostname.toLowerCase();
+    return host === "fcm.googleapis.com"
+      || host === "updates.push.services.mozilla.com"
+      || host === "push.services.mozilla.com"
+      || host === "web.push.apple.com"
+      || host.endsWith(".push.apple.com")
+      || host.endsWith(".notify.windows.com");
+  } catch {
+    return false;
+  }
+}
+
+function normalizePushSubscriptions(value: unknown): NonNullable<StoredPlanningData["pushSubscriptions"]> {
+  if (!Array.isArray(value)) return [];
+  const byEndpoint = new Map<string, NonNullable<StoredPlanningData["pushSubscriptions"]>[number]>();
+  value.filter(isRecord).forEach((item) => {
+    const endpoint = asString(item.endpoint).trim();
+    const p256dh = asString(item.p256dh).trim();
+    const auth = asString(item.auth).trim();
+    if (!isSupportedPushEndpoint(endpoint) || !p256dh || !auth) return;
+    const createdAt = timestamp(item.createdAt);
+    byEndpoint.set(endpoint, omitEmpty({
+      endpoint, p256dh, auth,
+      expirationTime: asOptionalNonNegativeNumber(item.expirationTime),
+      createdAt, updatedAt: timestamp(item.updatedAt, createdAt),
+    }));
+  });
+  return [...byEndpoint.values()];
+}
+
+function normalizeMonthlyReports(value: unknown): NonNullable<StoredPlanningData["monthlyReportSnapshots"]> {
+  if (!Array.isArray(value)) return [];
+  const sectionIds = new Set([
+    "income-vs-expected",
+    "expenses-vs-budget-category",
+    "savings-amount-rate",
+    "portfolio-value-returns-change",
+    "net-worth-change",
+    "retirement-date-movement",
+    "health-score-change",
+    "top-next-month-actions",
+  ]);
+  const byMonth = new Map<string, NonNullable<StoredPlanningData["monthlyReportSnapshots"]>[number]>();
+  value.filter(isRecord).forEach((report) => {
+    const month = normalizeMonth(report.month);
+    if (!month || !Array.isArray(report.sections)) return;
+    const sections = report.sections.filter(isRecord).flatMap((section) => {
+      const id = asString(section.id);
+      if (!sectionIds.has(id) || !isRecord(section.metrics)
+        || !isRecord(section.metricFormats) || !Array.isArray(section.actions)) return [];
+      const metrics = Object.fromEntries(Object.entries(section.metrics).flatMap(([key, metric]) => {
+        const value = asOptionalNumber(metric);
+        return value === undefined ? [] : [[key.slice(0, 120), value]];
+      }));
+      const rawMetricFormats = section.metricFormats as Record<string, unknown>;
+      const metricFormats = Object.fromEntries(Object.keys(metrics).map((key) => {
+        const rawFormat = asString(rawMetricFormats[key]);
+        const format = ["currency", "percent", "count", "number"].includes(rawFormat)
+          ? rawFormat
+          : "number";
+        return [key, format];
+      }));
+      const unavailableMetrics = Array.isArray(section.unavailableMetrics)
+        ? [...new Set(section.unavailableMetrics
+            .filter((metric): metric is string => typeof metric === "string" && !(metric in metrics))
+            .map((metric) => metric.slice(0, 120)))]
+        : [];
+      return [{
+        id,
+        title: asString(section.title).slice(0, 160),
+        metrics,
+        metricFormats,
+        ...(unavailableMetrics.length > 0 ? { unavailableMetrics } : {}),
+        actions: section.actions
+          .filter((action): action is string => typeof action === "string")
+          .map((action) => action.slice(0, 500)),
+      }];
+    });
+    if (sections.length !== 8 || new Set(sections.map((section) => section.id)).size !== 8) return;
+    const rawForecast = isRecord(report.retirementForecast) ? report.retirementForecast : undefined;
+    const rawAssumptions = rawForecast && isRecord(rawForecast.assumptions)
+      ? rawForecast.assumptions
+      : undefined;
+    const retirementForecast = rawForecast && rawAssumptions
+      && /^\d{4}-\d{2}-\d{2}$/.test(asString(rawForecast.asOfDate))
+      ? {
+          projectedRetirementMonth: rawForecast.projectedRetirementMonth === null
+            ? null
+            : normalizeMonth(rawForecast.projectedRetirementMonth) ?? null,
+          projectedRetirementAge: rawForecast.projectedRetirementAge === null
+            ? null
+            : asOptionalNumber(rawForecast.projectedRetirementAge) ?? null,
+          asOfDate: asString(rawForecast.asOfDate),
+          modelVersion: asOptionalNumber(rawForecast.modelVersion),
+          assumptions: {
+            targetRetirementAge: asNumber(rawAssumptions.targetRetirementAge),
+            lifeExpectancy: asNumber(rawAssumptions.lifeExpectancy),
+            generalInflation: asNumber(rawAssumptions.generalInflation),
+            salaryGrowth: asNumber(rawAssumptions.salaryGrowth),
+            monthlyContribution: asNumber(rawAssumptions.monthlyContribution),
+            monthlySpending: asNumber(rawAssumptions.monthlySpending),
+            portfolioValue: asNumber(rawAssumptions.portfolioValue),
+            investedPrincipal: asOptionalNumber(rawAssumptions.investedPrincipal),
+            portfolioReturnAmount: asOptionalNumber(rawAssumptions.portfolioReturnAmount),
+            expectedReturn: asNumber(rawAssumptions.expectedReturn),
+          },
+          ...(isRecord(rawForecast.projectionInputs) ? {
+            projectionInputs: {
+              expenses: asArray(rawForecast.projectionInputs.expenses).filter(isRecord),
+              budgets: asArray(rawForecast.projectionInputs.budgets).filter(isRecord),
+              incomes: asArray(rawForecast.projectionInputs.incomes).filter(isRecord),
+              investments: asArray(rawForecast.projectionInputs.investments).filter(isRecord),
+              loans: asArray(rawForecast.projectionInputs.loans).filter(isRecord),
+              plannedExpenses: asArray(rawForecast.projectionInputs.plannedExpenses).filter(isRecord),
+              emergencyFund: isRecord(rawForecast.projectionInputs.emergencyFund)
+                ? rawForecast.projectionInputs.emergencyFund
+                : {},
+              assumptions: isRecord(rawForecast.projectionInputs.assumptions)
+                ? rawForecast.projectionInputs.assumptions
+                : {},
+            },
+          } : {}),
+          drivers: asArray(rawForecast.drivers)
+            .filter((driver): driver is string => typeof driver === "string")
+            .slice(0, 4)
+            .map((driver) => driver.slice(0, 500)),
+        }
+      : undefined;
+    byMonth.set(month, {
+      id: asString(report.id).trim() || `monthly-report-${month}`,
+      month,
+      generatedAt: timestamp(report.generatedAt),
+      ...(retirementForecast ? { retirementForecast } : {}),
+      sections,
+    });
+  });
+  return [...byMonth.values()].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 120);
+}
+
+function normalizeLifestyle(value: unknown) {
+  return value === "Basic" || value === "Comfortable" || value === "Premium" || value === "Custom"
+    ? value
+    : undefined;
+}
+
+function normalizePensionSources(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).flatMap((source, index) => {
+    const name = asString(source.name).trim();
+    const monthlyAmount = asOptionalNonNegativeNumber(source.monthlyAmount ?? source.amount);
+    if (!name || monthlyAmount === undefined) return [];
+    const startAge = asOptionalNonNegativeNumber(source.startAge);
+    return [omitEmpty({
+      id: asString(source.id).trim() || `pension-${index + 1}`,
+      name,
+      monthlyAmount,
+      startAge: startAge === undefined ? undefined : Math.round(startAge),
+      annualEscalationRate:
+        asOptionalNonNegativeNumber(source.annualEscalationRate ?? source.escalationRate) ?? 0,
+    })];
+  });
+}
+
 const investmentSortKeys = new Set(["manual", "invested", "current", "gain", "projected"]);
 const loanSortKeys = new Set(["manual", "outstanding", "emi", "remaining", "interest"]);
 const incomeSortKeys = new Set(["manual", "monthly", "annual", "growth"]);
@@ -159,6 +773,7 @@ export function normalizeUiPreferences(value: unknown): FinancialDataResponse["u
     investmentSort: asSortChoice(record.investmentSort, investmentSortKeys),
     loanSort: asSortChoice(record.loanSort, loanSortKeys),
     incomeSort: asSortChoice(record.incomeSort, incomeSortKeys),
+    dashboardTourDismissed: asBoolean(record.dashboardTourDismissed),
   };
 }
 
@@ -298,6 +913,7 @@ type InvestmentRow = Omit<
   "userId" | "accountId" | "updatedAt"
 >;
 type IncomeRow = Omit<typeof incomeSourcesTable.$inferSelect, "userId" | "accountId" | "updatedAt">;
+type IncomeReceiptRow = Omit<typeof incomeReceiptsTable.$inferSelect, "userId" | "updatedAt">;
 type SalaryRow = typeof salaryDetailsTable.$inferSelect;
 type ExpenseRow = Omit<typeof expensesTable.$inferSelect, "userId" | "accountId" | "updatedAt">;
 type BudgetRow = Pick<typeof budgetsTable.$inferSelect, "id" | "category" | "monthlyLimit" | "details">;
@@ -364,10 +980,24 @@ function budgetSchedules(value: unknown): StoredBudgetSchedule[] {
       ? normalizeMonth(schedule.endMonth ?? schedule.endDate)
       : undefined;
     if (endMode === "custom" && (!endMonth || endMonth < startMonth)) return [];
+    const cadence = schedule.cadence === "quarterly"
+      || schedule.cadence === "half-yearly"
+      || schedule.cadence === "yearly"
+      || schedule.cadence === "one-time"
+      ? schedule.cadence
+      : "monthly";
+    const annualMonth = schedule.annualMonth;
+    if (cadence === "yearly"
+      && (typeof annualMonth !== "number"
+        || !Number.isInteger(annualMonth)
+        || annualMonth < 0
+        || annualMonth > 11)) return [];
     const normalized: StoredBudgetSchedule = {
       id: rowId(schedule.id),
       amount: Math.max(0, asNumber(schedule.amount ?? schedule.monthlyLimit)),
       startMonth,
+      ...(cadence !== "monthly" ? { cadence } : {}),
+      ...(cadence === "yearly" ? { annualMonth: annualMonth as number } : {}),
       endMode,
       ...(endMonth ? { endMonth } : {}),
       ...(asString(schedule.note).trim() ? { note: asString(schedule.note).trim() } : {}),
@@ -398,6 +1028,8 @@ function budgetFromRow(row: BudgetRow) {
         startDate: schedule.startMonth === legacyBudgetStartMonth
           ? undefined
           : `${schedule.startMonth}-01`,
+        cadence: schedule.cadence,
+        annualMonth: schedule.annualMonth,
         endMode: schedule.endMode,
         endDate: schedule.endMonth ? `${schedule.endMonth}-01` : undefined,
         note: schedule.note,
@@ -461,7 +1093,7 @@ function incomeFromRows(source: IncomeRow, salary: SalaryRow | undefined) {
 }
 
 type StoredRows = {
-  profile: Pick<typeof userProfilesTable.$inferSelect, "riskPreference" | "uiPreferences"> | undefined;
+  profile: Pick<typeof userProfilesTable.$inferSelect, "riskPreference" | "uiPreferences" | "planningData"> | undefined;
   plan:
     | Pick<
         typeof retirementPlansTable.$inferSelect,
@@ -476,6 +1108,7 @@ type StoredRows = {
   expenses: ExpenseRow[];
   budgets: BudgetRow[];
   incomeSources: IncomeRow[];
+  incomeReceipts: IncomeReceiptRow[];
   salary: SalaryRow[];
   investments: InvestmentRow[];
   loans: LoanRow[];
@@ -490,7 +1123,8 @@ function buildFinancialData(
   user: typeof usersTable.$inferSelect,
   rows: StoredRows,
 ): FinancialDataResponse {
-  const { profile, plan, expenses, budgets, incomeSources, investments, loans } = rows;
+  const { profile, plan, expenses, budgets, incomeSources, incomeReceipts, investments, loans } = rows;
+  const planningData = isRecord(profile?.planningData) ? profile.planningData : {};
   const salaryBySource = new Map(rows.salary.map((row) => [row.incomeSourceId, row]));
 
   const dateOfBirth = user.dateOfBirth ?? defaultDateOfBirth();
@@ -518,6 +1152,14 @@ function buildFinancialData(
     incomeSources: incomeSources.map((source) =>
       incomeFromRows(source, salaryBySource.get(source.id)),
     ),
+    incomeReceipts: incomeReceipts.map((receipt) => omitEmpty({
+      id: receipt.id,
+      incomeSourceId: receipt.incomeSourceId,
+      receivedDate: receipt.receivedDate,
+      amount: asNumber(receipt.amount),
+      note: receipt.note || undefined,
+      createdAt: receipt.createdAt.toISOString(),
+    })),
     investments: investments.map(investmentFromRow),
     loans: loans.map((row) =>
       omitEmpty({
@@ -531,10 +1173,28 @@ function buildFinancialData(
         totalTenureMonths: row.totalTenureMonths,
         startDate: row.startDate,
         emi: asNumber(row.emi),
+        repaymentType:
+          row.repaymentType === "bullet" || row.repaymentType === "interest-only-plus-bullet"
+            ? row.repaymentType
+            : "emi",
         prepayments: asNumber(row.prepayments),
         notes: row.notes || undefined,
         createdAt: row.createdAt.toISOString(),
       }),
+    ),
+    plannedExpenses: plannedExpenses(planningData.plannedExpenses),
+    netWorthSnapshots: normalizeNetWorthSnapshots(planningData.netWorthSnapshots),
+    emergencyFund: normalizeEmergencyFund(planningData.emergencyFund),
+    goals: normalizeGoals(planningData.goals),
+    reminders: normalizeReminders(planningData.customReminders),
+    notificationPreferences: normalizeNotificationPreferences(planningData.notificationPreferences),
+    notifications: normalizeNotificationState(planningData.notificationState),
+    pushSubscriptions: normalizePushSubscriptions(planningData.pushSubscriptions).map(
+      ({ p256dh: _p256dh, auth: _auth, ...subscription }) => subscription,
+    ),
+    monthlyReports: normalizeMonthlyReports(planningData.monthlyReportSnapshots),
+    monthlyReportEmailFailures: normalizeMonthlyReportEmailFailures(
+      planningData.monthlyReportEmailFailures,
     ),
     retirementInputs: {
       dateOfBirth,
@@ -544,6 +1204,10 @@ function buildFinancialData(
       salaryGrowth: asNumber(plan?.salaryGrowthPct, 8),
       monthlyContributionOverride,
       investSurplus: plan?.investSurplus ?? false,
+      lifestyleChoice: normalizeLifestyle(planningData.lifestyleChoice),
+      customLifestyleExpense: asOptionalNonNegativeNumber(planningData.customLifestyleExpense),
+      retirementSpendingAdjustmentPercent: asNumber(planningData.retirementSpendingAdjustmentPercent, 0),
+      pensionSources: normalizePensionSources(planningData.pensionSources),
     },
     profileInputs: {
       fullName: user.fullName ?? undefined,
@@ -551,6 +1215,7 @@ function buildFinancialData(
       email: user.email ?? undefined,
       phone: user.phone ?? undefined,
       onboardingCompleted: user.onboardingCompleted,
+      onboardingProgress: onboardingProgress(planningData.onboardingProgress),
       dateOfBirth,
       targetRetirementAge,
       lifeExpectancy,
@@ -563,13 +1228,14 @@ function buildFinancialData(
 export async function loadFinancialData(
   user: typeof usersTable.$inferSelect,
 ): Promise<FinancialDataResponse> {
-  const [profile, plan, expenses, budgets, incomeSources, investments, loans] =
+  const [profile, plan, expenses, budgets, incomeSources, incomeReceipts, investments, loans] =
     await Promise.all([
       db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, user.id)).limit(1),
       db.select().from(retirementPlansTable).where(eq(retirementPlansTable.userId, user.id)).limit(1),
       db.select().from(expensesTable).where(eq(expensesTable.userId, user.id)),
       db.select().from(budgetsTable).where(eq(budgetsTable.userId, user.id)),
       db.select().from(incomeSourcesTable).where(eq(incomeSourcesTable.userId, user.id)),
+      db.select().from(incomeReceiptsTable).where(eq(incomeReceiptsTable.userId, user.id)),
       db.select().from(investmentsTable).where(eq(investmentsTable.userId, user.id)),
       db.select().from(loansTable).where(eq(loansTable.userId, user.id)),
     ]);
@@ -593,21 +1259,397 @@ export async function loadFinancialData(
     expenses,
     budgets,
     incomeSources,
+    incomeReceipts,
     salary,
     investments,
     loans,
   });
 }
 
+type FinancialTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function loadFinancialDataInTransaction(
+  tx: FinancialTransaction,
+  user: typeof usersTable.$inferSelect,
+): Promise<FinancialDataResponse> {
+  const profile = await tx.select().from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, user.id)).limit(1);
+  const plan = await tx.select().from(retirementPlansTable)
+    .where(eq(retirementPlansTable.userId, user.id)).limit(1);
+  const expenses = await tx.select().from(expensesTable)
+    .where(eq(expensesTable.userId, user.id));
+  const budgets = await tx.select().from(budgetsTable)
+    .where(eq(budgetsTable.userId, user.id));
+  const incomeSources = await tx.select().from(incomeSourcesTable)
+    .where(eq(incomeSourcesTable.userId, user.id));
+  const incomeReceipts = await tx.select().from(incomeReceiptsTable)
+    .where(eq(incomeReceiptsTable.userId, user.id));
+  const investments = await tx.select().from(investmentsTable)
+    .where(eq(investmentsTable.userId, user.id));
+  const loans = await tx.select().from(loansTable)
+    .where(eq(loansTable.userId, user.id));
+  const salary = incomeSources.length === 0 ? [] : await tx.select()
+    .from(salaryDetailsTable).where(inArray(
+      salaryDetailsTable.incomeSourceId,
+      incomeSources.map((source) => source.id),
+    ));
+  return buildFinancialData(user, {
+    profile: profile[0], plan: plan[0], expenses, budgets, incomeSources,
+    incomeReceipts, salary, investments, loans,
+  });
+}
+
+export async function captureCanonicalAdmissionBaseline(
+  tx: FinancialTransaction,
+  user: typeof usersTable.$inferSelect,
+): Promise<number> {
+  return Buffer.byteLength(JSON.stringify(
+    financialSaveMutationDocument(await loadFinancialDataInTransaction(tx, user)),
+  ));
+}
+
+export async function assertCanonicalMutationAdmission(
+  tx: FinancialTransaction,
+  user: typeof usersTable.$inferSelect,
+  baselineBytes: number,
+  admissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
+): Promise<void> {
+  const resultingBytes = Buffer.byteLength(JSON.stringify(
+    financialSaveMutationDocument(await loadFinancialDataInTransaction(tx, user)),
+  ));
+  if (resultingBytes > admissionLimit && resultingBytes > baselineBytes) {
+    throw new FinancialSaveSizeLimitError(resultingBytes, admissionLimit);
+  }
+}
+
+/** Internal delivery path only; public financial-data responses intentionally redact these keys. */
+export async function loadPushSubscriptionsForUser(userId: string) {
+  const [profile] = await db.select({ planningData: userProfilesTable.planningData })
+    .from(userProfilesTable).where(eq(userProfilesTable.userId, userId)).limit(1);
+  return normalizePushSubscriptions(profile?.planningData?.pushSubscriptions);
+}
+
+export async function loadMonthlyReportEmailDeliveriesForUser(userId: string) {
+  const [profile] = await db.select({ planningData: userProfilesTable.planningData })
+    .from(userProfilesTable).where(eq(userProfilesTable.userId, userId)).limit(1);
+  const value = (profile?.planningData as PlanningDataWithReportDelivery | undefined)
+    ?.monthlyReportEmailDeliveries;
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value).flatMap(([month, deliveredAt]) => {
+    const normalizedMonth = normalizeMonth(month);
+    return normalizedMonth && typeof deliveredAt === "string"
+      ? [[normalizedMonth, timestamp(deliveredAt)]]
+      : [];
+  }));
+}
+
+function normalizeMonthlyReportEmailFailures(value: unknown): FinancialDataResponse["monthlyReportEmailFailures"] {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value).flatMap(([month, failure]) => {
+    const normalizedMonth = normalizeMonth(month);
+    if (!normalizedMonth || !isRecord(failure)) return [];
+    const category = failure.category;
+    if (category !== "report_too_large" && category !== "email_unavailable" && category !== "temporary") return [];
+    const failedAt = timestamp(failure.failedAt);
+    return [[normalizedMonth, { category, failedAt }]];
+  }));
+}
+
 export class PlanningCategoryConflictError extends Error {}
+
+/**
+ * Raised rather than silently trimming a goal allocation.  A client can use
+ * the figures to explain the conflict and, importantly, a stale client cannot
+ * commit more of the account's cash flow than is available.
+ */
+export class GoalAllocationConflictError extends Error {
+  readonly code = "GOAL_ALLOCATION_EXCEEDS_SURPLUS";
+
+  constructor(
+    readonly allocated: number,
+    readonly available: number,
+  ) {
+    super(`Goal allocations of ${allocated.toFixed(2)} exceed confirmed monthly surplus of ${available.toFixed(2)}`);
+    this.name = "GoalAllocationConflictError";
+  }
+}
+
+type CashFlowRow = {
+  id?: unknown;
+  name?: unknown;
+  amount?: unknown;
+  date?: unknown;
+  loanId?: unknown;
+  linkedLoanId?: unknown;
+  reimbursable?: unknown;
+  merchant?: unknown;
+  note?: unknown;
+  frequency?: unknown;
+  recurring?: unknown;
+  incomeEndMode?: unknown;
+  incomeEndDate?: unknown;
+  type?: unknown;
+  salaryDetails?: unknown;
+  monthlyLimit?: unknown;
+  windows?: unknown;
+  details?: unknown;
+  emi?: unknown;
+  startDate?: unknown;
+  totalTenureMonths?: unknown;
+  repaymentType?: unknown;
+  annualInterestRate?: unknown;
+  outstandingPrincipal?: unknown;
+  monthlyContribution?: unknown;
+  contributionStartDate?: unknown;
+  contributionEndMode?: unknown;
+  contributionEndDate?: unknown;
+  autoManagedContribution?: unknown;
+  linkedIncomeSourceId?: unknown;
+};
+
+function budgetHasEffectivePlan(row: CashFlowRow): boolean {
+  const details = isRecord(row.details) ? row.details : {};
+  const windows = Array.isArray(row.windows)
+    ? row.windows
+    : Array.isArray(details.schedules)
+      ? details.schedules
+      : [];
+  if (windows.length === 0) return Math.max(0, asNumber(row.monthlyLimit)) > 0;
+  return windows.filter(isRecord).some((window) =>
+    Math.max(0, asNumber(window.monthlyLimit ?? window.amount)) > 0);
+}
+
+function loanExpenseText(value: unknown): string {
+  return asString(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function isLivingCostExpense(
+  expense: CashFlowRow,
+  loans: CashFlowRow[],
+  currentMonth: string,
+  currentDate: string,
+  asOf: Date,
+): boolean {
+  const amount = Math.max(0, asNumber(expense.amount));
+  if (amount <= 0 || expense.reimbursable === true || expense.loanId || expense.linkedLoanId) return false;
+  const text = loanExpenseText(`${asString(expense.merchant)} ${asString(expense.note)}`);
+  return !loans.some((loan) => {
+    const payment = loanPaymentForMonth(loan, currentMonth, currentDate, asOf);
+    if (payment <= 0 || Math.abs(amount - payment) > Math.max(1, payment * 0.01)) return false;
+    const name = loanExpenseText(loan.name);
+    const type = loanExpenseText(loan.type);
+    return /\b(emi|loan|mortgage)\b/.test(text)
+      || (name.length >= 3 && text.includes(name))
+      || (type.length >= 4 && text.includes(type));
+  });
+}
+
+/**
+ * Matches the Goals screen's living-cost fallback: average up to three
+ * completed calendar months with observed spend, or normalize the current
+ * partial month when no completed history exists.
+ */
+function actualMonthlyLivingCost(
+  expenses: CashFlowRow[],
+  loans: CashFlowRow[],
+  asOf: Date,
+): number {
+  const monthKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonth = monthKey(asOf);
+  const currentDate = `${currentMonth}-${String(asOf.getDate()).padStart(2, "0")}`;
+  const ordinary = expenses.flatMap((row) => {
+    const date = new Date(asString(row.date));
+    return Number.isFinite(date.getTime()) && date <= asOf
+      && isLivingCostExpense(row, loans, currentMonth, currentDate, asOf)
+      ? [{ row, date }]
+      : [];
+  });
+  if (ordinary.length === 0) return 0;
+  const completed: number[] = [];
+  for (let offset = -3; offset <= -1; offset += 1) {
+    const month = new Date(asOf.getFullYear(), asOf.getMonth() + offset, 1);
+    const key = monthKey(month);
+    const total = ordinary
+      .filter((expense) => monthKey(expense.date) === key)
+      .reduce((sum, expense) => sum + Math.max(0, asNumber(expense.row.amount)), 0);
+    if (total > 0) completed.push(total);
+  }
+  if (completed.length > 0) {
+    return completed.reduce((sum, total) => sum + total, 0) / completed.length;
+  }
+  const currentTotal = ordinary
+    .filter((expense) => monthKey(expense.date) === currentMonth)
+    .reduce((sum, expense) => sum + Math.max(0, asNumber(expense.row.amount)), 0);
+  const daysInMonth = new Date(asOf.getFullYear(), asOf.getMonth() + 1, 0).getDate();
+  const elapsedDays = Math.max(1, Math.min(daysInMonth, asOf.getDate()));
+  return Math.max(currentTotal, currentTotal * daysInMonth / elapsedDays);
+}
+
+function monthlyNetIncome(source: CashFlowRow, month: string, currentDate: string): number {
+  if (source.recurring === false || source.frequency !== "Monthly") return 0;
+  const start = normalizeMonth(source.date);
+  const end = normalizeMonth(source.incomeEndDate);
+  const startDate = asString(source.date).slice(0, 10);
+  if ((/^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate > currentDate)
+    || (start && start > month)
+    || (source.incomeEndMode === "custom" && end && end < month)) return 0;
+  const details = isRecord(source.salaryDetails) ? source.salaryDetails : undefined;
+  if (source.type !== "Salary" || !details) return Math.max(0, asNumber(source.amount));
+  return Math.max(0,
+    asNumber(details.basicPay) + asNumber(details.hra) + asNumber(details.allowances)
+      - asNumber(details.employeePF ?? details.employeePf) - asNumber(details.professionalTax)
+      - asNumber(details.tds) - asNumber(details.otherDeductions),
+  );
+}
+
+function investmentContributionForMonth(row: CashFlowRow, month: string, currentDate: string) {
+  const start = normalizeMonth(row.contributionStartDate);
+  const end = normalizeMonth(row.contributionEndDate);
+  const startDate = asString(row.contributionStartDate).slice(0, 10);
+  if ((/^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate > currentDate)
+    || (start && start > month)
+    || (row.contributionEndMode === "custom" && end && end < month)) return 0;
+  return Math.max(0, asNumber(row.monthlyContribution));
+}
+
+function loanPaymentForMonth(
+  row: CashFlowRow,
+  month: string,
+  currentDate = `${month}-01`,
+  asOf = new Date(`${currentDate}T00:00:00`),
+) {
+  if (asNumber(row.outstandingPrincipal) <= 0) return 0;
+  const start = normalizeMonth(row.startDate);
+  const startDate = asString(row.startDate).slice(0, 10);
+  if ((/^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate > currentDate)
+    || (start && start > month)) return 0;
+  const principal = Math.max(0, asNumber(row.outstandingPrincipal));
+  const emi = Math.max(0, asNumber(row.emi));
+  const monthlyRate = Math.max(0, asNumber(row.annualInterestRate)) / 1200;
+  const repaymentType = row.repaymentType ?? "emi";
+  if (repaymentType === "emi" && emi <= 0) return 0;
+  const startInstant = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    ? new Date(`${startDate}T00:00:00`)
+    : undefined;
+  const elapsed = startInstant
+    ? Math.max(0, Math.floor((asOf.getTime() - startInstant.getTime()) / (30.4375 * 86_400_000)))
+    : 0;
+  const fallbackMonths = Math.max(
+    1,
+    Math.min(1200, Math.ceil(Math.max(1, asNumber(row.totalTenureMonths)) - elapsed)),
+  );
+  let remainingMonths = fallbackMonths;
+  if (repaymentType === "emi" && monthlyRate === 0) {
+    remainingMonths = Math.max(1, Math.min(1200, Math.ceil(principal / emi)));
+  } else if (repaymentType === "emi" && emi > principal * monthlyRate) {
+    const calculated = Math.ceil(-Math.log(1 - principal * monthlyRate / emi) / Math.log(1 + monthlyRate));
+    if (Number.isFinite(calculated) && calculated > 0) remainingMonths = Math.min(1200, calculated);
+  }
+  if (row.repaymentType === "bullet") {
+    return remainingMonths === 1
+      ? principal + principal * monthlyRate
+      : 0;
+  }
+  if (row.repaymentType === "interest-only-plus-bullet") {
+    return principal * monthlyRate + (remainingMonths === 1 ? principal : 0);
+  }
+  return emi;
+}
+
+function budgetAmountForMonth(row: CashFlowRow, month: string): number {
+  const details = isRecord(row.details) ? row.details : {};
+  const rawWindows = Array.isArray(row.windows)
+    ? row.windows
+    : Array.isArray(details.schedules)
+      ? details.schedules
+      : [];
+  if (rawWindows.length === 0) return Math.max(0, asNumber(row.monthlyLimit));
+  const targetIndex = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1;
+  return rawWindows.filter(isRecord).reduce((total, window) => {
+    const start = normalizeMonth(window.startDate ?? window.startMonth) ?? "1900-01";
+    const end = normalizeMonth(window.endDate ?? window.endMonth);
+    if (month < start || (window.endMode === "custom" && end && month > end)) return total;
+    const startIndex = Number(start.slice(0, 4)) * 12 + Number(start.slice(5, 7)) - 1;
+    const elapsed = targetIndex - startIndex;
+    const cadence = asString(window.cadence, "monthly");
+    const occurs = cadence === "monthly"
+      || (cadence === "quarterly" && elapsed >= 0 && elapsed % 3 === 0)
+      || (cadence === "half-yearly" && elapsed >= 0 && elapsed % 6 === 0)
+      || (cadence === "one-time" && elapsed === 0)
+      || (cadence === "yearly" && Number(window.annualMonth) === Number(month.slice(5, 7)) - 1);
+    return occurs ? total + Math.max(0, asNumber(window.monthlyLimit ?? window.amount)) : total;
+  }, 0);
+}
+
+function confirmedMonthlySurplus(input: {
+  income: CashFlowRow[];
+  budgets: CashFlowRow[];
+  expenses: CashFlowRow[];
+  loans: CashFlowRow[];
+  investments: CashFlowRow[];
+  emergencyFund?: unknown;
+}): number {
+  const asOf = new Date();
+  const currentMonth = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, "0")}`;
+  const currentDate = `${currentMonth}-${String(asOf.getDate()).padStart(2, "0")}`;
+  const income = input.income.reduce(
+    (total, row) => total + monthlyNetIncome(row, currentMonth, currentDate), 0,
+  );
+  // Match the Goals projection: any effective budget plan owns the baseline,
+  // even when its schedule has no occurrence this month. Without a plan, use
+  // the same observed-month average as the browser rather than summing history.
+  const budgetTotal = input.budgets.reduce((total, row) => total + budgetAmountForMonth(row, currentMonth), 0);
+  const livingCosts = input.budgets.some(budgetHasEffectivePlan)
+    ? budgetTotal
+    : actualMonthlyLivingCost(input.expenses, input.loans, asOf);
+  const emi = input.loans.reduce(
+    (total, row) => total + loanPaymentForMonth(row, currentMonth, currentDate, asOf), 0,
+  );
+  const existingSips = input.investments.reduce(
+    (total, row) => total + (
+      row.autoManagedContribution === true && Boolean(row.linkedIncomeSourceId)
+        ? 0
+        : investmentContributionForMonth(row, currentMonth, currentDate)
+    ), 0,
+  );
+  const emergencyPlan = normalizeEmergencyFund(input.emergencyFund);
+  const emergencyTarget = livingCosts * emergencyPlan.targetMonths;
+  const emergency = emergencyPlan.reserveBalance >= emergencyTarget
+    ? 0
+    : Math.min(emergencyPlan.monthlyContribution, emergencyTarget - emergencyPlan.reserveBalance);
+  return Math.max(0, income - livingCosts - emi - existingSips - emergency);
+}
+
+function assertGoalAllocationsWithinSurplus(
+  goals: NonNullable<StoredPlanningData["goals"]>,
+  cashFlow: Parameters<typeof confirmedMonthlySurplus>[0],
+) {
+  // A brand-new account has not confirmed a monthly cash-flow baseline yet.
+  // Do not manufacture a zero-surplus fact from an empty ledger; as soon as
+  // any monthly fact exists, the persisted values above are authoritative.
+  if (
+    cashFlow.income.length === 0 && cashFlow.budgets.length === 0
+    && cashFlow.expenses.length === 0 && cashFlow.loans.length === 0
+    && cashFlow.investments.length === 0
+  ) return;
+  const allocated = goals.reduce((total, goal) => total + goal.monthlyAllocation, 0);
+  const available = confirmedMonthlySurplus(cashFlow);
+  // Currency is stored at two decimal places; do not reject a harmless binary
+  // floating-point fraction.
+  if (allocated > available + 0.005) throw new GoalAllocationConflictError(allocated, available);
+}
 
 export async function managePlanningCategory(
   user: typeof usersTable.$inferSelect,
   category: string,
   action: "archive" | "rename" | "restore",
   nextCategory?: string,
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
 ): Promise<FinancialDataResponse> {
   await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
     const [budgetRows, profileRows] = await Promise.all([
       tx.select().from(budgetsTable).where(eq(budgetsTable.userId, user.id)),
       tx.select().from(userProfilesTable).where(eq(userProfilesTable.userId, user.id)).limit(1),
@@ -685,6 +1727,398 @@ export async function managePlanningCategory(
         uiPreferences: nextUiPreferences,
       });
     }
+    await assertCanonicalMutationAdmission(
+      tx, user, admissionBaseline, financialDocumentAdmissionLimit,
+    );
+  });
+
+  return loadFinancialData(user);
+}
+
+export async function updateFinancialHealthPlanning(
+  user: typeof usersTable.$inferSelect,
+  update: {
+    emergencyFund?: unknown;
+    netWorthSnapshot?: unknown;
+  },
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
+): Promise<FinancialDataResponse> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    await tx
+      .insert(userProfilesTable)
+      .values({ userId: user.id })
+      .onConflictDoNothing();
+    await tx.execute(sql`
+      select user_id from user_profiles where user_id = ${user.id} for update
+    `);
+    const [profile] = await tx
+      .select()
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.userId, user.id))
+      .limit(1);
+    const current = isRecord(profile?.planningData) ? profile.planningData : {};
+    const nextSnapshots = update.netWorthSnapshot === undefined
+      ? normalizeNetWorthSnapshots(current.netWorthSnapshots)
+      : normalizeNetWorthSnapshots([
+        ...asArray(current.netWorthSnapshots),
+        update.netWorthSnapshot,
+      ]);
+    const nextPlanningData = {
+      ...current,
+      netWorthSnapshots: nextSnapshots,
+      emergencyFund: update.emergencyFund === undefined
+        ? normalizeEmergencyFund(current.emergencyFund)
+        : normalizeEmergencyFund(update.emergencyFund),
+    };
+
+    await tx
+      .update(userProfilesTable)
+      .set({ planningData: nextPlanningData, updatedAt: new Date() })
+      .where(eq(userProfilesTable.userId, user.id));
+    await assertCanonicalMutationAdmission(
+      tx, user, admissionBaseline, financialDocumentAdmissionLimit,
+    );
+  });
+
+  return loadFinancialData(user);
+}
+
+type PlanningFeaturesUpdate = {
+  goals?: unknown;
+  customReminders?: unknown;
+  notificationPreferences?: unknown;
+  notification?: unknown;
+  notificationStateUpdate?: { id: string; read?: boolean; dismissed?: boolean };
+  pushDeliveredNotificationId?: string;
+  pushSubscription?: unknown;
+  removePushEndpoint?: string;
+  monthlyReportSnapshot?: unknown;
+  monthlyReportEmailDeliveredMonth?: string;
+  monthlyReportEmailClearFailureMonth?: string;
+  monthlyReportEmailFailure?: {
+    month: string;
+    category: MonthlyReportEmailFailureCategory;
+    failedAt?: string;
+  };
+};
+
+export async function updatePlanningFeatures(
+  user: typeof usersTable.$inferSelect,
+  update: PlanningFeaturesUpdate,
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
+): Promise<FinancialDataResponse> {
+  let notificationFound = true;
+  const incomingPushSubscription = update.pushSubscription === undefined
+    ? undefined
+    : normalizePushSubscriptions([update.pushSubscription])[0];
+  await db.transaction(async (tx) => {
+    if (incomingPushSubscription) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${incomingPushSubscription.endpoint}))`);
+    }
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    await tx.insert(userProfilesTable).values({ userId: user.id }).onConflictDoNothing();
+    await tx.execute(sql`select user_id from user_profiles where user_id = ${user.id} for update`);
+    const [profile] = await tx
+      .select()
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.userId, user.id))
+      .limit(1);
+    const current = (isRecord(profile?.planningData) ? profile.planningData : {}) as PlanningDataWithReportDelivery;
+    const next: PlanningDataWithReportDelivery = { ...current };
+
+    if (update.goals !== undefined) {
+      const goals = normalizeGoals(update.goals);
+      const previousGoals = normalizeGoals(current.goals);
+      const previousCommitment = previousGoals.reduce(
+        (sum, goal) => sum + goal.monthlyAllocation, 0,
+      );
+      const nextCommitment = goals.reduce((sum, goal) => sum + goal.monthlyAllocation, 0);
+      const [income, budgets, expenses, loans, investments] = await Promise.all([
+        tx.select().from(incomeSourcesTable).where(eq(incomeSourcesTable.userId, user.id)),
+        tx.select().from(budgetsTable).where(eq(budgetsTable.userId, user.id)),
+        tx.select().from(expensesTable).where(eq(expensesTable.userId, user.id)),
+        tx.select().from(loansTable).where(eq(loansTable.userId, user.id)),
+        tx.select().from(investmentsTable).where(eq(investmentsTable.userId, user.id)),
+      ]);
+      const salary = income.length === 0 ? [] : await tx.select().from(salaryDetailsTable).where(
+        inArray(salaryDetailsTable.incomeSourceId, income.map((source) => source.id)),
+      );
+      const salaryByIncome = new Map(salary.map((row) => [row.incomeSourceId, row]));
+      if (nextCommitment > previousCommitment + 0.005) {
+        assertGoalAllocationsWithinSurplus(goals, {
+          income: income.map((row) => ({ ...row, salaryDetails: salaryByIncome.get(row.id) })),
+          budgets,
+          expenses,
+          loans,
+          investments,
+          emergencyFund: current.emergencyFund,
+        });
+      }
+      next.goals = goals;
+    }
+    if (update.customReminders !== undefined) {
+      next.customReminders = normalizeReminders(update.customReminders);
+    }
+    if (update.notificationPreferences !== undefined) {
+      next.notificationPreferences = normalizeNotificationPreferences(update.notificationPreferences);
+    }
+    if (update.notification !== undefined) {
+      const existing = normalizeNotificationState(current.notificationState);
+      const candidate = normalizeNotificationState([update.notification])[0];
+      next.notificationState = candidate && !existing.some((item) => item.dedupeKey === candidate.dedupeKey)
+        ? normalizeNotificationState([...existing, candidate])
+        : existing;
+    }
+    if (update.notificationStateUpdate) {
+      const now = new Date().toISOString();
+      const existing = normalizeNotificationState(current.notificationState);
+      notificationFound = existing.some((item) => item.id === update.notificationStateUpdate!.id);
+      next.notificationState = existing.map((item) => item.id === update.notificationStateUpdate!.id
+        ? {
+            ...item,
+            ...(update.notificationStateUpdate!.read ? { readAt: item.readAt ?? now } : {}),
+            ...(update.notificationStateUpdate!.dismissed
+              ? { dismissedAt: item.dismissedAt ?? now }
+              : {}),
+          }
+        : item);
+    }
+    if (update.pushDeliveredNotificationId) {
+      const existing = normalizeNotificationState(current.notificationState);
+      next.notificationState = existing.map((item) => item.id === update.pushDeliveredNotificationId
+        ? { ...item, pushDeliveredAt: item.pushDeliveredAt ?? new Date().toISOString() }
+        : item);
+    }
+    if (update.pushSubscription !== undefined) {
+      if (incomingPushSubscription) {
+        const profiles = await tx.select({
+          userId: userProfilesTable.userId,
+          planningData: userProfilesTable.planningData,
+        }).from(userProfilesTable);
+        for (const owner of profiles) {
+          if (owner.userId === user.id) continue;
+          const ownerHasEndpoint = normalizePushSubscriptions(owner.planningData?.pushSubscriptions)
+            .some((item) => item.endpoint === incomingPushSubscription.endpoint);
+          if (!ownerHasEndpoint) continue;
+          await tx.execute(sql`select user_id from user_profiles where user_id = ${owner.userId} for update`);
+          const [lockedOwner] = await tx.select({ planningData: userProfilesTable.planningData })
+            .from(userProfilesTable)
+            .where(eq(userProfilesTable.userId, owner.userId))
+            .limit(1);
+          const ownerPlanning = isRecord(lockedOwner?.planningData) ? lockedOwner.planningData : {};
+          const retained = normalizePushSubscriptions(ownerPlanning.pushSubscriptions)
+            .filter((item) => item.endpoint !== incomingPushSubscription.endpoint);
+          if (retained.length !== normalizePushSubscriptions(ownerPlanning.pushSubscriptions).length) {
+            await tx.update(userProfilesTable)
+              .set({ planningData: { ...ownerPlanning, pushSubscriptions: retained }, updatedAt: new Date() })
+              .where(eq(userProfilesTable.userId, owner.userId));
+          }
+        }
+      }
+      next.pushSubscriptions = normalizePushSubscriptions([
+        ...asArray(current.pushSubscriptions),
+        ...(incomingPushSubscription ? [incomingPushSubscription] : []),
+      ]);
+    }
+    if (update.removePushEndpoint !== undefined) {
+      next.pushSubscriptions = normalizePushSubscriptions(current.pushSubscriptions)
+        .filter((item) => item.endpoint !== update.removePushEndpoint);
+    }
+    if (update.monthlyReportSnapshot !== undefined) {
+      const existing = normalizeMonthlyReports(current.monthlyReportSnapshots);
+      const candidate = normalizeMonthlyReports([update.monthlyReportSnapshot])[0];
+      const prior = candidate ? existing.find((item) => item.month === candidate.month) : undefined;
+      next.monthlyReportSnapshots = candidate && !prior
+        ? normalizeMonthlyReports([...existing, candidate])
+        : candidate?.retirementForecast && prior && !prior.retirementForecast
+          ? normalizeMonthlyReports(existing.map((item) => item.month === candidate.month ? candidate : item))
+          : existing;
+    }
+    if (normalizeMonth(update.monthlyReportEmailDeliveredMonth)) {
+      const deliveredMonth = normalizeMonth(update.monthlyReportEmailDeliveredMonth)!;
+      next.monthlyReportEmailDeliveries = {
+        ...(isRecord(current.monthlyReportEmailDeliveries) ? current.monthlyReportEmailDeliveries : {}),
+        [deliveredMonth]: new Date().toISOString(),
+      };
+      const failures = normalizeMonthlyReportEmailFailures(current.monthlyReportEmailFailures);
+      delete failures[deliveredMonth];
+      next.monthlyReportEmailFailures = failures;
+    }
+    if (normalizeMonth(update.monthlyReportEmailClearFailureMonth)) {
+      const clearedMonth = normalizeMonth(update.monthlyReportEmailClearFailureMonth)!;
+      const failures = normalizeMonthlyReportEmailFailures(current.monthlyReportEmailFailures);
+      delete failures[clearedMonth];
+      next.monthlyReportEmailFailures = failures;
+    }
+    if (update.monthlyReportEmailFailure && normalizeMonth(update.monthlyReportEmailFailure.month)) {
+      const failureMonth = normalizeMonth(update.monthlyReportEmailFailure.month)!;
+      next.monthlyReportEmailFailures = {
+        ...normalizeMonthlyReportEmailFailures(current.monthlyReportEmailFailures),
+        [failureMonth]: {
+          category: update.monthlyReportEmailFailure.category,
+          failedAt: timestamp(update.monthlyReportEmailFailure.failedAt),
+        },
+      };
+    }
+    const plan = await tx.select().from(retirementPlansTable)
+      .where(eq(retirementPlansTable.userId, user.id)).limit(1);
+    const expenses = await tx.select().from(expensesTable)
+      .where(eq(expensesTable.userId, user.id));
+    const budgets = await tx.select().from(budgetsTable)
+      .where(eq(budgetsTable.userId, user.id));
+    const incomeSources = await tx.select().from(incomeSourcesTable)
+      .where(eq(incomeSourcesTable.userId, user.id));
+    const incomeReceipts = await tx.select().from(incomeReceiptsTable)
+      .where(eq(incomeReceiptsTable.userId, user.id));
+    const investments = await tx.select().from(investmentsTable)
+      .where(eq(investmentsTable.userId, user.id));
+    const loans = await tx.select().from(loansTable)
+      .where(eq(loansTable.userId, user.id));
+    const salary = incomeSources.length === 0
+      ? []
+      : await tx.select().from(salaryDetailsTable).where(inArray(
+        salaryDetailsTable.incomeSourceId,
+        incomeSources.map((source) => source.id),
+      ));
+    const storedRows = {
+      plan: plan[0],
+      expenses,
+      budgets,
+      incomeSources,
+      incomeReceipts,
+      salary,
+      investments,
+      loans,
+    };
+    const currentData = buildFinancialData(user, {
+      ...storedRows,
+      profile: {
+        riskPreference: profile?.riskPreference ?? "Balanced",
+        uiPreferences: profile?.uiPreferences ?? {},
+        planningData: current,
+      },
+    });
+    const nextData = buildFinancialData(user, {
+      ...storedRows,
+      profile: {
+        riskPreference: profile?.riskPreference ?? "Balanced",
+        uiPreferences: profile?.uiPreferences ?? {},
+        planningData: next,
+      },
+    });
+    const currentBytes = Buffer.byteLength(
+      JSON.stringify(financialSaveMutationDocument(currentData)),
+    );
+    const nextBytes = Buffer.byteLength(
+      JSON.stringify(financialSaveMutationDocument(nextData)),
+    );
+    if (nextBytes > financialDocumentAdmissionLimit && nextBytes > currentBytes) {
+      throw new FinancialSaveSizeLimitError(
+        nextBytes,
+        financialDocumentAdmissionLimit,
+      );
+    }
+    await tx
+      .update(userProfilesTable)
+      .set({ planningData: next, updatedAt: new Date() })
+      .where(eq(userProfilesTable.userId, user.id));
+    await assertCanonicalMutationAdmission(
+      tx,
+      user,
+      admissionBaseline,
+      financialDocumentAdmissionLimit,
+    );
+  });
+  if (!notificationFound) throw new NotificationStateNotFoundError();
+  return loadFinancialData(user);
+}
+
+export class NotificationStateNotFoundError extends Error {}
+
+export async function updateRetirementPlanning(
+  user: typeof usersTable.$inferSelect,
+  retirementInputs: Record<string, unknown>,
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
+): Promise<FinancialDataResponse> {
+  const targetRetirementAge = Math.round(asNumber(retirementInputs.targetRetirementAge, 55));
+  const lifeExpectancy = Math.round(asNumber(retirementInputs.lifeExpectancy, 85));
+  const generalInflationPct = money(retirementInputs.generalInflation, 6);
+  const salaryGrowthPct = money(retirementInputs.salaryGrowth, 8);
+  const contributionOverride = optionalMoney(retirementInputs.monthlyContributionOverride);
+  const investSurplus = asBoolean(retirementInputs.investSurplus, false);
+  const lifestyleChoice = normalizeLifestyle(retirementInputs.lifestyleChoice);
+  const customLifestyleExpense = asOptionalNonNegativeNumber(retirementInputs.customLifestyleExpense);
+  const retirementSpendingAdjustmentPercent = Math.max(
+    -90,
+    Math.min(300, asNumber(retirementInputs.retirementSpendingAdjustmentPercent, 0)),
+  );
+  const pensionSources = normalizePensionSources(retirementInputs.pensionSources);
+  const istNow = sql`timezone('Asia/Kolkata', now())`;
+
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    await tx
+      .insert(userProfilesTable)
+      .values({ userId: user.id })
+      .onConflictDoNothing();
+    await tx.execute(sql`
+      select user_id from user_profiles where user_id = ${user.id} for update
+    `);
+    const [profile] = await tx
+      .select()
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.userId, user.id))
+      .limit(1);
+    const current = isRecord(profile?.planningData) ? profile.planningData : {};
+    const nextPlanningData = {
+      ...current,
+      ...(lifestyleChoice ? { lifestyleChoice } : {}),
+      ...(customLifestyleExpense !== undefined ? { customLifestyleExpense } : {}),
+      retirementSpendingAdjustmentPercent,
+      pensionSources,
+    };
+
+    await tx
+      .update(userProfilesTable)
+      .set({ planningData: nextPlanningData, updatedAt: new Date() })
+      .where(eq(userProfilesTable.userId, user.id));
+    await tx.execute(sql`
+      insert into retirement_plans (
+        user_id,
+        target_retirement_age,
+        life_expectancy,
+        general_inflation_pct,
+        salary_growth_pct,
+        monthly_contribution_override,
+        invest_surplus,
+        updated_at
+      )
+      values (
+        ${user.id},
+        ${targetRetirementAge},
+        ${lifeExpectancy},
+        ${generalInflationPct},
+        ${salaryGrowthPct},
+        ${contributionOverride},
+        ${investSurplus},
+        ${istNow}
+      )
+      on conflict (user_id) do update
+        set target_retirement_age = excluded.target_retirement_age,
+            life_expectancy = excluded.life_expectancy,
+            general_inflation_pct = excluded.general_inflation_pct,
+            salary_growth_pct = excluded.salary_growth_pct,
+            monthly_contribution_override = excluded.monthly_contribution_override,
+            invest_surplus = excluded.invest_surplus,
+            updated_at = excluded.updated_at
+    `);
+    await assertCanonicalMutationAdmission(
+      tx, user, admissionBaseline, financialDocumentAdmissionLimit,
+    );
   });
 
   return loadFinancialData(user);
@@ -694,6 +2128,9 @@ export async function saveFinancialData(
   user: typeof usersTable.$inferSelect,
   payload: Record<string, unknown>,
   legacyBlob?: Record<string, unknown>,
+  mode: "save" | "restore" = "save",
+  accountMutation?: FinancialRestoreAccountMutation,
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
 ): Promise<FinancialDataResponse> {
   const profileInputs = isRecord(payload.profileInputs)
     ? payload.profileInputs
@@ -709,8 +2146,37 @@ export async function saveFinancialData(
   const expenses = asArray(payload.expenses ?? legacyBlob?.expenses);
   const budgets = asArray(payload.budgets ?? legacyBlob?.budgets);
   const incomeSources = asArray(payload.incomeSources ?? legacyBlob?.incomeSources);
+  const incomeReceipts = asArray(payload.incomeReceipts ?? legacyBlob?.incomeReceipts);
   const investments = asArray(payload.investments ?? legacyBlob?.investments);
   const loans = asArray(payload.loans ?? legacyBlob?.loans);
+  const normalizedPlannedExpenses = plannedExpenses(payload.plannedExpenses ?? legacyBlob?.plannedExpenses);
+  const normalizedNetWorthSnapshots = normalizeNetWorthSnapshots(
+    payload.netWorthSnapshots ?? legacyBlob?.netWorthSnapshots,
+  );
+  const emergencyFund = normalizeEmergencyFund(
+    payload.emergencyFund ?? legacyBlob?.emergencyFund,
+    { ...(legacyBlob ?? {}), ...payload },
+  );
+  const lifestyleChoice = normalizeLifestyle(
+    retirementInputs.lifestyleChoice ?? payload.lifestyleChoice ?? legacyBlob?.lifestyleChoice,
+  );
+  const customLifestyleExpense = asOptionalNonNegativeNumber(
+    retirementInputs.customLifestyleExpense
+      ?? payload.customLifestyleExpense
+      ?? legacyBlob?.customLifestyleExpense,
+  );
+  const retirementSpendingAdjustmentPercent = Math.max(
+    -90,
+    Math.min(300, asNumber(
+      retirementInputs.retirementSpendingAdjustmentPercent
+        ?? payload.retirementSpendingAdjustmentPercent
+        ?? legacyBlob?.retirementSpendingAdjustmentPercent,
+      0,
+    )),
+  );
+  const pensionSources = normalizePensionSources(
+    retirementInputs.pensionSources ?? payload.pensionSources ?? legacyBlob?.pensionSources,
+  );
 
   const targetRetirementAge = Math.round(
     asNumber(profileInputs.targetRetirementAge ?? retirementInputs.targetRetirementAge, 55),
@@ -720,6 +2186,34 @@ export async function saveFinancialData(
   );
   const riskPreference = asString(profileInputs.riskPreference, "Balanced") || "Balanced";
   const uiPreferences = normalizeUiPreferences(payload.uiPreferences);
+  const progress = onboardingProgress(profileInputs.onboardingProgress);
+  let planningData: PlanningDataWithReportDelivery = {
+    plannedExpenses: normalizedPlannedExpenses,
+    netWorthSnapshots: normalizedNetWorthSnapshots,
+    emergencyFund,
+    ...(lifestyleChoice ? { lifestyleChoice } : {}),
+    ...(customLifestyleExpense !== undefined ? { customLifestyleExpense } : {}),
+    retirementSpendingAdjustmentPercent,
+    pensionSources,
+    goals: normalizeGoals(payload.goals ?? legacyBlob?.goals),
+    customReminders: normalizeReminders(payload.reminders ?? payload.customReminders
+      ?? legacyBlob?.reminders ?? legacyBlob?.customReminders),
+    notificationPreferences: normalizeNotificationPreferences(
+      payload.notificationPreferences ?? legacyBlob?.notificationPreferences,
+    ),
+    notificationState: normalizeNotificationState(
+      payload.notifications ?? payload.notificationState
+        ?? legacyBlob?.notifications ?? legacyBlob?.notificationState,
+    ),
+    pushSubscriptions: normalizePushSubscriptions(
+      payload.pushSubscriptions ?? legacyBlob?.pushSubscriptions,
+    ),
+    monthlyReportSnapshots: normalizeMonthlyReports(
+      payload.monthlyReports ?? payload.monthlyReportSnapshots
+        ?? legacyBlob?.monthlyReports ?? legacyBlob?.monthlyReportSnapshots,
+    ),
+    ...(progress ? { onboardingProgress: progress } : {}),
+  };
 
   const generalInflationPct = money(retirementInputs.generalInflation, 6);
   const salaryGrowthPct = money(retirementInputs.salaryGrowth, 8);
@@ -739,6 +2233,10 @@ export async function saveFinancialData(
     totalTenureMonths: Math.round(asNumber(loan.totalTenureMonths)),
     startDate: asString(loan.startDate),
     emi: money(loan.emi),
+    repaymentType:
+      loan.repaymentType === "bullet" || loan.repaymentType === "interest-only-plus-bullet"
+        ? loan.repaymentType
+        : "emi",
     prepayments: money(loan.prepayments),
     notes: asString(loan.notes),
     createdAt: loan.createdAt ? new Date(asString(loan.createdAt)) : now,
@@ -780,6 +2278,20 @@ export async function saveFinancialData(
     });
   });
   const incomeIds = new Set(incomeRows.map((source) => source.id));
+  const incomeReceiptRows = incomeReceipts.filter(isRecord).flatMap((receipt) => {
+    const incomeSourceId = asString(receipt.incomeSourceId);
+    const receivedDate = calendarDate(receipt.receivedDate);
+    if (!incomeIds.has(incomeSourceId) || !receivedDate) return [];
+    return [{
+      id: rowId(receipt.id),
+      userId: user.id,
+      incomeSourceId,
+      receivedDate,
+      amount: money(Math.max(0, asNumber(receipt.amount))),
+      note: asString(receipt.note),
+      createdAt: receipt.createdAt ? new Date(asString(receipt.createdAt)) : now,
+    }];
+  });
   const incomeById = new Map(incomeRows.map((source) => [source.id, source]));
   const allocationTotals = new Map<string, number>();
   const allocationIds = new Set<string>();
@@ -853,7 +2365,7 @@ export async function saveFinancialData(
       otherDeductions: money(row.salaryDetails?.otherDeductions),
     }));
 
-  const expenseRows = expenses.filter(isRecord).map((expense) => ({
+  let expenseRows = expenses.filter(isRecord).map((expense) => ({
     id: rowId(expense.id),
     userId: user.id,
     loanId:
@@ -940,15 +2452,161 @@ export async function saveFinancialData(
   // use the database clock rather than sending one from the application.
   const istNow = sql`timezone('Asia/Kolkata', now())`;
 
+  let finalExpenseRows = expenseRows;
+  let responseUser = user;
   await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    let preservedBankImportProvenance: Array<typeof bankStatementImportProvenanceTable.$inferSelect> = [];
+    if (accountMutation) {
+      const [currentAccount] = await tx.select({ phone: usersTable.phone }).from(usersTable)
+        .where(eq(usersTable.id, user.id)).for("update");
+      if (!currentAccount) throw new Error("Account not found");
+      const phoneChanged = accountMutation.phone !== undefined
+        && accountMutation.phone !== currentAccount.phone;
+      if (phoneChanged) {
+        await tx.update(mobileOtpChallengesTable).set({ consumedAt: new Date() }).where(and(
+          eq(mobileOtpChallengesTable.userId, user.id),
+          isNull(mobileOtpChallengesTable.consumedAt),
+        ));
+      }
+      const [updatedAccount] = await tx.update(usersTable).set({
+        fullName: accountMutation.fullName,
+        gender: accountMutation.gender,
+        phone: accountMutation.phone,
+        phoneVerifiedAt: phoneChanged ? null : undefined,
+        dateOfBirth: accountMutation.dateOfBirth,
+        onboardingCompleted: accountMutation.onboardingCompleted,
+        updatedAt: new Date(),
+      }).where(eq(usersTable.id, user.id)).returning();
+      if (!updatedAccount) throw new Error("Account not found");
+      responseUser = updatedAccount;
+    }
+    await tx.insert(userProfilesTable).values({ userId: user.id }).onConflictDoNothing();
+    await tx.execute(sql`select user_id from user_profiles where user_id = ${user.id} for update`);
+    if (mode === "save") {
+      const deletedReceiptExpenses = await tx.select({
+        id: receiptReviewsTable.confirmedExpenseDeletedId,
+      }).from(receiptReviewsTable).where(eq(receiptReviewsTable.userId, user.id));
+      const deletedIds = new Set(deletedReceiptExpenses.flatMap(({ id }) => id ? [id] : []));
+      expenseRows = expenseRows.filter(({ id }) => !deletedIds.has(id));
+      const activeReceiptExpenses = await tx.select({
+        id: receiptReviewsTable.confirmedExpenseId,
+      }).from(receiptReviewsTable).where(and(
+        eq(receiptReviewsTable.userId, user.id),
+        isNotNull(receiptReviewsTable.confirmedExpenseId),
+      ));
+      const submittedIds = new Set(expenseRows.map(({ id }) => id));
+      const omittedProtectedIds = activeReceiptExpenses.flatMap(({ id }) =>
+        id && !submittedIds.has(id) ? [id] : []);
+      if (omittedProtectedIds.length > 0) {
+        const omittedProtectedExpenses = await tx.select().from(expensesTable).where(and(
+          eq(expensesTable.userId, user.id),
+          inArray(expensesTable.id, omittedProtectedIds),
+        ));
+        // Submitted rows retain precedence and order. Only protected rows that
+        // SQL will retain despite omission are appended to the replacement set.
+        expenseRows = [...expenseRows, ...omittedProtectedExpenses];
+      }
+    } else {
+      const restoredExpenseIds = new Set(expenseRows.map(({ id }) => id));
+      const activeReceiptExpenses = await tx.select({
+        reviewId: receiptReviewsTable.id,
+        expenseId: receiptReviewsTable.confirmedExpenseId,
+      }).from(receiptReviewsTable).where(and(
+        eq(receiptReviewsTable.userId, user.id),
+        isNotNull(receiptReviewsTable.confirmedExpenseId),
+      )).for("update");
+      const deletedAt = new Date();
+      for (const receipt of activeReceiptExpenses) {
+        if (receipt.expenseId && !restoredExpenseIds.has(receipt.expenseId)) {
+          await tx.update(receiptReviewsTable).set({
+            confirmedExpenseDeletedId: receipt.expenseId,
+            confirmedExpenseDeletedAt: deletedAt,
+            confirmedExpenseId: null,
+          }).where(and(
+            eq(receiptReviewsTable.id, receipt.reviewId),
+            eq(receiptReviewsTable.userId, user.id),
+            eq(receiptReviewsTable.confirmedExpenseId, receipt.expenseId),
+          ));
+        }
+      }
+    }
+    const retainedExpenseIds = [...new Set(expenseRows.map(({ id }) => id))];
+    if (retainedExpenseIds.length > 0) {
+      preservedBankImportProvenance = await tx.select()
+        .from(bankStatementImportProvenanceTable)
+        .where(and(
+          eq(bankStatementImportProvenanceTable.userId, user.id),
+          inArray(bankStatementImportProvenanceTable.expenseId, retainedExpenseIds),
+        ))
+        .for("update");
+    }
+    const [existingProfile] = await tx
+      .select({ planningData: userProfilesTable.planningData })
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.userId, user.id))
+      .limit(1);
+    const existingPlanning = (isRecord(existingProfile?.planningData)
+      ? existingProfile.planningData
+      : {}) as PlanningDataWithReportDelivery;
+    planningData = {
+      ...planningData,
+      goals: payload.goals === undefined ? normalizeGoals(existingPlanning.goals) : planningData.goals,
+      customReminders: payload.reminders === undefined && payload.customReminders === undefined
+        ? normalizeReminders(existingPlanning.customReminders)
+        : planningData.customReminders,
+      notificationPreferences: payload.notificationPreferences === undefined
+        ? normalizeNotificationPreferences(existingPlanning.notificationPreferences)
+        : planningData.notificationPreferences,
+      notificationState: payload.notifications === undefined && payload.notificationState === undefined
+        ? normalizeNotificationState(existingPlanning.notificationState)
+        : mergeNotificationState(existingPlanning.notificationState, planningData.notificationState),
+      // Subscriptions and immutable snapshots are server-owned and can only be
+      // changed through their dedicated authenticated endpoints.
+      pushSubscriptions: normalizePushSubscriptions(existingPlanning.pushSubscriptions),
+      monthlyReportSnapshots: mode === "restore"
+        ? planningData.monthlyReportSnapshots
+        : normalizeMonthlyReports(existingPlanning.monthlyReportSnapshots),
+      monthlyReportEmailDeliveries: isRecord(existingPlanning.monthlyReportEmailDeliveries)
+        ? existingPlanning.monthlyReportEmailDeliveries
+        : {},
+      monthlyReportEmailFailures: normalizeMonthlyReportEmailFailures(
+        existingPlanning.monthlyReportEmailFailures,
+      ),
+    };
+    // This check deliberately happens after the profile row lock is acquired
+    // and before any destructive replacement statements.  Both the dedicated
+    // goals endpoint and a complete document save therefore share the same
+    // authoritative concurrency boundary.
+    const previousGoals = normalizeGoals(existingPlanning.goals);
+    const previousCommitment = previousGoals.reduce(
+      (sum, goal) => sum + goal.monthlyAllocation, 0,
+    );
+    const nextCommitment = (planningData.goals ?? []).reduce(
+      (sum, goal) => sum + goal.monthlyAllocation, 0,
+    );
+    const increasesGoalCommitment = payload.goals !== undefined
+      && nextCommitment > previousCommitment + 0.005;
+    if (mode === "save" && increasesGoalCommitment) {
+      assertGoalAllocationsWithinSurplus(planningData.goals ?? [], {
+        income: incomeRows,
+        budgets: budgetRows,
+        expenses: expenseRows,
+        loans: loanRows,
+        investments: investmentRows,
+        emergencyFund: planningData.emergencyFund,
+      });
+    }
     // Profile and plan upserts travel together as one statement.
     await tx.execute(sql`
       with saved_profile as (
-        insert into user_profiles (user_id, risk_preference, ui_preferences, updated_at)
-        values (${user.id}, ${riskPreference}, cast(${JSON.stringify(uiPreferences)} as jsonb), ${istNow})
+        insert into user_profiles (user_id, risk_preference, ui_preferences, planning_data, updated_at)
+        values (${user.id}, ${riskPreference}, cast(${JSON.stringify(uiPreferences)} as jsonb), cast(${JSON.stringify(planningData)} as jsonb), ${istNow})
         on conflict (user_id) do update
           set risk_preference = excluded.risk_preference,
               ui_preferences = excluded.ui_preferences,
+              planning_data = excluded.planning_data,
               updated_at = excluded.updated_at
       )
       insert into retirement_plans (
@@ -986,7 +2644,15 @@ export async function saveFinancialData(
     await tx.execute(sql`
       with
         cleared_investments as (delete from investments where user_id = ${user.id}),
-        cleared_expenses as (delete from expenses where user_id = ${user.id}),
+        cleared_expenses as (
+          delete from expenses e
+          where e.user_id = ${user.id}
+            and not exists (
+              select 1 from receipt_reviews r
+              where r.user_id = ${user.id}
+                and r.confirmed_expense_id = e.id
+            )
+        ),
         cleared_budgets as (delete from budgets where user_id = ${user.id}),
         cleared_income as (delete from income_sources where user_id = ${user.id}),
         cleared_loans as (delete from loans where user_id = ${user.id})
@@ -994,22 +2660,89 @@ export async function saveFinancialData(
     `);
 
     // Loans and income go first: expenses and investments reference them.
-    if (loanRows.length > 0) await tx.insert(loansTable).values(loanRows);
+    for (const chunk of rowChunks(loanRows)) await tx.insert(loansTable).values(chunk);
     if (incomeRows.length > 0) {
-      await tx.insert(incomeSourcesTable).values(
-        incomeRows.map(({ salaryDetails: _salary, ...row }) => row),
-      );
-      if (salaryRows.length > 0) await tx.insert(salaryDetailsTable).values(salaryRows);
+      const storedIncomeRows = incomeRows.map(({ salaryDetails: _salary, ...row }) => row);
+      for (const chunk of rowChunks(storedIncomeRows)) {
+        await tx.insert(incomeSourcesTable).values(chunk);
+      }
+      for (const chunk of rowChunks(salaryRows)) {
+        await tx.insert(salaryDetailsTable).values(chunk);
+      }
+      for (const chunk of rowChunks(incomeReceiptRows)) {
+        await tx.insert(incomeReceiptsTable).values(chunk);
+      }
     }
-    if (expenseRows.length > 0) await tx.insert(expensesTable).values(expenseRows);
-    if (budgetRows.length > 0) await tx.insert(budgetsTable).values(budgetRows);
-    if (investmentRows.length > 0) await tx.insert(investmentsTable).values(investmentRows);
+    if (expenseRows.length > 0) {
+      for (const chunk of rowChunks(expenseRows)) {
+        await tx.insert(expensesTable).values(chunk).onConflictDoUpdate({
+          target: expensesTable.id,
+          set: {
+            loanId: sql`excluded.loan_id`,
+            date: sql`excluded.date`,
+            amount: sql`excluded.amount`,
+            category: sql`excluded.category`,
+            merchant: sql`excluded.merchant`,
+            paymentMethod: sql`excluded.payment_method`,
+            note: sql`excluded.note`,
+            reimbursable: sql`excluded.reimbursable`,
+            recurring: sql`excluded.recurring`,
+            updatedAt: new Date(),
+          },
+          setWhere: eq(expensesTable.userId, user.id),
+        });
+      }
+      if (mode === "restore") {
+        const requestedExpenseIds = [...new Set(expenseRows.map(({ id }) => id))];
+        const materializedExpenses = await tx.select({ id: expensesTable.id })
+          .from(expensesTable).where(and(
+            eq(expensesTable.userId, user.id),
+            inArray(expensesTable.id, requestedExpenseIds),
+          ));
+        if (materializedExpenses.length !== requestedExpenseIds.length) {
+          throw new FinancialRestoreCollisionError();
+        }
+        await tx.update(receiptReviewsTable).set({
+          confirmedExpenseId: receiptReviewsTable.confirmedExpenseDeletedId,
+          confirmedExpenseDeletedId: null,
+          confirmedExpenseDeletedAt: null,
+        }).where(and(
+          eq(receiptReviewsTable.userId, user.id),
+          inArray(receiptReviewsTable.confirmedExpenseDeletedId, expenseRows.map(({ id }) => id)),
+          sql`exists (
+            select 1
+            from expenses restore_expense
+            where restore_expense.id = ${receiptReviewsTable.confirmedExpenseDeletedId}
+              and restore_expense.user_id = ${user.id}
+          )`,
+        ));
+      }
+      if (preservedBankImportProvenance.length > 0) {
+        for (const chunk of rowChunks(preservedBankImportProvenance)) {
+          await tx.insert(bankStatementImportProvenanceTable)
+            .values(chunk)
+            .onConflictDoNothing();
+        }
+      }
+    }
+    for (const chunk of rowChunks(budgetRows)) await tx.insert(budgetsTable).values(chunk);
+    for (const chunk of rowChunks(investmentRows)) {
+      await tx.insert(investmentsTable).values(chunk);
+    }
+    finalExpenseRows = await tx.select().from(expensesTable)
+      .where(eq(expensesTable.userId, user.id));
+    await assertCanonicalMutationAdmission(
+      tx,
+      responseUser,
+      admissionBaseline,
+      financialDocumentAdmissionLimit,
+    );
   });
 
   // The rows above are exactly what the database now holds, so the response is
   // built from them rather than spending another round trip reading them back.
-  return buildFinancialData(user, {
-    profile: { riskPreference, uiPreferences },
+  return buildFinancialData(responseUser, {
+    profile: { riskPreference, uiPreferences, planningData },
     plan: {
       targetRetirementAge,
       lifeExpectancy,
@@ -1018,27 +2751,109 @@ export async function saveFinancialData(
       monthlyContributionOverride: contributionOverride,
       investSurplus,
     },
-    expenses: expenseRows,
+    expenses: finalExpenseRows,
     budgets: budgetRows,
     incomeSources: incomeRows,
+    incomeReceipts: incomeReceiptRows,
     salary: salaryRows,
     investments: investmentRows,
     loans: loanRows,
   });
 }
 
-export async function clearFinancialData(userId: string): Promise<void> {
-  // A single statement is atomic on its own, so this needs no transaction and
-  // costs one round trip instead of nine.
-  await db.execute(sql`
+export async function restoreFinancialData(
+  user: typeof usersTable.$inferSelect,
+  payload: Record<string, unknown>,
+  accountMutation: FinancialRestoreAccountMutation,
+  financialDocumentAdmissionLimit = FINANCIAL_DOCUMENT_ADMISSION_JSON_LIMIT,
+): Promise<{
+  data: FinancialDataResponse;
+  user: typeof usersTable.$inferSelect;
+}> {
+  const data = await saveFinancialData(
+    user,
+    payload,
+    undefined,
+    "restore",
+    accountMutation,
+    financialDocumentAdmissionLimit,
+  );
+  const [updatedUser] = await db.select().from(usersTable).where(eq(usersTable.id, user.id));
+  if (!updatedUser) throw new Error("Account not found after restore");
+  return { data, user: updatedUser };
+}
+
+export async function clearFinancialData(
+  user: typeof usersTable.$inferSelect,
+): Promise<FinancialDataResponse> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    const now = new Date();
+    await tx.update(receiptReviewsTable).set({
+      confirmedExpenseDeletedId: receiptReviewsTable.confirmedExpenseId,
+      confirmedExpenseDeletedAt: now,
+      confirmedExpenseId: null,
+    }).where(and(
+      eq(receiptReviewsTable.userId, user.id),
+      isNotNull(receiptReviewsTable.confirmedExpenseId),
+    ));
+    await tx.execute(sql`
     with
-      cleared_investments as (delete from investments where user_id = ${userId}),
-      cleared_expenses as (delete from expenses where user_id = ${userId}),
-      cleared_budgets as (delete from budgets where user_id = ${userId}),
-      cleared_income as (delete from income_sources where user_id = ${userId}),
-      cleared_loans as (delete from loans where user_id = ${userId}),
-      cleared_plan as (delete from retirement_plans where user_id = ${userId}),
-      cleared_profile as (delete from user_profiles where user_id = ${userId})
+      cleared_investments as (delete from investments where user_id = ${user.id}),
+      cleared_expenses as (
+        delete from expenses e
+        where e.user_id = ${user.id}
+          and not exists (
+            select 1 from receipt_reviews r
+            where r.user_id = ${user.id}
+              and r.confirmed_expense_id = e.id
+          )
+      ),
+      cleared_budgets as (delete from budgets where user_id = ${user.id}),
+      cleared_income as (delete from income_sources where user_id = ${user.id}),
+      cleared_loans as (delete from loans where user_id = ${user.id}),
+      cleared_plan as (delete from retirement_plans where user_id = ${user.id}),
+      cleared_profile as (delete from user_profiles where user_id = ${user.id})
     select 1
-  `);
+    `);
+    await assertCanonicalMutationAdmission(tx, user, admissionBaseline);
+  });
+  return buildFinancialData(user, {
+    profile: undefined,
+    plan: undefined,
+    expenses: [],
+    budgets: [],
+    incomeSources: [],
+    incomeReceipts: [],
+    salary: [],
+    investments: [],
+    loans: [],
+  });
+}
+
+export async function deleteFinancialExpense(
+  user: typeof usersTable.$inferSelect,
+  expenseId: string,
+): Promise<FinancialDataResponse | null> {
+  const deleted = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${financialLifecycleLockKey(user.id)}))`);
+    const admissionBaseline = await captureCanonicalAdmissionBaseline(tx, user);
+    const [expense] = await tx.select({ id: expensesTable.id }).from(expensesTable)
+      .where(sql`${expensesTable.id} = ${expenseId} and ${expensesTable.userId} = ${user.id}`)
+      .for("update");
+    if (!expense) return false;
+    const now = new Date();
+    await tx.update(receiptReviewsTable).set({
+      confirmedExpenseDeletedId: expense.id,
+      confirmedExpenseDeletedAt: now,
+      confirmedExpenseId: null,
+    }).where(sql`${receiptReviewsTable.userId} = ${user.id}
+      and ${receiptReviewsTable.confirmedExpenseId} = ${expense.id}`);
+    await tx.delete(expensesTable).where(sql`${expensesTable.id} = ${expense.id}
+      and ${expensesTable.userId} = ${user.id}`);
+    await assertCanonicalMutationAdmission(tx, user, admissionBaseline);
+    return true;
+  });
+  return deleted ? loadFinancialData(user) : null;
 }

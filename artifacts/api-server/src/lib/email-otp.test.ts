@@ -2,12 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyResendFailure,
+  EMAIL_DELIVERY_BUDGET_MS,
   EmailDeliveryError,
   hasMultipleOtpEmailAddresses,
   isValidOtpEmail,
   normalizeOtpEmail,
   sendLoginCode,
 } from "./email-otp.js";
+
+test("keeps the complete provider retry budget below the serverless deadline", () => {
+  assert.ok(EMAIL_DELIVERY_BUDGET_MS > 0);
+  assert.ok(EMAIL_DELIVERY_BUDGET_MS <= 10_000);
+  assert.ok(EMAIL_DELIVERY_BUDGET_MS < 30_000);
+});
 
 test("normalizes email identity consistently", () => {
   assert.equal(normalizeOtpEmail("  Person@Example.COM "), "person@example.com");
@@ -96,6 +103,42 @@ test("retries an indeterminate send with the same provider idempotency key", asy
       "login-otp-challenge-stable",
       "login-otp-challenge-stable",
     ]);
+  } finally {
+    globalThis.fetch = nativeFetch;
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+    if (previousFrom === undefined) delete process.env.AUTH_EMAIL_FROM;
+    else process.env.AUTH_EMAIL_FROM = previousFrom;
+  }
+});
+
+test("bounds stalled provider calls and reports an indeterminate retryable failure", async () => {
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFrom = process.env.AUTH_EMAIL_FROM;
+  const nativeFetch = globalThis.fetch;
+  process.env.RESEND_API_KEY = "test-key";
+  process.env.AUTH_EMAIL_FROM = "Login <login@example.test>";
+  globalThis.fetch = (_input, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+  });
+  const startedAt = Date.now();
+  try {
+    await assert.rejects(
+      sendLoginCode("person@example.com", "123456", "challenge-stalled"),
+      (error: unknown) =>
+        error instanceof EmailDeliveryError
+        && error.category === "transient"
+        && error.indeterminate,
+    );
+    const elapsedMs = Date.now() - startedAt;
+    assert.ok(
+      elapsedMs >= EMAIL_DELIVERY_BUDGET_MS - 250,
+      `delivery stopped unexpectedly early after ${elapsedMs}ms`,
+    );
+    assert.ok(
+      elapsedMs < EMAIL_DELIVERY_BUDGET_MS + 1_000,
+      `delivery exceeded its ${EMAIL_DELIVERY_BUDGET_MS}ms budget: ${elapsedMs}ms`,
+    );
   } finally {
     globalThis.fetch = nativeFetch;
     if (previousKey === undefined) delete process.env.RESEND_API_KEY;

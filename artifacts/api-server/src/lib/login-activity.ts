@@ -3,7 +3,7 @@ import { lt } from "drizzle-orm";
 import type { Request } from "express";
 
 export const LOGIN_ACTIVITY_RETENTION_DAYS = 90;
-export type LoginMethod = "email_otp" | "oidc";
+export type LoginMethod = "email_otp" | "oidc" | "passkey" | "pin";
 
 function bounded(value: string | undefined, maxLength: number): string | null {
   const normalized = value?.trim();

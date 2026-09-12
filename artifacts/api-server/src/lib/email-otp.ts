@@ -6,6 +6,9 @@ export const OTP_RESEND_MS = 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_REQUEST_WINDOW_MS = 10 * 60 * 1000;
 export const OTP_MAX_REQUESTS_PER_NETWORK = 20;
+export const EMAIL_DELIVERY_BUDGET_MS = 8_000;
+export const EMAIL_DELIVERY_ATTEMPT_TIMEOUT_MS = 3_000;
+export const EMAIL_DELIVERY_MAX_ATTEMPTS = 3;
 
 export function normalizeOtpEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -89,15 +92,20 @@ export async function sendLoginCode(email: string, code: string, challengeId: st
     }),
   } satisfies RequestInit;
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const deliveryDeadline = Date.now() + EMAIL_DELIVERY_BUDGET_MS;
+  for (let attempt = 0; attempt < EMAIL_DELIVERY_MAX_ATTEMPTS; attempt += 1) {
+    const remainingMs = deliveryDeadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new EmailDeliveryError("transient", undefined, undefined, true);
+    }
     let response: globalThis.Response;
     try {
       response = await fetch("https://api.resend.com/emails", {
         ...request,
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(Math.min(EMAIL_DELIVERY_ATTEMPT_TIMEOUT_MS, remainingMs)),
       });
     } catch {
-      if (attempt < 2) continue;
+      if (attempt < EMAIL_DELIVERY_MAX_ATTEMPTS - 1 && Date.now() < deliveryDeadline) continue;
       throw new EmailDeliveryError("transient", undefined, undefined, true);
     }
     if (response.ok) return;
@@ -111,8 +119,12 @@ export async function sendLoginCode(email: string, code: string, challengeId: st
     }
     if (response.status >= 500 && attempt === 0) continue;
     if (response.status === 409 && providerType === "concurrent_idempotent_requests") {
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      if (attempt < EMAIL_DELIVERY_MAX_ATTEMPTS - 1) {
+        const retryDelayMs = Math.min(250 * (attempt + 1), deliveryDeadline - Date.now());
+        if (retryDelayMs <= 0) {
+          throw new EmailDeliveryError("transient", response.status, providerType, true);
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
         continue;
       }
       throw new EmailDeliveryError("transient", response.status, providerType, true);

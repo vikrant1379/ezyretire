@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import { db, emailOtpChallengesTable, loginActivitiesTable, sessionsTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, emailOtpChallengesTable, loginActivitiesTable, poolMax, sessionsTable, usersTable } from "@workspace/db";
+import { count, eq } from "drizzle-orm";
+import { hashRequester, OTP_MAX_REQUESTS_PER_NETWORK } from "./email-otp.js";
+import { createSession } from "./auth.js";
 
 process.env.SESSION_SECRET ??= "test-only-session-secret-that-is-at-least-32-characters";
 process.env.RESEND_API_KEY = "test-resend-key";
@@ -11,6 +13,7 @@ process.env.AUTH_EMAIL_FROM = "ezyRetire <login@example.test>";
 const nativeFetch = globalThis.fetch;
 const deliveredCodes = new Map<string, string>();
 let deliveryFailureResponse: { status: number; type: string } | null = null;
+let stallDelivery = false;
 const deliveredMessages = new Map<string, {
   from: string;
   subject: string;
@@ -19,6 +22,11 @@ const deliveredMessages = new Map<string, {
 }>();
 globalThis.fetch = (input, init) => {
   if (String(input) === "https://api.resend.com/emails") {
+    if (stallDelivery) {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+    }
     if (deliveryFailureResponse) {
       return Promise.resolve(new Response(
         JSON.stringify({ name: deliveryFailureResponse.type, message: "sensitive provider details" }),
@@ -44,6 +52,70 @@ globalThis.fetch = (input, init) => {
 
 const { default: app } = await import("../app.js");
 
+test("email OTP bursts leave database capacity for unrelated work", async () => {
+  const unique = `otp-burst-${process.pid}-${Date.now()}`;
+  const burstIp = `198.51.100.${(process.pid % 200) + 1}`;
+  const burstRequesterHash = hashRequester(burstIp);
+  await db.insert(emailOtpChallengesTable).values(
+    Array.from({ length: OTP_MAX_REQUESTS_PER_NETWORK - 5 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      email: `seed-${index}-${unique}@example.test`,
+      requesterHash: burstRequesterHash,
+      codeHash: "0".repeat(64),
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      resendAvailableAt: new Date(Date.now() - 1),
+      maxAttempts: 5,
+      deliveredAt: new Date(),
+    })),
+  );
+
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const { port } = server.address() as AddressInfo;
+  const api = `http://127.0.0.1:${port}/api`;
+  const burstSize = poolMax + OTP_MAX_REQUESTS_PER_NETWORK;
+
+  try {
+    assert.ok(burstSize > poolMax);
+    const burstPromise = Promise.all(
+      Array.from({ length: burstSize }, async (_, index) => {
+        const response = await nativeFetch(`${api}/auth/otp/request`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-forwarded-for": burstIp,
+          },
+          body: JSON.stringify({ email: `request-${index}-${unique}@example.test` }),
+        });
+        return {
+          response,
+          body: await response.json() as { error?: string },
+        };
+      }),
+    );
+    const unrelatedQuery = await Promise.race([
+      db.select({ userCount: count() }).from(usersTable),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Unrelated database query stalled during email-code burst")), 2_000);
+      }),
+    ]);
+    assert.ok(unrelatedQuery[0].userCount >= 0);
+
+    const burst = await burstPromise;
+    assert.equal(burst.filter(({ response }) => response.status === 200).length, 5);
+    assert.equal(burst.filter(({ response }) => response.status === 429).length, burstSize - 5);
+    assert.equal(burst.filter(({ response }) => response.status >= 500).length, 0);
+    for (const { body } of burst.filter(({ response }) => response.status === 429)) {
+      assert.deepEqual(body, {
+        error: "Too many code requests. Please wait a few minutes and try again.",
+      });
+    }
+  } finally {
+    server.close();
+    await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.requesterHash, burstRequesterHash));
+  }
+});
+
 test("email OTP routes preserve accounts and enforce challenge abuse controls", async () => {
   const unique = `${process.pid}-${Date.now()}`;
   const existingEmail = `existing-${unique}@example.test`;
@@ -56,6 +128,7 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
   const quotaFailureEmail = `quota-failed-${unique}@example.test`;
   const configFailureEmail = `config-failed-${unique}@example.test`;
   const pendingFailureEmail = `pending-failed-${unique}@example.test`;
+  const stalledFailureEmail = `stalled-failed-${unique}@example.test`;
   const existingId = `existing-otp-${unique}`;
   await db.insert(usersTable).values({
     id: existingId,
@@ -68,15 +141,22 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const { port } = server.address() as AddressInfo;
   const api = `http://127.0.0.1:${port}/api`;
-  const post = (path: string, body: unknown) =>
+  const post = (path: string, body: unknown, ip?: string) =>
     nativeFetch(`${api}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(ip ? { "x-forwarded-for": ip } : {}),
+      },
       body: JSON.stringify(body),
     });
-  const requestCode = async (email: string) => {
-    const response = await post("/auth/otp/request", { email });
-    const body = await response.json() as { challengeId?: string; error?: string };
+  const requestCode = async (email: string, ip?: string) => {
+    const response = await post("/auth/otp/request", { email }, ip);
+    const body = await response.json() as {
+      challengeId?: string;
+      error?: string;
+      retryAfterSeconds?: number;
+    };
     return { response, body, code: deliveredCodes.get(email) };
   };
 
@@ -168,6 +248,111 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
       .where(eq(loginActivitiesTable.userId, existingId));
     assert.equal(activitiesAfterRoutineRequest.length, 1);
 
+    await db.update(emailOtpChallengesTable)
+      .set({ resendAvailableAt: new Date(Date.now() - 1) })
+      .where(eq(emailOtpChallengesTable.id, existingRequest.body.challengeId!));
+    const existingSessionId = await createSession({
+      user: {
+        id: existingId,
+        email: existingEmail,
+        profileImageUrl: null,
+        fullName: "Existing Customer",
+        dateOfBirth: null,
+        gender: null,
+        phone: null,
+        onboardingCompleted: true,
+        isAdmin: false,
+      },
+    });
+    const stepUpRequestResponse = await nativeFetch(`${api}/auth/otp/request`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `sid=${existingSessionId}`,
+      },
+      body: JSON.stringify({
+        purpose: "passkey_management",
+        email: `stale-${unique}@example.test`,
+      }),
+    });
+    assert.equal(stepUpRequestResponse.status, 200);
+    const stepUpRequestBody = await stepUpRequestResponse.json() as { challengeId: string };
+    const stepUpBindingCookie = stepUpRequestResponse.headers
+      .getSetCookie()
+      .find((value) => value.startsWith("__Host-ezyretire-passkey-step-up="))
+      ?.split(";")[0];
+    assert.ok(stepUpBindingCookie);
+    assert.equal(deliveredCodes.has(`stale-${unique}@example.test`), false);
+    const steppedUp = await nativeFetch(`${api}/auth/otp/verify`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `sid=${existingSessionId}; ${stepUpBindingCookie}`,
+      },
+      body: JSON.stringify({
+        challengeId: stepUpRequestBody.challengeId,
+        code: deliveredCodes.get(existingEmail),
+      }),
+    });
+    assert.equal(steppedUp.status, 200);
+    const clearedStepUpCookie = steppedUp.headers
+      .getSetCookie()
+      .find((value) => value.startsWith("__Host-ezyretire-passkey-step-up=")) ?? "";
+    assert.match(clearedStepUpCookie, /(?:Max-Age=0|Expires=Thu, 01 Jan 1970 00:00:00 GMT)/i);
+    assert.match(clearedStepUpCookie, /Path=\//i);
+    assert.match(clearedStepUpCookie, /HttpOnly/i);
+    assert.match(clearedStepUpCookie, /Secure/i);
+    assert.match(clearedStepUpCookie, /SameSite=Strict/i);
+    const rotatedSessionId = steppedUp.headers
+      .getSetCookie()
+      .find((value) => value.startsWith("sid="))
+      ?.slice(4)
+      .split(";")[0];
+    assert.ok(rotatedSessionId);
+    assert.notEqual(rotatedSessionId, existingSessionId);
+    const [oldSession] = await db.select().from(sessionsTable).where(eq(sessionsTable.sid, existingSessionId));
+    assert.equal(oldSession, undefined);
+    const [upgradedSession] = await db.select().from(sessionsTable).where(eq(sessionsTable.sid, rotatedSessionId));
+    const upgradedSessionData = upgradedSession.sess as {
+      user: { id: string };
+      emailStepUp: { userId: string };
+    };
+    assert.equal(upgradedSessionData.user.id, existingId);
+    assert.equal(upgradedSessionData.emailStepUp.userId, existingId);
+    const oldSessionPasskeys = await nativeFetch(`${api}/auth/passkeys`, {
+      headers: { cookie: `sid=${existingSessionId}` },
+    });
+    assert.equal(oldSessionPasskeys.status, 401);
+    const rotatedSessionPasskeys = await nativeFetch(`${api}/auth/passkeys`, {
+      headers: { cookie: `sid=${rotatedSessionId}` },
+    });
+    assert.equal(rotatedSessionPasskeys.status, 200);
+    await db.update(emailOtpChallengesTable)
+      .set({ resendAvailableAt: new Date(Date.now() - 1) })
+      .where(eq(emailOtpChallengesTable.email, existingEmail));
+    const laterOrdinaryRequest = await requestCode(existingEmail);
+    assert.equal(laterOrdinaryRequest.response.status, 200);
+    const laterOrdinaryVerification = await nativeFetch(`${api}/auth/otp/verify`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `sid=${rotatedSessionId}; ${stepUpBindingCookie}`,
+      },
+      body: JSON.stringify({
+        challengeId: laterOrdinaryRequest.body.challengeId,
+        code: laterOrdinaryRequest.code,
+      }),
+    });
+    assert.equal(laterOrdinaryVerification.status, 200);
+    const laterOrdinarySessionId = laterOrdinaryVerification.headers
+      .getSetCookie()
+      .find((value) => value.startsWith("sid="))
+      ?.slice(4)
+      .split(";")[0];
+    assert.ok(laterOrdinarySessionId);
+    await db.delete(sessionsTable).where(eq(sessionsTable.sid, laterOrdinarySessionId));
+    await db.delete(sessionsTable).where(eq(sessionsTable.sid, rotatedSessionId));
+
     const newRequest = await requestCode(newEmail);
     const newVerified = await post("/auth/otp/verify", {
       challengeId: newRequest.body.challengeId,
@@ -236,6 +421,7 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
     const deliveryFailure = await requestCode(failedEmail);
     assert.equal(deliveryFailure.response.status, 503);
     assert.match(deliveryFailure.body.error ?? "", /try again/i);
+    assert.equal(deliveryFailure.body.retryAfterSeconds, 3);
     const [pendingAfterServerFailure] = await db
       .select()
       .from(emailOtpChallengesTable)
@@ -290,6 +476,7 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
     deliveryFailureResponse = { status: 409, type: "concurrent_idempotent_requests" };
     const pendingFailure = await requestCode(pendingFailureEmail);
     assert.equal(pendingFailure.response.status, 503);
+    assert.equal(pendingFailure.body.retryAfterSeconds, 3);
     const [pendingChallenge] = await db
       .select()
       .from(emailOtpChallengesTable)
@@ -306,6 +493,28 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
     assert.equal(recoveredPending.body.challengeId, pendingChallenge.id);
     assert.match(recoveredPending.code ?? "", /^\d{6}$/);
 
+    stallDelivery = true;
+    const stalledStartedAt = Date.now();
+    const stalledFailure = await requestCode(stalledFailureEmail);
+    const stalledElapsedMs = Date.now() - stalledStartedAt;
+    assert.equal(stalledFailure.response.status, 503);
+    assert.match(stalledFailure.body.error ?? "", /try again/i);
+    assert.equal(stalledFailure.body.retryAfterSeconds, 3);
+    assert.ok(stalledElapsedMs < 10_000, `stalled request took ${stalledElapsedMs}ms`);
+    const [stalledChallenge] = await db
+      .select()
+      .from(emailOtpChallengesTable)
+      .where(eq(emailOtpChallengesTable.email, stalledFailureEmail));
+    assert.ok(stalledChallenge);
+    assert.equal(stalledChallenge.deliveredAt, null);
+    await db.update(emailOtpChallengesTable)
+      .set({ resendAvailableAt: new Date(Date.now() - 1) })
+      .where(eq(emailOtpChallengesTable.id, stalledChallenge.id));
+    stallDelivery = false;
+    const recoveredStall = await requestCode(stalledFailureEmail);
+    assert.equal(recoveredStall.response.status, 200);
+    assert.equal(recoveredStall.body.challengeId, stalledChallenge.id);
+
     const passwordLogin = await post("/auth/login", { email: existingEmail, password: "old-password" });
     assert.equal(passwordLogin.status, 410);
   } finally {
@@ -321,11 +530,11 @@ test("email OTP routes preserve accounts and enforce challenge abuse controls", 
     await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.email, quotaFailureEmail));
     await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.email, configFailureEmail));
     await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.email, pendingFailureEmail));
+    await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.email, stalledFailureEmail));
     await db.delete(emailOtpChallengesTable).where(eq(emailOtpChallengesTable.email, `recoverable-${unique}@example.test`));
     await db.delete(usersTable).where(eq(usersTable.email, existingEmail));
     await db.delete(usersTable).where(eq(usersTable.email, newEmail));
     await db.delete(usersTable).where(eq(usersTable.email, `recoverable-${unique}@example.test`));
     await db.delete(usersTable).where(eq(usersTable.email, failedEmail));
-    await db.delete(sessionsTable).where(eq(sessionsTable.sid, "unused"));
   }
 });

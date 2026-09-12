@@ -12,6 +12,14 @@ export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
 export interface SessionData {
   user: AuthUser;
+  /** Time the primary credential was last verified, used for destructive actions. */
+  authenticatedAt?: number;
+  /** Short-lived email OTP step-up proof. Never set by OIDC or passkey login. */
+  emailStepUp?: {
+    userId: string;
+    verifiedAt: number;
+    method: "email_otp";
+  };
   access_token?: string;
   refresh_token?: string;
   expires_at?: number;
@@ -52,7 +60,10 @@ export async function createSession(data: SessionData): Promise<string> {
   const sid = crypto.randomBytes(32).toString("hex");
   await db.insert(sessionsTable).values({
     sid,
-    sess: data as unknown as Record<string, unknown>,
+    sess: {
+      ...data,
+      authenticatedAt: data.authenticatedAt ?? Date.now(),
+    } as unknown as Record<string, unknown>,
     expire: new Date(Date.now() + SESSION_TTL),
   });
   return sid;

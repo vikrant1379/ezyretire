@@ -5,9 +5,9 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const CORE_SWATCHES = [
-  { name: 'Deep Indigo', role: 'Primary', className: 'bg-primary text-primary-foreground' },
-  { name: 'Saffron', role: 'Secondary', className: 'bg-secondary text-secondary-foreground' },
-  { name: 'Warm Neutral', role: 'Accent', className: 'bg-accent text-accent-foreground' },
+  { name: 'Deep Blue', role: 'Primary Action', className: 'bg-primary text-primary-foreground' },
+  { name: 'Subtle Slate', role: 'Secondary Surface', className: 'bg-secondary text-secondary-foreground' },
+  { name: 'Cool Neutral', role: 'Hover / secondary', className: 'bg-accent text-accent-foreground' },
 ] as const;
 
 function Swatch({ name, role, className }: { name: string; role: string; className: string }) {
@@ -20,7 +20,7 @@ export function OverviewPage() {
       <section className="rounded-xl border bg-card p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Complete source system</p>
         <h2 className="mt-2 font-serif text-3xl">Clarity for every money decision.</h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Extracted directly from ezyRetire. Light and dark themes use the product’s warm-neutral, indigo, and saffron visual language.</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Extracted directly from ezyRetire. Light and dark themes use the product’s deep blue and neutral visual language.</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">{CORE_SWATCHES.map((swatch) => <Swatch key={swatch.role} {...swatch} />)}</div>
       </section>
 
@@ -68,11 +68,39 @@ export function OverviewPage() {
 }
 
 export function ColorsPage() {
-  return <div className="space-y-6 rounded-xl border bg-card p-6"><div><h2 className="font-serif text-2xl">Core palette</h2><p className="text-sm text-muted-foreground">Indigo establishes trust, saffron adds optimism, and warm neutrals keep dense financial information calm.</p></div><div className="grid gap-4 sm:grid-cols-3">{CORE_SWATCHES.map((swatch) => <Swatch key={swatch.role} {...swatch} />)}</div><div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{['bg-background','bg-card','bg-muted','bg-destructive','bg-border'].map((value) => <div key={value} className={`h-20 rounded-lg border ${value}`} />)}</div></div>;
+  return <div className="space-y-6 rounded-xl border bg-card p-6">
+    <div><h2 className="text-h2 font-semibold">Color roles, not decoration</h2><p className="text-body text-muted-foreground">Keep surfaces neutral. Use blue for a primary action, links, focus, or a selected navigation marker—not balances, card decoration, or success.</p></div>
+    <div className="grid gap-4 sm:grid-cols-3">{CORE_SWATCHES.map((swatch) => <Swatch key={swatch.role} {...swatch} />)}</div>
+    <section className="space-y-2">
+      <h3 className="text-h3 font-semibold">Reference comparison</h3>
+      <p className="text-sm text-muted-foreground">The supplied dark Republish dialog uses a deep blue button and a brighter link. We retain its narrow action hierarchy, not its literal blue: the subdued publishing state is not a suitable text or focus color on charcoal. Our existing blue family avoids adding another competing accent.</p>
+      <p className="text-sm">Chosen action blue: light <strong>#0B6F93</strong> with white text; dark <strong>#55B6D3</strong> with charcoal text. Links and focus use the same theme-aware blue. Do not copy the reference layout or branding.</p>
+    </section>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Swatch name="Positive" role="Incoming, assets and gains" className="bg-positive-background text-positive" />
+      <Swatch name="Negative" role="Outgoing, debt and losses" className="bg-negative-background text-negative" />
+      <Swatch name="Warning" role="Caution or attention needed" className="bg-warning-background text-warning" />
+    </div>
+    <p className="text-sm text-muted-foreground">Always pair financial color with labels, signs, or icons. Errors and destructive confirmations remain neutral with explicit wording; red is reserved for financial outflow. Cards and secondary controls use neutral surfaces. Disabled controls retain their label at reduced opacity, block interaction, and never look selected.</p>
+    <div className="flex flex-wrap items-center gap-3"><Button>Save plan</Button><Button variant="secondary">Cancel</Button><Button variant="link">Learn more</Button><Button disabled>Unavailable</Button></div>
+    <Input aria-label="Example control boundary and focus" placeholder="Tab here to inspect focus" />
+  </div>;
 }
 
 export function FontsPage() {
-  return <div className="space-y-7 rounded-xl border bg-card p-6"><section><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fraunces · headings</p><p className="mt-3 font-serif text-4xl">A confident financial future.</p></section><section className="border-t pt-6"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plus Jakarta Sans · interface</p><p className="mt-3 max-w-2xl text-base">Designed for readable labels, forms, explanations, tables, and financial decisions across screen sizes.</p></section></div>;
+  return <div className="space-y-6 rounded-xl border bg-card p-6">
+    <h2 className="text-h2 font-semibold">Inter throughout</h2>
+    <p className="text-body text-muted-foreground">Use size and weight—not another font, italics, or color—to establish hierarchy. Heading weights are 600, body 400, and labels 500. Reserve 700 for occasional emphasis.</p>
+    <section className="space-y-3">
+      <p className="text-h1 font-semibold">Page heading · 28 / 36</p>
+      <p className="text-h2 font-semibold">Section heading · 22 / 30</p>
+      <p className="text-h3 font-semibold">Card heading · 18 / 26</p>
+      <p className="text-body">Body explanation · 15 / 24</p>
+      <p className="text-label font-medium text-muted-foreground">Field label · 12 / 16</p>
+      <p className="financial-number text-amount-lg font-semibold">₹1,25,000.00</p>
+    </section>
+    <p className="text-sm text-muted-foreground">Financial figures use Inter with tabular numerals: 24px for summaries, 18px for secondary totals, and 14px in compact rows. Preserve readable wrapping around figures; use the existing responsive heading scale and never shrink essential text below 11px.</p>
+  </div>;
 }
 
 export function LayoutPage() {

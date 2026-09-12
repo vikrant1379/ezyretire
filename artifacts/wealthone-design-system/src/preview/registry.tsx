@@ -92,7 +92,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     name: 'Fonts',
-    entries: [{ id: 'type-scale', name: 'Type scale', description: 'Fraunces headings with Plus Jakarta Sans UI text.', Page: FontsPage }],
+    entries: [{ id: 'type-scale', name: 'Type scale', description: 'Inter headings and UI text.', Page: FontsPage }],
   },
   {
     name: 'Layout',

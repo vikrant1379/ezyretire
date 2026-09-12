@@ -7,7 +7,6 @@
  */
 import * as zod from 'zod';
 
-
 /**
  * Returns server health status
  * @summary Health check
@@ -42,11 +41,209 @@ export const UpdateAuthProfileBody = zod.object({
   "fullName": zod.string(),
   "dateOfBirth": zod.string(),
   "gender": zod.string(),
-  "phone": zod.string(),
+  "phone": zod.string().nullish(),
   "onboardingCompleted": zod.boolean()
 })
 
 export const UpdateAuthProfileResponse = zod.unknown()
+
+
+/**
+ * @summary Create or replace a four-digit account PIN after recent email verification
+ */
+export const setupAccountPinBodyPinRegExp = new RegExp('^\\d{4}$');
+
+
+export const SetupAccountPinBody = zod.object({
+  "pin": zod.string().regex(setupAccountPinBodyPinRegExp)
+})
+
+export const SetupAccountPinResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable(),
+  "fullName": zod.string().nullable(),
+  "dateOfBirth": zod.string().nullable(),
+  "gender": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "onboardingCompleted": zod.boolean(),
+  "isAdmin": zod.boolean()
+}),
+  "pinConfigured": zod.literal(true)
+})
+
+
+/**
+ * @summary Sign in to a remembered account with its four-digit PIN
+ */
+export const loginWithAccountPinBodyEmailMax = 320;
+
+
+export const loginWithAccountPinBodyEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const loginWithAccountPinBodyPinRegExp = new RegExp('^\\d{4}$');
+
+
+export const LoginWithAccountPinBody = zod.object({
+  "email": zod.string().max(loginWithAccountPinBodyEmailMax).regex(loginWithAccountPinBodyEmailRegExp),
+  "pin": zod.string().regex(loginWithAccountPinBodyPinRegExp)
+})
+
+export const LoginWithAccountPinResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable(),
+  "fullName": zod.string().nullable(),
+  "dateOfBirth": zod.string().nullable(),
+  "gender": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "onboardingCompleted": zod.boolean(),
+  "isAdmin": zod.boolean()
+})
+})
+
+
+/**
+ * @summary Create passkey registration options for a recently email-verified customer
+ */
+export const BeginPasskeyRegistrationBody = zod.object({
+
+})
+
+export const BeginPasskeyRegistrationResponse = zod.object({
+  "challengeId": zod.string(),
+  "options": zod.record(zod.string(), zod.unknown())
+})
+
+
+/**
+ * @summary Verify and store a passkey
+ */
+export const completePasskeyRegistrationBodyNameMax = 80;
+
+
+
+export const CompletePasskeyRegistrationBody = zod.object({
+  "challengeId": zod.string(),
+  "name": zod.string().min(1).max(completePasskeyRegistrationBodyNameMax),
+  "response": zod.record(zod.string(), zod.unknown())
+})
+
+export const CompletePasskeyRegistrationResponse = zod.object({
+  "credential": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "transports": zod.array(zod.string()),
+  "deviceType": zod.string().nullable(),
+  "backedUp": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable()
+})
+})
+
+
+/**
+ * @summary Create discoverable username-less passkey authentication options
+ */
+export const BeginPasskeyAuthenticationBody = zod.object({
+
+})
+
+export const BeginPasskeyAuthenticationResponse = zod.object({
+  "challengeId": zod.string(),
+  "options": zod.record(zod.string(), zod.unknown())
+})
+
+
+/**
+ * @summary Verify a discoverable passkey and issue the normal session
+ */
+export const CompletePasskeyAuthenticationBody = zod.object({
+  "challengeId": zod.string(),
+  "response": zod.record(zod.string(), zod.unknown())
+})
+
+export const CompletePasskeyAuthenticationResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable(),
+  "fullName": zod.string().nullable(),
+  "dateOfBirth": zod.string().nullable(),
+  "gender": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "onboardingCompleted": zod.boolean(),
+  "isAdmin": zod.boolean()
+}),
+  "needsProfile": zod.boolean()
+})
+
+
+/**
+ * @summary List active passkeys after recent email verification
+ */
+export const ListPasskeysResponse = zod.object({
+  "credentials": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "transports": zod.array(zod.string()),
+  "deviceType": zod.string().nullable(),
+  "backedUp": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Rename an owned active passkey
+ */
+export const renamePasskeyPathIdMax = 1024;
+
+
+
+export const RenamePasskeyParams = zod.object({
+  "id": zod.coerce.string().max(renamePasskeyPathIdMax)
+})
+
+export const renamePasskeyBodyNameMax = 80;
+
+
+
+export const RenamePasskeyBody = zod.object({
+  "name": zod.string().min(1).max(renamePasskeyBodyNameMax)
+})
+
+export const RenamePasskeyResponse = zod.object({
+  "credential": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "transports": zod.array(zod.string()),
+  "deviceType": zod.string().nullable(),
+  "backedUp": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable()
+})
+})
+
+
+/**
+ * @summary Revoke an owned active passkey
+ */
+export const revokePasskeyPathIdMax = 1024;
+
+
+
+export const RevokePasskeyParams = zod.object({
+  "id": zod.coerce.string().max(revokePasskeyPathIdMax)
+})
+
+export const RevokePasskeyBody = zod.object({
+
+})
+
+export const RevokePasskeyResponse = zod.void()
 
 
 /**
@@ -130,6 +327,1427 @@ export const LogoutBrowserSessionQueryParams = zod.object({
 })
 
 export const LogoutBrowserSessionResponse = zod.void()
+
+
+/**
+ * @summary Get the signed-in account's financial planning document
+ */
+export const getFinancialDataResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const getFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const getFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const getFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const getFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const getFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+
+export const getFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+
+export const getFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const getFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const getFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const getFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const getFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const getFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const getFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const getFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const GetFinancialDataResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(getFinancialDataResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(getFinancialDataResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(getFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(getFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin).max(getFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(getFinancialDataResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(getFinancialDataResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(getFinancialDataResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(getFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(getFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(getFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(getFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(getFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(getFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(getFinancialDataResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Replace the signed-in account's financial planning document
+ */
+export const putFinancialDataBodyNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const putFinancialDataBodyNetWorthSnapshotsItemAssetsMin = 0;
+
+export const putFinancialDataBodyNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const putFinancialDataBodyNetWorthSnapshotsItemHealthScoreMin = 0;
+export const putFinancialDataBodyNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const putFinancialDataBodyEmergencyFundTargetMonthsMin = 0;
+
+export const putFinancialDataBodyEmergencyFundReserveBalanceMin = 0;
+
+export const putFinancialDataBodyEmergencyFundMonthlyContributionMin = 0;
+
+export const putFinancialDataBodyRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const putFinancialDataBodyRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const putFinancialDataBodyRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const putFinancialDataBodyRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const putFinancialDataBodyRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const putFinancialDataBodyRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const putFinancialDataBodyIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const PutFinancialDataBody = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(putFinancialDataBodyNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(putFinancialDataBodyNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(putFinancialDataBodyNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(putFinancialDataBodyNetWorthSnapshotsItemHealthScoreMin).max(putFinancialDataBodyNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(putFinancialDataBodyEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(putFinancialDataBodyEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(putFinancialDataBodyEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(putFinancialDataBodyRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(putFinancialDataBodyRetirementInputsRetirementSpendingAdjustmentPercentMin).max(putFinancialDataBodyRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(putFinancialDataBodyRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(putFinancialDataBodyRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(putFinancialDataBodyRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(putFinancialDataBodyIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+export const putFinancialDataResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const putFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const putFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const putFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const putFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const putFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+
+export const putFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+
+export const putFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const putFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const putFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const putFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const putFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const putFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const putFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const putFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const PutFinancialDataResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(putFinancialDataResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(putFinancialDataResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(putFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(putFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin).max(putFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(putFinancialDataResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(putFinancialDataResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(putFinancialDataResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(putFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(putFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(putFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(putFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(putFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(putFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(putFinancialDataResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Clear the signed-in account's financial planning document
+ */
+export const deleteFinancialDataResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const deleteFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const deleteFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const deleteFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const deleteFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const deleteFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+
+export const deleteFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+
+export const deleteFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const deleteFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const deleteFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const deleteFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const deleteFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const deleteFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const deleteFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const deleteFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const DeleteFinancialDataResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(deleteFinancialDataResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(deleteFinancialDataResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(deleteFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(deleteFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin).max(deleteFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(deleteFinancialDataResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(deleteFinancialDataResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(deleteFinancialDataResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(deleteFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(deleteFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(deleteFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(deleteFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(deleteFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(deleteFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(deleteFinancialDataResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Atomically commit reviewed premium bank statement expenses
+ */
+
+export const importBankStatementExpensesBodyRowsItemImportIdRegExp = new RegExp('^[a-fA-F0-9]{64}$');
+export const importBankStatementExpensesBodyRowsItemSourceRowIdMax = 256;
+
+export const importBankStatementExpensesBodyRowsItemParserVersionMin = 3;
+export const importBankStatementExpensesBodyRowsItemParserVersionMax = 64;
+
+export const importBankStatementExpensesBodyRowsItemAmountExclusiveMin = 0;
+
+export const importBankStatementExpensesBodyRowsItemCategoryMax = 80;
+
+export const importBankStatementExpensesBodyRowsItemMerchantMax = 160;
+
+export const importBankStatementExpensesBodyRowsItemPaymentMethodMax = 80;
+
+export const importBankStatementExpensesBodyRowsItemNoteMax = 2000;
+
+export const importBankStatementExpensesBodyRowsMax = 5000;
+
+
+
+export const ImportBankStatementExpensesBody = zod.object({
+  "expectedAccountId": zod.string().min(1),
+  "rows": zod.array(zod.object({
+  "importId": zod.string().regex(importBankStatementExpensesBodyRowsItemImportIdRegExp),
+  "sourceRowId": zod.string().min(1).max(importBankStatementExpensesBodyRowsItemSourceRowIdMax),
+  "bank": zod.enum(['SBI', 'HDFC', 'ICICI', 'Axis', 'Kotak', 'PNB', 'BOB', 'IndusInd']),
+  "parserVersion": zod.string().min(importBankStatementExpensesBodyRowsItemParserVersionMin).max(importBankStatementExpensesBodyRowsItemParserVersionMax),
+  "date": zod.coerce.date(),
+  "amount": zod.number().gt(importBankStatementExpensesBodyRowsItemAmountExclusiveMin),
+  "category": zod.string().min(1).max(importBankStatementExpensesBodyRowsItemCategoryMax),
+  "merchant": zod.string().min(1).max(importBankStatementExpensesBodyRowsItemMerchantMax),
+  "paymentMethod": zod.string().min(1).max(importBankStatementExpensesBodyRowsItemPaymentMethodMax),
+  "note": zod.string().max(importBankStatementExpensesBodyRowsItemNoteMax).optional(),
+  "reimbursable": zod.boolean().optional(),
+  "recurring": zod.boolean().optional()
+})).min(1).max(importBankStatementExpensesBodyRowsMax)
+})
+
+export const importBankStatementExpensesResponseDuplicateCountMin = 0;
+
+export const importBankStatementExpensesResponseDataNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const importBankStatementExpensesResponseDataNetWorthSnapshotsItemAssetsMin = 0;
+
+export const importBankStatementExpensesResponseDataNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const importBankStatementExpensesResponseDataNetWorthSnapshotsItemHealthScoreMin = 0;
+export const importBankStatementExpensesResponseDataNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const importBankStatementExpensesResponseDataEmergencyFundTargetMonthsMin = 0;
+
+export const importBankStatementExpensesResponseDataEmergencyFundReserveBalanceMin = 0;
+
+export const importBankStatementExpensesResponseDataEmergencyFundMonthlyContributionMin = 0;
+
+export const importBankStatementExpensesResponseDataRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const importBankStatementExpensesResponseDataRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const importBankStatementExpensesResponseDataRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const importBankStatementExpensesResponseDataIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const ImportBankStatementExpensesResponse = zod.object({
+  "added": zod.array(zod.record(zod.string(), zod.unknown())),
+  "duplicateCount": zod.number().min(importBankStatementExpensesResponseDuplicateCountMin),
+  "data": zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(importBankStatementExpensesResponseDataNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(importBankStatementExpensesResponseDataNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(importBankStatementExpensesResponseDataNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(importBankStatementExpensesResponseDataNetWorthSnapshotsItemHealthScoreMin).max(importBankStatementExpensesResponseDataNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(importBankStatementExpensesResponseDataEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(importBankStatementExpensesResponseDataEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(importBankStatementExpensesResponseDataEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(importBankStatementExpensesResponseDataRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(importBankStatementExpensesResponseDataRetirementInputsRetirementSpendingAdjustmentPercentMin).max(importBankStatementExpensesResponseDataRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(importBankStatementExpensesResponseDataRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(importBankStatementExpensesResponseDataIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+})
+
+
+/**
+ * @summary Download a complete versioned export for the signed-in account
+ */
+export const ExportPersonalDataResponse = zod.unknown()
+
+
+/**
+ * @summary Get the signed-in account deletion lifecycle
+ */
+export const getAccountDeletionStatusResponseAttemptsMultipleOf = 1;
+
+
+
+export const GetAccountDeletionStatusResponse = zod.object({
+  "id": zod.string().optional(),
+  "status": zod.enum(['none', 'cooling_off', 'cancelled', 'processing', 'blocked', 'completed']),
+  "requestedAt": zod.coerce.date().optional(),
+  "scheduledFor": zod.coerce.date().optional(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "attempts": zod.number().multipleOf(getAccountDeletionStatusResponseAttemptsMultipleOf).optional(),
+  "retryingObjectCleanup": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Schedule deletion after recent authentication and strong confirmation
+ */
+export const RequestAccountDeletionBody = zod.object({
+  "email": zod.string(),
+  "confirmation": zod.enum(['DELETE MY ACCOUNT'])
+})
+
+export const requestAccountDeletionResponseAttemptsMultipleOf = 1;
+
+
+
+export const RequestAccountDeletionResponse = zod.object({
+  "id": zod.string().optional(),
+  "status": zod.enum(['none', 'cooling_off', 'cancelled', 'processing', 'blocked', 'completed']),
+  "requestedAt": zod.coerce.date().optional(),
+  "scheduledFor": zod.coerce.date().optional(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "attempts": zod.number().multipleOf(requestAccountDeletionResponseAttemptsMultipleOf).optional(),
+  "retryingObjectCleanup": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Cancel deletion during the seven-day cooling period
+ */
+export const cancelAccountDeletionResponseAttemptsMultipleOf = 1;
+
+
+
+export const CancelAccountDeletionResponse = zod.object({
+  "id": zod.string().optional(),
+  "status": zod.enum(['none', 'cooling_off', 'cancelled', 'processing', 'blocked', 'completed']),
+  "requestedAt": zod.coerce.date().optional(),
+  "scheduledFor": zod.coerce.date().optional(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "attempts": zod.number().multipleOf(cancelAccountDeletionResponseAttemptsMultipleOf).optional(),
+  "retryingObjectCleanup": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update emergency-fund settings or one monthly net-worth snapshot
+ */
+export const updateFinancialHealthPlanningBodyThreeEmergencyFundTargetMonthsMin = 0;
+
+export const updateFinancialHealthPlanningBodyThreeEmergencyFundReserveBalanceMin = 0;
+
+export const updateFinancialHealthPlanningBodyThreeEmergencyFundMonthlyContributionMin = 0;
+
+export const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotAssetsMin = 0;
+
+export const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotLiabilitiesMin = 0;
+
+export const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotHealthScoreMin = 0;
+export const updateFinancialHealthPlanningBodyThreeNetWorthSnapshotHealthScoreMax = 100;
+
+
+
+export const UpdateFinancialHealthPlanningBody = zod.union([zod.unknown(),zod.unknown()]).and(zod.object({
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(updateFinancialHealthPlanningBodyThreeEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(updateFinancialHealthPlanningBodyThreeEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(updateFinancialHealthPlanningBodyThreeEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "netWorthSnapshot": zod.object({
+  "month": zod.string().regex(updateFinancialHealthPlanningBodyThreeNetWorthSnapshotMonthRegExp),
+  "assets": zod.number().min(updateFinancialHealthPlanningBodyThreeNetWorthSnapshotAssetsMin),
+  "liabilities": zod.number().min(updateFinancialHealthPlanningBodyThreeNetWorthSnapshotLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(updateFinancialHealthPlanningBodyThreeNetWorthSnapshotHealthScoreMin).max(updateFinancialHealthPlanningBodyThreeNetWorthSnapshotHealthScoreMax).optional()
+}).optional()
+}))
+
+export const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const updateFinancialHealthPlanningResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const updateFinancialHealthPlanningResponseEmergencyFundTargetMonthsMin = 0;
+
+export const updateFinancialHealthPlanningResponseEmergencyFundReserveBalanceMin = 0;
+
+export const updateFinancialHealthPlanningResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const updateFinancialHealthPlanningResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const updateFinancialHealthPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const updateFinancialHealthPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const updateFinancialHealthPlanningResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const UpdateFinancialHealthPlanningResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(updateFinancialHealthPlanningResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(updateFinancialHealthPlanningResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(updateFinancialHealthPlanningResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(updateFinancialHealthPlanningResponseNetWorthSnapshotsItemHealthScoreMin).max(updateFinancialHealthPlanningResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(updateFinancialHealthPlanningResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(updateFinancialHealthPlanningResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(updateFinancialHealthPlanningResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(updateFinancialHealthPlanningResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(updateFinancialHealthPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(updateFinancialHealthPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(updateFinancialHealthPlanningResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(updateFinancialHealthPlanningResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Authoritatively restore the signed-in account's financial planning document
+ */
+export const restoreFinancialDataBodyOneNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const restoreFinancialDataBodyOneNetWorthSnapshotsItemAssetsMin = 0;
+
+export const restoreFinancialDataBodyOneNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const restoreFinancialDataBodyOneNetWorthSnapshotsItemHealthScoreMin = 0;
+export const restoreFinancialDataBodyOneNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const restoreFinancialDataBodyOneEmergencyFundTargetMonthsMin = 0;
+
+export const restoreFinancialDataBodyOneEmergencyFundReserveBalanceMin = 0;
+
+export const restoreFinancialDataBodyOneEmergencyFundMonthlyContributionMin = 0;
+
+export const restoreFinancialDataBodyOneRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const restoreFinancialDataBodyOneRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const restoreFinancialDataBodyOneRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const restoreFinancialDataBodyOneIncomeReceiptsItemAmountMin = 0;
+
+export const restoreFinancialDataBodyTwoRestoreUploadObjectPathRegExp = new RegExp('^/objects/vault-staging/[0-9a-fA-F-]{36}$');
+export const restoreFinancialDataBodyTwoRestoreUploadSizeMax = 12582912;
+export const restoreFinancialDataBodyTwoRestoreUploadSizeMultipleOf = 1;
+
+
+
+export const RestoreFinancialDataBody = zod.union([zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(restoreFinancialDataBodyOneNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(restoreFinancialDataBodyOneNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(restoreFinancialDataBodyOneNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(restoreFinancialDataBodyOneNetWorthSnapshotsItemHealthScoreMin).max(restoreFinancialDataBodyOneNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(restoreFinancialDataBodyOneEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(restoreFinancialDataBodyOneEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(restoreFinancialDataBodyOneEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(restoreFinancialDataBodyOneRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(restoreFinancialDataBodyOneRetirementInputsRetirementSpendingAdjustmentPercentMin).max(restoreFinancialDataBodyOneRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(restoreFinancialDataBodyOneRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(restoreFinancialDataBodyOneIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+}),zod.object({
+  "restoreUpload": zod.object({
+  "objectPath": zod.string().regex(restoreFinancialDataBodyTwoRestoreUploadObjectPathRegExp),
+  "size": zod.number().min(1).max(restoreFinancialDataBodyTwoRestoreUploadSizeMax).multipleOf(restoreFinancialDataBodyTwoRestoreUploadSizeMultipleOf)
+})
+})])
+
+export const restoreFinancialDataResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const restoreFinancialDataResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const restoreFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const restoreFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const restoreFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const restoreFinancialDataResponseEmergencyFundTargetMonthsMin = 0;
+
+export const restoreFinancialDataResponseEmergencyFundReserveBalanceMin = 0;
+
+export const restoreFinancialDataResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const restoreFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const restoreFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const restoreFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const restoreFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const restoreFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const restoreFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const restoreFinancialDataResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const RestoreFinancialDataResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(restoreFinancialDataResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(restoreFinancialDataResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(restoreFinancialDataResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(restoreFinancialDataResponseNetWorthSnapshotsItemHealthScoreMin).max(restoreFinancialDataResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(restoreFinancialDataResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(restoreFinancialDataResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(restoreFinancialDataResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(restoreFinancialDataResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(restoreFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(restoreFinancialDataResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(restoreFinancialDataResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(restoreFinancialDataResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(restoreFinancialDataResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(restoreFinancialDataResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Create an owner-bound upload URL for a large financial restore backup
+ */
+export const requestFinancialRestoreUploadUrlBodySizeMax = 12582912;
+export const requestFinancialRestoreUploadUrlBodySizeMultipleOf = 1;
+
+
+
+export const RequestFinancialRestoreUploadUrlBody = zod.object({
+  "size": zod.number().min(1).max(requestFinancialRestoreUploadUrlBodySizeMax).multipleOf(requestFinancialRestoreUploadUrlBodySizeMultipleOf)
+})
+
+export const requestFinancialRestoreUploadUrlResponseMetadataSizeMultipleOf = 1;
+
+
+
+export const RequestFinancialRestoreUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string(),
+  "metadata": zod.object({
+  "size": zod.number().multipleOf(requestFinancialRestoreUploadUrlResponseMetadataSizeMultipleOf),
+  "contentType": zod.enum(['application/json'])
+})
+})
+
+
+/**
+ * @summary Deliberately delete one owned expense
+ */
+export const DeleteFinancialExpenseParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const deleteFinancialExpenseResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const deleteFinancialExpenseResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const deleteFinancialExpenseResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const deleteFinancialExpenseResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const deleteFinancialExpenseResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const deleteFinancialExpenseResponseEmergencyFundTargetMonthsMin = 0;
+
+export const deleteFinancialExpenseResponseEmergencyFundReserveBalanceMin = 0;
+
+export const deleteFinancialExpenseResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const deleteFinancialExpenseResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const deleteFinancialExpenseResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const deleteFinancialExpenseResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const deleteFinancialExpenseResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const DeleteFinancialExpenseResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(deleteFinancialExpenseResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(deleteFinancialExpenseResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(deleteFinancialExpenseResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(deleteFinancialExpenseResponseNetWorthSnapshotsItemHealthScoreMin).max(deleteFinancialExpenseResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(deleteFinancialExpenseResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(deleteFinancialExpenseResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(deleteFinancialExpenseResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(deleteFinancialExpenseResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(deleteFinancialExpenseResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(deleteFinancialExpenseResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(deleteFinancialExpenseResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(deleteFinancialExpenseResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Replace retirement assumptions, lifestyle, and pension sources
+ */
+export const updateRetirementPlanningBodyTargetRetirementAgeMin = 18;
+export const updateRetirementPlanningBodyTargetRetirementAgeMax = 120;
+
+export const updateRetirementPlanningBodyLifeExpectancyMin = 18;
+export const updateRetirementPlanningBodyLifeExpectancyMax = 130;
+
+export const updateRetirementPlanningBodyGeneralInflationMin = 0;
+export const updateRetirementPlanningBodyGeneralInflationMax = 25;
+
+export const updateRetirementPlanningBodySalaryGrowthMin = 0;
+export const updateRetirementPlanningBodySalaryGrowthMax = 100;
+
+export const updateRetirementPlanningBodyMonthlyContributionOverrideMin = 0;
+
+export const updateRetirementPlanningBodyCustomLifestyleExpenseMin = 0;
+
+
+export const updateRetirementPlanningBodyPensionSourcesItemMonthlyAmountMin = 0;
+
+export const updateRetirementPlanningBodyPensionSourcesItemStartAgeMin = 0;
+
+export const updateRetirementPlanningBodyPensionSourcesItemAnnualEscalationRateMin = 0;
+
+
+
+export const UpdateRetirementPlanningBody = zod.object({
+  "dateOfBirth": zod.string(),
+  "targetRetirementAge": zod.number().min(updateRetirementPlanningBodyTargetRetirementAgeMin).max(updateRetirementPlanningBodyTargetRetirementAgeMax),
+  "lifeExpectancy": zod.number().min(updateRetirementPlanningBodyLifeExpectancyMin).max(updateRetirementPlanningBodyLifeExpectancyMax),
+  "generalInflation": zod.number().min(updateRetirementPlanningBodyGeneralInflationMin).max(updateRetirementPlanningBodyGeneralInflationMax),
+  "salaryGrowth": zod.number().min(updateRetirementPlanningBodySalaryGrowthMin).max(updateRetirementPlanningBodySalaryGrowthMax),
+  "monthlyContributionOverride": zod.number().min(updateRetirementPlanningBodyMonthlyContributionOverrideMin),
+  "investSurplus": zod.boolean(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']),
+  "customLifestyleExpense": zod.number().min(updateRetirementPlanningBodyCustomLifestyleExpenseMin),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(updateRetirementPlanningBodyPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(updateRetirementPlanningBodyPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(updateRetirementPlanningBodyPensionSourcesItemAnnualEscalationRateMin)
+}))
+})
+
+export const updateRetirementPlanningResponseNetWorthSnapshotsItemMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const updateRetirementPlanningResponseNetWorthSnapshotsItemAssetsMin = 0;
+
+export const updateRetirementPlanningResponseNetWorthSnapshotsItemLiabilitiesMin = 0;
+
+export const updateRetirementPlanningResponseNetWorthSnapshotsItemHealthScoreMin = 0;
+export const updateRetirementPlanningResponseNetWorthSnapshotsItemHealthScoreMax = 100;
+
+export const updateRetirementPlanningResponseEmergencyFundTargetMonthsMin = 0;
+
+export const updateRetirementPlanningResponseEmergencyFundReserveBalanceMin = 0;
+
+export const updateRetirementPlanningResponseEmergencyFundMonthlyContributionMin = 0;
+
+export const updateRetirementPlanningResponseRetirementInputsCustomLifestyleExpenseMin = 0;
+
+export const updateRetirementPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMin = -90;
+export const updateRetirementPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMax = 300;
+
+
+export const updateRetirementPlanningResponseRetirementInputsPensionSourcesItemMonthlyAmountMin = 0;
+
+export const updateRetirementPlanningResponseRetirementInputsPensionSourcesItemStartAgeMin = 0;
+
+export const updateRetirementPlanningResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin = 0;
+
+export const updateRetirementPlanningResponseIncomeReceiptsItemAmountMin = 0;
+
+
+
+export const UpdateRetirementPlanningResponse = zod.object({
+  "netWorthSnapshots": zod.array(zod.object({
+  "month": zod.string().regex(updateRetirementPlanningResponseNetWorthSnapshotsItemMonthRegExp),
+  "assets": zod.number().min(updateRetirementPlanningResponseNetWorthSnapshotsItemAssetsMin),
+  "liabilities": zod.number().min(updateRetirementPlanningResponseNetWorthSnapshotsItemLiabilitiesMin),
+  "netWorth": zod.number(),
+  "healthScore": zod.number().min(updateRetirementPlanningResponseNetWorthSnapshotsItemHealthScoreMin).max(updateRetirementPlanningResponseNetWorthSnapshotsItemHealthScoreMax).optional()
+})).optional(),
+  "emergencyFund": zod.object({
+  "targetMonths": zod.number().min(updateRetirementPlanningResponseEmergencyFundTargetMonthsMin),
+  "reserveBalance": zod.number().min(updateRetirementPlanningResponseEmergencyFundReserveBalanceMin),
+  "monthlyContribution": zod.number().min(updateRetirementPlanningResponseEmergencyFundMonthlyContributionMin)
+}).optional(),
+  "retirementInputs": zod.object({
+  "dateOfBirth": zod.string().optional(),
+  "targetRetirementAge": zod.number().optional(),
+  "lifeExpectancy": zod.number().optional(),
+  "generalInflation": zod.number().optional(),
+  "salaryGrowth": zod.number().optional(),
+  "monthlyContributionOverride": zod.number().optional(),
+  "investSurplus": zod.boolean().optional(),
+  "lifestyleChoice": zod.enum(['Basic', 'Comfortable', 'Premium', 'Custom']).optional(),
+  "customLifestyleExpense": zod.number().min(updateRetirementPlanningResponseRetirementInputsCustomLifestyleExpenseMin).optional(),
+  "retirementSpendingAdjustmentPercent": zod.number().min(updateRetirementPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMin).max(updateRetirementPlanningResponseRetirementInputsRetirementSpendingAdjustmentPercentMax).optional(),
+  "pensionSources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1),
+  "monthlyAmount": zod.number().min(updateRetirementPlanningResponseRetirementInputsPensionSourcesItemMonthlyAmountMin),
+  "startAge": zod.number().min(updateRetirementPlanningResponseRetirementInputsPensionSourcesItemStartAgeMin).optional(),
+  "annualEscalationRate": zod.number().min(updateRetirementPlanningResponseRetirementInputsPensionSourcesItemAnnualEscalationRateMin)
+})).optional()
+}).optional(),
+  "incomeReceipts": zod.array(zod.object({
+  "id": zod.string(),
+  "incomeSourceId": zod.string(),
+  "receivedDate": zod.coerce.date(),
+  "amount": zod.number().min(updateRetirementPlanningResponseIncomeReceiptsItemAmountMin),
+  "note": zod.string().optional(),
+  "createdAt": zod.coerce.date()
+})).optional()
+})
+
+
+/**
+ * @summary Get effective account capabilities
+ */
+export const GetEntitlementsResponse = zod.object({
+  "plan": zod.enum(['free', 'premium']),
+  "premium": zod.boolean(),
+  "validUntil": zod.coerce.date().nullable(),
+  "capabilities": zod.object({
+  "receiptOcr": zod.boolean(),
+  "bankStatementImport": zod.boolean(),
+  "documentVault": zod.boolean(),
+  "nomineeTracker": zod.boolean(),
+  "verifiedMobile": zod.boolean()
+}),
+  "mobileVerification": zod.object({
+  "hasMobile": zod.boolean(),
+  "verified": zod.boolean()
+})
+})
+
+
+/**
+ * @summary Request mobile verification by SMS
+ */
+export const RequestMobileOtpResponse = zod.unknown()
+
+
+/**
+ * @summary Verify a delivered mobile verification challenge
+ */
+export const verifyMobileOtpBodyCodeRegExp = new RegExp('^\\d{6}$');
+
+
+export const VerifyMobileOtpBody = zod.object({
+  "challengeId": zod.string(),
+  "code": zod.string().regex(verifyMobileOtpBodyCodeRegExp)
+})
+
+export const VerifyMobileOtpResponse = zod.unknown()
+
+
+/**
+ * @summary Request a private direct-upload URL
+ */
+export const requestVaultUploadUrlBodyNameMax = 240;
+
+export const requestVaultUploadUrlBodySizeMax = 20971520;
+export const requestVaultUploadUrlBodySizeMultipleOf = 1;
+
+export const requestVaultUploadUrlBodyPurposeDefault = `vault_document`;
+
+export const RequestVaultUploadUrlBody = zod.object({
+  "name": zod.string().min(1).max(requestVaultUploadUrlBodyNameMax),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(requestVaultUploadUrlBodySizeMax).multipleOf(requestVaultUploadUrlBodySizeMultipleOf),
+  "purpose": zod.enum(['vault_document', 'receipt_review']).default(requestVaultUploadUrlBodyPurposeDefault)
+})
+
+export const requestVaultUploadUrlResponseMetadataNameMax = 240;
+
+export const requestVaultUploadUrlResponseMetadataSizeMax = 20971520;
+export const requestVaultUploadUrlResponseMetadataSizeMultipleOf = 1;
+
+export const requestVaultUploadUrlResponseMetadataPurposeDefault = `vault_document`;
+
+export const RequestVaultUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string(),
+  "metadata": zod.object({
+  "name": zod.string().min(1).max(requestVaultUploadUrlResponseMetadataNameMax),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(requestVaultUploadUrlResponseMetadataSizeMax).multipleOf(requestVaultUploadUrlResponseMetadataSizeMultipleOf),
+  "purpose": zod.enum(['vault_document', 'receipt_review']).default(requestVaultUploadUrlResponseMetadataPurposeDefault)
+})
+})
+
+
+/**
+ * @summary Retry cleanup of this account's expired uploads and receipt reviews
+ */
+export const cleanupExpiredVaultStorageBodyObjectPathRegExp = new RegExp('^/objects/vault/[0-9a-fA-F-]{36}$');
+
+
+export const CleanupExpiredVaultStorageBody = zod.object({
+  "objectPath": zod.string().regex(cleanupExpiredVaultStorageBodyObjectPathRegExp).optional().describe('Cancel and immediately remove this account\'s unconsumed upload')
+})
+
+export const CleanupExpiredVaultStorageResponse = zod.object({
+  "cleanupPending": zod.boolean()
+})
+
+
+/**
+ * @summary Get account-scoped pending storage cleanup status
+ */
+export const getVaultCleanupStatusResponsePendingMin = 0;
+
+export const getVaultCleanupStatusResponseFailedMin = 0;
+
+export const getVaultCleanupStatusResponseScheduledMin = 0;
+
+
+
+export const GetVaultCleanupStatusResponse = zod.object({
+  "pending": zod.number().min(getVaultCleanupStatusResponsePendingMin),
+  "failed": zod.number().min(getVaultCleanupStatusResponseFailedMin),
+  "scheduled": zod.number().min(getVaultCleanupStatusResponseScheduledMin)
+})
+
+
+/**
+ * @summary List account vault metadata
+ */
+export const ListVaultDocumentsResponse = zod.unknown()
+
+
+/**
+ * @summary Confirm a completed upload and create metadata
+ */
+export const confirmVaultDocumentBodyOneNameMax = 240;
+
+export const confirmVaultDocumentBodyOneSizeMax = 20971520;
+export const confirmVaultDocumentBodyOneSizeMultipleOf = 1;
+
+export const confirmVaultDocumentBodyOnePurposeDefault = `vault_document`;
+export const confirmVaultDocumentBodyTwoCategoryMax = 64;
+
+
+
+export const ConfirmVaultDocumentBody = zod.object({
+  "name": zod.string().min(1).max(confirmVaultDocumentBodyOneNameMax),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(confirmVaultDocumentBodyOneSizeMax).multipleOf(confirmVaultDocumentBodyOneSizeMultipleOf),
+  "purpose": zod.enum(['vault_document', 'receipt_review']).default(confirmVaultDocumentBodyOnePurposeDefault)
+}).and(zod.object({
+  "objectPath": zod.string(),
+  "category": zod.string().max(confirmVaultDocumentBodyTwoCategoryMax).optional(),
+  "expiresOn": zod.coerce.date().nullish()
+}))
+
+export const ConfirmVaultDocumentResponse = zod.void()
+
+
+/**
+ * @summary Replace document content after direct upload
+ */
+export const ReplaceVaultDocumentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const replaceVaultDocumentBodyOneNameMax = 240;
+
+export const replaceVaultDocumentBodyOneSizeMax = 20971520;
+export const replaceVaultDocumentBodyOneSizeMultipleOf = 1;
+
+export const replaceVaultDocumentBodyOnePurposeDefault = `vault_document`;
+export const replaceVaultDocumentBodyTwoCategoryMax = 64;
+
+
+
+export const ReplaceVaultDocumentBody = zod.object({
+  "name": zod.string().min(1).max(replaceVaultDocumentBodyOneNameMax),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(replaceVaultDocumentBodyOneSizeMax).multipleOf(replaceVaultDocumentBodyOneSizeMultipleOf),
+  "purpose": zod.enum(['vault_document', 'receipt_review']).default(replaceVaultDocumentBodyOnePurposeDefault)
+}).and(zod.object({
+  "objectPath": zod.string(),
+  "category": zod.string().max(replaceVaultDocumentBodyTwoCategoryMax).optional(),
+  "expiresOn": zod.coerce.date().nullish()
+}))
+
+export const ReplaceVaultDocumentResponse = zod.object({
+  "cleanupPending": zod.boolean()
+})
+
+
+/**
+ * @summary Delete document metadata and object
+ */
+export const DeleteVaultDocumentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteVaultDocumentResponse = zod.object({
+  "cleanupPending": zod.boolean()
+})
+
+
+/**
+ * @summary Download an account-owned private document
+ */
+export const DownloadVaultDocumentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DownloadVaultDocumentResponse = zod.unknown()
+
+
+/**
+ * @summary Inline-preview an account-owned raster image
+ */
+export const PreviewVaultDocumentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PreviewVaultDocumentResponse = zod.unknown()
+
+
+/**
+ * @summary Archive or restore a document
+ */
+export const UpdateVaultDocumentLifecycleParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateVaultDocumentLifecycleBody = zod.object({
+  "archived": zod.boolean()
+})
+
+export const UpdateVaultDocumentLifecycleResponse = zod.unknown()
+
+
+/**
+ * @summary Stage OCR candidates without saving financial data
+ */
+export const createReceiptReviewBodyCandidatesMax = 50;
+
+
+
+export const CreateReceiptReviewBody = zod.object({
+  "documentId": zod.string(),
+  "candidates": zod.array(zod.record(zod.string(), zod.unknown())).max(createReceiptReviewBodyCandidatesMax)
+})
+
+export const CreateReceiptReviewResponse = zod.void()
+
+
+/**
+ * @summary Get staged receipt candidates
+ */
+export const GetReceiptReviewParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetReceiptReviewResponse = zod.unknown()
+
+
+/**
+ * @summary Discard staged candidates
+ */
+export const DiscardReceiptReviewParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DiscardReceiptReviewResponse = zod.object({
+  "cleanupPending": zod.boolean()
+})
+
+
+/**
+ * @summary Confirm reviewed receipt values
+ */
+export const ConfirmReceiptReviewParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const confirmReceiptReviewBodyValuesMerchantMax = 160;
+
+export const confirmReceiptReviewBodyValuesAmountMin = 0;
+
+export const confirmReceiptReviewBodyValuesCategoryMax = 80;
+
+export const confirmReceiptReviewBodyValuesLineItemsItemDescriptionMax = 120;
+
+export const confirmReceiptReviewBodyValuesLineItemsItemAmountMin = 0;
+
+export const confirmReceiptReviewBodyValuesLineItemsMax = 100;
+
+
+
+export const ConfirmReceiptReviewBody = zod.object({
+  "values": zod.object({
+  "merchant": zod.string().max(confirmReceiptReviewBodyValuesMerchantMax),
+  "amount": zod.number().min(confirmReceiptReviewBodyValuesAmountMin),
+  "date": zod.coerce.date(),
+  "category": zod.string().max(confirmReceiptReviewBodyValuesCategoryMax),
+  "retainOriginal": zod.boolean().optional(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string().max(confirmReceiptReviewBodyValuesLineItemsItemDescriptionMax),
+  "amount": zod.number().min(confirmReceiptReviewBodyValuesLineItemsItemAmountMin)
+})).max(confirmReceiptReviewBodyValuesLineItemsMax).optional()
+})
+})
+
+export const confirmReceiptReviewResponseValuesMerchantMax = 160;
+
+export const confirmReceiptReviewResponseValuesAmountMin = 0;
+
+export const confirmReceiptReviewResponseValuesCategoryMax = 80;
+
+export const confirmReceiptReviewResponseValuesLineItemsItemDescriptionMax = 120;
+
+export const confirmReceiptReviewResponseValuesLineItemsItemAmountMin = 0;
+
+export const confirmReceiptReviewResponseValuesLineItemsMax = 100;
+
+
+
+export const ConfirmReceiptReviewResponse = zod.object({
+  "reviewId": zod.string(),
+  "expense": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "loanId": zod.string().nullable(),
+  "accountId": zod.string().nullable(),
+  "date": zod.string(),
+  "amount": zod.string(),
+  "category": zod.string(),
+  "merchant": zod.string(),
+  "paymentMethod": zod.string(),
+  "note": zod.string(),
+  "reimbursable": zod.boolean(),
+  "recurring": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "status": zod.enum(['confirmed']),
+  "values": zod.object({
+  "merchant": zod.string().max(confirmReceiptReviewResponseValuesMerchantMax),
+  "amount": zod.number().min(confirmReceiptReviewResponseValuesAmountMin),
+  "date": zod.coerce.date(),
+  "category": zod.string().max(confirmReceiptReviewResponseValuesCategoryMax),
+  "retainOriginal": zod.boolean().optional(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string().max(confirmReceiptReviewResponseValuesLineItemsItemDescriptionMax),
+  "amount": zod.number().min(confirmReceiptReviewResponseValuesLineItemsItemAmountMin)
+})).max(confirmReceiptReviewResponseValuesLineItemsMax).optional()
+}),
+  "saved": zod.literal(true),
+  "retainedOriginal": zod.boolean(),
+  "cleanupPending": zod.boolean()
+})
+
+
+/**
+ * @summary List account nominees
+ */
+export const ListNomineesResponse = zod.unknown()
+
+
+/**
+ * @summary Create an account nominee
+ */
+export const createNomineeBodyNameMax = 120;
+
+export const createNomineeBodyRelationshipMax = 64;
+
+export const createNomineeBodyAllocationPercentMin = 0;
+export const createNomineeBodyAllocationPercentMax = 100;
+export const createNomineeBodyAllocationPercentMultipleOf = 1;
+
+export const createNomineeBodyCoverageLabelMax = 160;
+
+export const createNomineeBodyInstitutionMax = 160;
+
+export const createNomineeBodyContactMax = 160;
+
+export const createNomineeBodyNotesMax = 1000;
+
+
+
+export const CreateNomineeBody = zod.object({
+  "name": zod.string().min(1).max(createNomineeBodyNameMax),
+  "relationship": zod.string().min(1).max(createNomineeBodyRelationshipMax),
+  "allocationPercent": zod.number().min(createNomineeBodyAllocationPercentMin).max(createNomineeBodyAllocationPercentMax).multipleOf(createNomineeBodyAllocationPercentMultipleOf),
+  "coverageType": zod.enum(['life', 'health', 'investment', 'other']).optional(),
+  "coverageLabel": zod.string().max(createNomineeBodyCoverageLabelMax).optional(),
+  "institution": zod.string().max(createNomineeBodyInstitutionMax).nullish(),
+  "status": zod.enum(['active', 'needs_review', 'inactive']).optional(),
+  "reviewStatus": zod.enum(['not_reviewed', 'reviewed', 'needs_update']).optional(),
+  "reminderOn": zod.coerce.date().nullish(),
+  "dateOfBirth": zod.coerce.date().nullish(),
+  "contact": zod.string().max(createNomineeBodyContactMax).nullish(),
+  "notes": zod.string().max(createNomineeBodyNotesMax).nullish()
+})
+
+export const CreateNomineeResponse = zod.void()
+
+
+/**
+ * @summary Replace an account nominee
+ */
+export const UpdateNomineeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateNomineeBodyNameMax = 120;
+
+export const updateNomineeBodyRelationshipMax = 64;
+
+export const updateNomineeBodyAllocationPercentMin = 0;
+export const updateNomineeBodyAllocationPercentMax = 100;
+export const updateNomineeBodyAllocationPercentMultipleOf = 1;
+
+export const updateNomineeBodyCoverageLabelMax = 160;
+
+export const updateNomineeBodyInstitutionMax = 160;
+
+export const updateNomineeBodyContactMax = 160;
+
+export const updateNomineeBodyNotesMax = 1000;
+
+
+
+export const UpdateNomineeBody = zod.object({
+  "name": zod.string().min(1).max(updateNomineeBodyNameMax),
+  "relationship": zod.string().min(1).max(updateNomineeBodyRelationshipMax),
+  "allocationPercent": zod.number().min(updateNomineeBodyAllocationPercentMin).max(updateNomineeBodyAllocationPercentMax).multipleOf(updateNomineeBodyAllocationPercentMultipleOf),
+  "coverageType": zod.enum(['life', 'health', 'investment', 'other']).optional(),
+  "coverageLabel": zod.string().max(updateNomineeBodyCoverageLabelMax).optional(),
+  "institution": zod.string().max(updateNomineeBodyInstitutionMax).nullish(),
+  "status": zod.enum(['active', 'needs_review', 'inactive']).optional(),
+  "reviewStatus": zod.enum(['not_reviewed', 'reviewed', 'needs_update']).optional(),
+  "reminderOn": zod.coerce.date().nullish(),
+  "dateOfBirth": zod.coerce.date().nullish(),
+  "contact": zod.string().max(updateNomineeBodyContactMax).nullish(),
+  "notes": zod.string().max(updateNomineeBodyNotesMax).nullish()
+})
+
+export const UpdateNomineeResponse = zod.unknown()
+
+
+/**
+ * @summary Delete an account nominee
+ */
+export const DeleteNomineeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteNomineeResponse = zod.void()
 
 
 /**

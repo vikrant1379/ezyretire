@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import { webkit } from "@playwright/test";
 
 const setupMessage =
-  "WebKit release-check setup is incomplete. Run `pnpm exec playwright install --with-deps webkit` on a Playwright-supported Linux host, then retry.";
+  "WebKit host setup failed before any app regression check ran. Run `pnpm exec playwright install --with-deps webkit` on the supported Ubuntu validation host, then retry.";
 
 async function verifyWebKitRuntime() {
   const executablePath = webkit.executablePath();
@@ -10,7 +10,9 @@ async function verifyWebKitRuntime() {
   try {
     await access(executablePath);
   } catch {
-    throw new Error(`${setupMessage}\nExpected browser executable: ${executablePath}`);
+    throw new Error(
+      `${setupMessage}\nReason: the Playwright-pinned WebKit executable is missing.\nExpected browser executable: ${executablePath}`,
+    );
   }
 
   let browser;
@@ -18,7 +20,9 @@ async function verifyWebKitRuntime() {
     browser = await webkit.launch({ headless: true });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${setupMessage}\nWebKit failed to launch:\n${detail}`);
+    throw new Error(
+      `${setupMessage}\nReason: WebKit could not launch; this is a browser/runtime dependency failure, not an application test failure.\nLaunch details:\n${detail}`,
+    );
   } finally {
     await browser?.close();
   }

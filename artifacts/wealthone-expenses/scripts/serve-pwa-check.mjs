@@ -22,17 +22,66 @@ let apiRequestCount = 0;
 let staticAssetRequestCount = 0;
 let recoveryNetworkBlocked = false;
 
+const logRequest = (request, status) => {
+  console.log(`${new Date().toISOString()} ${request.method ?? "GET"} ${request.url ?? "/"} ${status}`);
+};
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  if (url.pathname === "/legacy-sw.js") {
+    response.writeHead(200, {
+      "cache-control": "no-store",
+      "content-type": "text/javascript; charset=utf-8",
+      "service-worker-allowed": "/",
+    });
+    response.end(`
+      const CACHE_NAME = "ezyretire-static-v4";
+      self.addEventListener("install", (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME).then((cache) => cache.put(
+            "/offline.html",
+            new Response(
+              '<!doctype html><html><head><meta name="theme-color" content="#312e81"></head><body style="background:#fffaf2">Legacy offline</body></html>',
+              { headers: { "content-type": "text/html; charset=utf-8" } },
+            ),
+          )),
+        );
+        self.skipWaiting();
+      });
+      self.addEventListener("activate", (event) => {
+        event.waitUntil(self.clients.claim());
+      });
+      self.addEventListener("fetch", (event) => {
+        if (event.request.mode === "navigate") {
+          event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+        }
+      });
+    `);
+    logRequest(request, 200);
+    return;
+  }
+
+  if (url.pathname === "/safari-storage-check-setup.html") {
+    response.writeHead(200, {
+      "cache-control": "no-store",
+      "content-type": "text/html; charset=utf-8",
+    });
+    response.end("<!doctype html><title>Safari storage check setup</title>");
+    logRequest(request, 200);
+    return;
+  }
+
   if (url.pathname === "/api/pwa-recovery-network") {
     recoveryNetworkBlocked = url.searchParams.get("blocked") === "true";
     response.writeHead(204, { "cache-control": "no-store" });
     response.end();
+    logRequest(request, 204);
     return;
   }
 
   if (recoveryNetworkBlocked && url.pathname.startsWith("/storage-blocked-")) {
     request.socket.destroy();
+    logRequest(request, "connection-destroyed");
     return;
   }
 
@@ -43,6 +92,7 @@ const server = createServer(async (request, response) => {
       "content-type": "application/json; charset=utf-8",
     });
     response.end(JSON.stringify({ requestCount: apiRequestCount }));
+    logRequest(request, 200);
     return;
   }
 
@@ -53,6 +103,7 @@ const server = createServer(async (request, response) => {
       "content-type": "text/plain; charset=utf-8",
     });
     response.end(`network-response-${staticAssetRequestCount}`);
+    logRequest(request, 200);
     return;
   }
 
@@ -64,6 +115,59 @@ const server = createServer(async (request, response) => {
 
   try {
     let body = await readFile(safePath);
+    if (pathname === "/index.html" && url.searchParams.has("safari-storage-check")) {
+      const scenario = url.searchParams.get("safari-storage-check");
+      const fixtureScript = {
+        current: `window.localStorage.setItem(
+          "ezyretire:offline-storage-unavailable",
+          JSON.stringify({ confirmedAt: Date.now(), unavailable: true }),
+        );`,
+        stale: `window.localStorage.setItem(
+          "ezyretire:offline-storage-unavailable",
+          JSON.stringify({
+            confirmedAt: Date.now() - (7 * 24 * 60 * 60 * 1000) - 1,
+            unavailable: true,
+          }),
+        );`,
+        malformed: `window.localStorage.setItem(
+          "ezyretire:offline-storage-unavailable",
+          "{not-json",
+        );`,
+        denied: `Object.defineProperty(window, "localStorage", {
+          configurable: true,
+          get() { throw new DOMException("Storage access is blocked", "SecurityError"); },
+        });
+        const safariStorageCheckRegister =
+          navigator.serviceWorker.register.bind(navigator.serviceWorker);
+        navigator.serviceWorker.register = (scriptUrl, options) => {
+          const deniedScriptUrl = new URL(scriptUrl, window.location.href);
+          deniedScriptUrl.searchParams.set("deny-cache-storage", "1");
+          return safariStorageCheckRegister(deniedScriptUrl.href, options);
+        };`,
+      }[scenario] ?? "";
+      const suppressStorageRecovery = ["current", "stale", "malformed"].includes(scenario)
+        ? `navigator.serviceWorker.register = () =>
+          Promise.reject(new DOMException("Disabled by Safari storage-state fixture", "NotSupportedError"));`
+        : "";
+      body = Buffer.from(
+        body.toString("utf8").replace(
+          "<head>",
+          `<head>
+    <script>
+      window.__safariStoragePageErrors = [];
+      window.addEventListener("error", (event) => {
+        window.__safariStoragePageErrors.push(event.message || "Unknown page error");
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        window.__safariStoragePageErrors.push(reason && reason.message ? reason.message : String(reason));
+      });
+      ${fixtureScript}
+      ${suppressStorageRecovery}
+    </script>`,
+        ),
+      );
+    }
     if (pathname === "/sw.js") {
       if (url.searchParams.has("deny-cache-storage")) {
         body = Buffer.concat([
@@ -97,16 +201,22 @@ const server = createServer(async (request, response) => {
       ...(pathname === "/sw.js" ? { "cache-control": "no-cache" } : {}),
     });
     response.end(body);
+    logRequest(request, 200);
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       const body = await readFile(resolve(publicRoot, "index.html"));
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end(body);
+      logRequest(request, 200);
       return;
     }
+    console.error(`${new Date().toISOString()} PWA check server error`, error);
     response.writeHead(500);
     response.end("PWA check server error");
+    logRequest(request, 500);
   }
 });
 
-server.listen(port, "127.0.0.1");
+server.listen(port, "127.0.0.1", () => {
+  console.log(`${new Date().toISOString()} PWA check server listening on http://127.0.0.1:${port}`);
+});

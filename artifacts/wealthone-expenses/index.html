@@ -8,7 +8,7 @@
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.ezyretire.com/" />
     <meta name="application-name" content="ezyRetire" />
-    <meta name="theme-color" content="#312e81" />
+    <meta name="theme-color" content="#f6f7f8" />
     <meta name="apple-mobile-web-app-title" content="ezyRetire" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -31,9 +31,28 @@
     <link rel="shortcut icon" href="/favicon.ico?v=f2fae116e85f" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/fonts/ezyretire-v3/fonts.css">
+    <link rel="preload" as="image" href="/brand-logo-compact.png" type="image/png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/brand-logo-compact-dark.png" type="image/png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/brand-logo.png" type="image/png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/brand-logo-dark.png" type="image/png" fetchpriority="high" />
+    <script>
+      (function() {
+        try {
+          var themeColors = {
+            light: '#f6f7f8',
+            dark: '#11161a'
+          };
+          var local = localStorage.getItem('ezyretire-theme');
+          var theme = local ? JSON.parse(local) : 'system';
+          var dark = theme === 'dark' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var resolved = dark ? 'dark' : 'light';
+          document.documentElement.classList.add(resolved);
+          document.documentElement.style.colorScheme = resolved;
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', themeColors[resolved]);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

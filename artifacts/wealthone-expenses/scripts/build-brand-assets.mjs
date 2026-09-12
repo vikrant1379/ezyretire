@@ -16,16 +16,30 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = resolve(root, "../..");
 const sourcePath = join(root, "brand", "mark.svg");
 const faviconSvgPath = join(root, "brand", "favicon.svg");
-const appMarkSourcePath = join(root, "brand", "app-mark.svg");
 const approvedLogoPath = join(
   workspaceRoot,
   "attached_assets",
-  "ezyretire_retirement_logo_e7b96b508c8c408297211d518ad9beaf_1788599942322.png",
+  "light-mode-hz_1789063924461.png",
+);
+const approvedDarkLogoPath = join(
+  workspaceRoot,
+  "attached_assets",
+  "dark-mode-hz_1789063919926.png",
+);
+const approvedDarkPageMarkPath = join(
+  workspaceRoot,
+  "attached_assets",
+  "lodericon-darkmode_1788994352024.png",
 );
 const approvedFaviconPath = join(
   workspaceRoot,
   "attached_assets",
   "fevicon_1788696519503.png",
+);
+const approvedLauncherPath = join(
+  workspaceRoot,
+  "attached_assets",
+  "mobile-app-icon-logo_1788990742871.png",
 );
 const publicDir = join(root, "public");
 const indexPath = join(root, "index.html");
@@ -47,9 +61,16 @@ if (check && !process.env.FORCE_BRAND_CHECK) {
 const outputRoot = check ? mkdtempSync(join(tmpdir(), "ezyretire-brand-")) : workspaceRoot;
 
 const source = readFileSync(sourcePath, "utf8");
-const appMarkSource = readFileSync(appMarkSourcePath, "utf8");
 const approvedFavicon = readFileSync(approvedFaviconPath);
 const approvedFaviconIdentity = createHash("sha256").update(approvedFavicon).digest("hex");
+const approvedLauncher = readFileSync(approvedLauncherPath);
+const approvedLauncherIdentity = createHash("sha256").update(approvedLauncher).digest("hex");
+const approvedDarkLogo = readFileSync(approvedDarkLogoPath);
+const approvedDarkLogoIdentity = createHash("sha256").update(approvedDarkLogo).digest("hex");
+const approvedDarkPageMark = readFileSync(approvedDarkPageMarkPath);
+const approvedDarkPageMarkIdentity = createHash("sha256").update(approvedDarkPageMark).digest("hex");
+const approvedLogo = readFileSync(approvedLogoPath);
+const approvedLogoIdentity = createHash("sha256").update(approvedLogo).digest("hex");
 const faviconSource = `<svg width="180" height="180" viewBox="0 0 1254 1254" xmlns="http://www.w3.org/2000/svg" data-brand-mark="r-growth-arc-glossy-supplied-v1" data-source-sha256="${approvedFaviconIdentity}">
   <title>ezyRetire favicon</title>
   <image width="1254" height="1254" href="data:image/png;base64,${approvedFavicon.toString("base64")}"/>
@@ -97,7 +118,7 @@ const socialCard = `<svg width="1200" height="630" viewBox="0 0 1200 630" fill="
 
 write(faviconSvgPath, faviconSource);
 write(join(publicDir, "favicon.svg"), favicon);
-write(join(publicDir, "app-mark.svg"), appMarkSource);
+write(join(publicDir, "loader-icon-darkmode.png"), approvedDarkPageMark);
 write(indexPath, indexHtml);
 write(join(publicDir, "social-card.svg"), socialCard);
 write(join(designPublicDir, "favicon.svg"), favicon);
@@ -119,17 +140,40 @@ function render(svgPath, destination, width, height, background = "none") {
 
 const generatedSocial = outputPath(join(publicDir, "social-card.svg"));
 const generatedFullLogo = outputPath(join(publicDir, "brand-logo.png"));
+const generatedDarkFullLogo = outputPath(join(publicDir, "brand-logo-dark.png"));
+const generatedCompactLogo = outputPath(join(publicDir, "brand-logo-compact.png"));
+const generatedCompactDarkLogo = outputPath(join(publicDir, "brand-logo-compact-dark.png"));
 
-execFileSync("magick", [
-  approvedLogoPath,
+write(join(publicDir, "brand-logo.png"), approvedLogo);
+write(join(publicDir, "brand-logo-dark.png"), approvedDarkLogo);
+const compactSourceArguments = (sourcePath) => [
+  sourcePath,
+  "-alpha",
+  "on",
   "-fuzz",
-  "3%",
+  "20%",
+  "-transparent",
+  "#0d1117",
   "-trim",
   "+repage",
   "-resize",
-  "864x748!",
+  "568x152",
+  "-gravity",
+  "center",
+  "-background",
+  "none",
+  "-extent",
+  "568x152",
+];
+execFileSync("magick", [
+  ...compactSourceArguments(approvedLogoPath),
   "-strip",
-  `PNG32:${generatedFullLogo}`,
+  `PNG32:${generatedCompactLogo}`,
+]);
+execFileSync("magick", [
+  ...compactSourceArguments(approvedDarkLogoPath),
+  "-strip",
+  `PNG32:${generatedCompactDarkLogo}`,
 ]);
 const rasterTargets = [
   ["favicon-32x32.png", 32, 32],
@@ -146,23 +190,74 @@ for (const [name, width, height] of rasterTargets) {
   render(approvedFaviconPath, outputPath(join(publicDir, name)), width, height);
 }
 for (const [name, width, height] of appIconTargets) {
-  render(sourcePath, outputPath(join(publicDir, name)), width, height);
+  render(approvedLauncherPath, outputPath(join(publicDir, name)), width, height);
 }
 execFileSync("magick", [
-  "-background",
-  "#FFFEFC",
-  "-density",
-  "384",
-  sourcePath,
+  "-size",
+  "512x512",
+  "xc:black",
+  "(",
+  approvedLauncherPath,
   "-resize",
-  "360x360!",
+  "410x410!",
+  ")",
   "-gravity",
   "center",
-  "-extent",
-  "512x512",
+  "-composite",
   "-strip",
   `PNG32:${outputPath(join(publicDir, "icon-maskable-512.png"))}`,
 ]);
+
+const launcherCropChecks = [
+  ["circle", "circle 256,256 256,10"],
+  ["squircle", "roundrectangle 20,20 492,492 150,150"],
+  ["rounded-square", "roundrectangle 8,8 504,504 72,72"],
+];
+const launcherCropCheckDir = mkdtempSync(join(tmpdir(), "ezyretire-launcher-crops-"));
+const criticalArtworkMask = join(launcherCropCheckDir, "critical-artwork.png");
+execFileSync("magick", [
+  outputPath(join(publicDir, "icon-maskable-512.png")),
+  "-alpha",
+  "off",
+  "-fx",
+  "(r+g+b)/3>0.2?1:0",
+  criticalArtworkMask,
+]);
+for (const [shape, draw] of launcherCropChecks) {
+  const cropMask = join(launcherCropCheckDir, `${shape}-mask.png`);
+  const croppedArtwork = join(launcherCropCheckDir, `${shape}-critical-artwork.png`);
+  execFileSync("magick", [
+    "-size",
+    "512x512",
+    "xc:black",
+    "-fill",
+    "white",
+    "-draw",
+    draw,
+    cropMask,
+  ]);
+  execFileSync("magick", [
+    criticalArtworkMask,
+    cropMask,
+    "-compose",
+    "Multiply",
+    "-composite",
+    croppedArtwork,
+  ]);
+  try {
+    execFileSync(
+      "magick",
+      ["compare", "-metric", "AE", criticalArtworkMask, croppedArtwork, "null:"],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+  } catch {
+    rmSync(launcherCropCheckDir, { recursive: true, force: true });
+    throw new Error(
+      `The supplied launcher artwork is clipped by the representative ${shape} launcher crop`,
+    );
+  }
+}
+rmSync(launcherCropCheckDir, { recursive: true, force: true });
 render(generatedSocial, outputPath(join(publicDir, "social-card.png")), 1200, 630);
 render(approvedFaviconPath, outputPath(join(designPublicDir, "favicon-dark.png")), 180, 180);
 
@@ -172,20 +267,93 @@ execFileSync("magick", [
   outputPath(join(publicDir, "favicon.ico")),
 ]);
 
+const brandSourceMarker = "r-growth-bars-v1";
+const launcherSourceMarker = "ezyretire-black-silver-launcher-supplied-v2";
+const lightLogoSourceMarker = "ezyretire-light-horizontal-logo-supplied-v1";
+const darkLogoSourceMarker = "ezyretire-dark-horizontal-logo-supplied-v1";
+const darkPageMarkSourceMarker = "ezyretire-golden-dark-loader-mark-supplied-v1";
+const brandSourceSha256 = createHash("sha256").update(source).digest("hex");
+const verifiedIconTargets = [
+  ["favicon.svg", 180, 180, "browser", "r-growth-arc-glossy-supplied-v1"],
+  ["favicon-32x32.png", 32, 32, "browser", "r-growth-arc-glossy-supplied-v1"],
+  ["favicon.png", 180, 180, "browser", "r-growth-arc-glossy-supplied-v1"],
+  ["apple-touch-icon.png", 180, 180, "apple-touch-and-splash", launcherSourceMarker],
+  ["icon-192.png", 192, 192, "any", launcherSourceMarker],
+  ["icon-512.png", 512, 512, "any", launcherSourceMarker],
+  ["icon-maskable-512.png", 512, 512, "maskable", launcherSourceMarker],
+  ["brand-logo.png", 2167, 726, "in-app-light-full-logo", lightLogoSourceMarker],
+  ["brand-logo-dark.png", 2172, 724, "in-app-dark-full-logo", darkLogoSourceMarker],
+  ["loader-icon-darkmode.png", 1278, 1230, "in-app-dark-page-mark", darkPageMarkSourceMarker],
+  ["brand-logo-compact.png", 568, 152, "compact-navigation-light-full-logo", lightLogoSourceMarker],
+  ["brand-logo-compact-dark.png", 568, 152, "compact-navigation-dark-full-logo", darkLogoSourceMarker],
+];
+const brandAssetEvidence = {
+  schemaVersion: 1,
+  approvedSources: {
+    [brandSourceMarker]: {
+      file: "brand/mark.svg",
+      sha256: brandSourceSha256,
+    },
+    "r-growth-arc-glossy-supplied-v1": {
+      file: "attached_assets/fevicon_1788696519503.png",
+      sha256: approvedFaviconIdentity,
+    },
+    [launcherSourceMarker]: {
+      file: "attached_assets/mobile-app-icon-logo_1788990742871.png",
+      sha256: approvedLauncherIdentity,
+    },
+    [lightLogoSourceMarker]: {
+      file: "attached_assets/light-mode-hz_1789063924461.png",
+      sha256: approvedLogoIdentity,
+    },
+    [darkLogoSourceMarker]: {
+      file: "attached_assets/dark-mode-hz_1789063919926.png",
+      sha256: approvedDarkLogoIdentity,
+    },
+    [darkPageMarkSourceMarker]: {
+      file: "attached_assets/lodericon-darkmode_1788994352024.png",
+      sha256: approvedDarkPageMarkIdentity,
+    },
+  },
+  launcherCropChecks: launcherCropChecks.map(([shape]) => ({
+    shape,
+    preservesCriticalArtwork: true,
+  })),
+  assets: verifiedIconTargets.map(([name, width, height, purpose, sourceMarker]) => {
+    const generatedPath = outputPath(join(publicDir, name));
+    return {
+      file: name,
+      width,
+      height,
+      purpose,
+      sourceMarker,
+      sha256: createHash("sha256").update(readFileSync(generatedPath)).digest("hex"),
+    };
+  }),
+};
+write(
+  join(publicDir, "brand-assets.json"),
+  `${JSON.stringify(brandAssetEvidence, null, 2)}\n`,
+);
+
 const generated = [
   "artifacts/wealthone-expenses/index.html",
   "artifacts/wealthone-expenses/brand/favicon.svg",
   "artifacts/wealthone-expenses/public/favicon.svg",
-  "artifacts/wealthone-expenses/public/app-mark.svg",
   "artifacts/wealthone-expenses/brand/favicon.png",
   "artifacts/wealthone-expenses/public/favicon.png",
   "artifacts/wealthone-expenses/public/brand-logo.png",
+  "artifacts/wealthone-expenses/public/brand-logo-dark.png",
+  "artifacts/wealthone-expenses/public/loader-icon-darkmode.png",
+  "artifacts/wealthone-expenses/public/brand-logo-compact.png",
+  "artifacts/wealthone-expenses/public/brand-logo-compact-dark.png",
   "artifacts/wealthone-expenses/public/social-card.svg",
   ...rasterTargets.map(([name]) => `artifacts/wealthone-expenses/public/${name}`),
   ...appIconTargets.map(([name]) => `artifacts/wealthone-expenses/public/${name}`),
   "artifacts/wealthone-expenses/public/icon-maskable-512.png",
   "artifacts/wealthone-expenses/public/social-card.png",
   "artifacts/wealthone-expenses/public/favicon.ico",
+  "artifacts/wealthone-expenses/public/brand-assets.json",
   "artifacts/wealthone-design-system/public/favicon.svg",
   "artifacts/wealthone-design-system/public/favicon-dark.png",
 ];
@@ -205,6 +373,6 @@ if (check) {
   process.stdout.write("Brand assets are up to date.\n");
 } else {
   process.stdout.write(
-    `Generated ${generated.length} brand assets from brand/mark.svg and the supplied favicon artwork.\n`,
+    `Generated ${generated.length} brand assets from the approved logo, favicon, and mobile launcher artwork.\n`,
   );
 }

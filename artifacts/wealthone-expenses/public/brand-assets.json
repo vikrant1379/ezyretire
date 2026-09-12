@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "approvedSources": {
+    "r-growth-bars-v1": {
+      "file": "brand/mark.svg",
+      "sha256": "21820cde14838a22cdc9f69ccbeeb980ef9abfbbb6bd0c6e42eb14903596928b"
+    },
+    "r-growth-arc-glossy-supplied-v1": {
+      "file": "attached_assets/fevicon_1788696519503.png",
+      "sha256": "897c84cff87bc00b9f1a381ed9b16847af77ec7baebcbeeee700b20eddb260fa"
+    },
+    "ezyretire-black-silver-launcher-supplied-v2": {
+      "file": "attached_assets/mobile-app-icon-logo_1788990742871.png",
+      "sha256": "3db62d453d815cb364410b5e7e1e0e98f7dd7a7be840f3d577a5e621ba7fa9a5"
+    },
+    "ezyretire-light-horizontal-logo-supplied-v1": {
+      "file": "attached_assets/light-mode-hz_1789063924461.png",
+      "sha256": "e43ffa7466a947610b9823e4de5440b1ea09d8269388c94a3f09b322279daef6"
+    },
+    "ezyretire-dark-horizontal-logo-supplied-v1": {
+      "file": "attached_assets/dark-mode-hz_1789063919926.png",
+      "sha256": "5d61a02309ff5b93d16ebffbf96f0a5c1d1ba6cdaf5610e691d9255e9c4fefad"
+    },
+    "ezyretire-golden-dark-loader-mark-supplied-v1": {
+      "file": "attached_assets/lodericon-darkmode_1788994352024.png",
+      "sha256": "615c6208740aa4a7a88ae79738b9c605eb8fb34a5336ecfd2af79a7227e5f7cd"
+    }
+  },
+  "launcherCropChecks": [
+    {
+      "shape": "circle",
+      "preservesCriticalArtwork": true
+    },
+    {
+      "shape": "squircle",
+      "preservesCriticalArtwork": true
+    },
+    {
+      "shape": "rounded-square",
+      "preservesCriticalArtwork": true
+    }
+  ],
+  "assets": [
+    {
+      "file": "favicon.svg",
+      "width": 180,
+      "height": 180,
+      "purpose": "browser",
+      "sourceMarker": "r-growth-arc-glossy-supplied-v1",
+      "sha256": "f2fae116e85fff6d803770aaefdf1b5d83b6af62c4e34094ff5964f2d379bb2e"
+    },
+    {
+      "file": "favicon-32x32.png",
+      "width": 32,
+      "height": 32,
+      "purpose": "browser",
+      "sourceMarker": "r-growth-arc-glossy-supplied-v1",
+      "sha256": "51b532cec4f839367defd68a21f109727cd72ac4c94ea259615e3b277451e85b"
+    },
+    {
+      "file": "favicon.png",
+      "width": 180,
+      "height": 180,
+      "purpose": "browser",
+      "sourceMarker": "r-growth-arc-glossy-supplied-v1",
+      "sha256": "3e56891017365d890bfc4320e358839ac175e496caabfdbca8bb814c82de6714"
+    },
+    {
+      "file": "apple-touch-icon.png",
+      "width": 180,
+      "height": 180,
+      "purpose": "apple-touch-and-splash",
+      "sourceMarker": "ezyretire-black-silver-launcher-supplied-v2",
+      "sha256": "1a88caa5393d0fd93ff381f80c1939b01221c3efd972f0cda001c76ee8690839"
+    },
+    {
+      "file": "icon-192.png",
+      "width": 192,
+      "height": 192,
+      "purpose": "any",
+      "sourceMarker": "ezyretire-black-silver-launcher-supplied-v2",
+      "sha256": "32f876a1d4326a8cb63d214560c31cc730033909df9471c3ac015385d3df5716"
+    },
+    {
+      "file": "icon-512.png",
+      "width": 512,
+      "height": 512,
+      "purpose": "any",
+      "sourceMarker": "ezyretire-black-silver-launcher-supplied-v2",
+      "sha256": "37c5766bc91b495e7c8d4c89ed3cac814c989fa69e051feb1d69bce01ed16e28"
+    },
+    {
+      "file": "icon-maskable-512.png",
+      "width": 512,
+      "height": 512,
+      "purpose": "maskable",
+      "sourceMarker": "ezyretire-black-silver-launcher-supplied-v2",
+      "sha256": "8a0f940faefba8c0db30575ae69d766e349529a4caf832f1e2c97c34594e86da"
+    },
+    {
+      "file": "brand-logo.png",
+      "width": 2167,
+      "height": 726,
+      "purpose": "in-app-light-full-logo",
+      "sourceMarker": "ezyretire-light-horizontal-logo-supplied-v1",
+      "sha256": "e43ffa7466a947610b9823e4de5440b1ea09d8269388c94a3f09b322279daef6"
+    },
+    {
+      "file": "brand-logo-dark.png",
+      "width": 2172,
+      "height": 724,
+      "purpose": "in-app-dark-full-logo",
+      "sourceMarker": "ezyretire-dark-horizontal-logo-supplied-v1",
+      "sha256": "5d61a02309ff5b93d16ebffbf96f0a5c1d1ba6cdaf5610e691d9255e9c4fefad"
+    },
+    {
+      "file": "loader-icon-darkmode.png",
+      "width": 1278,
+      "height": 1230,
+      "purpose": "in-app-dark-page-mark",
+      "sourceMarker": "ezyretire-golden-dark-loader-mark-supplied-v1",
+      "sha256": "615c6208740aa4a7a88ae79738b9c605eb8fb34a5336ecfd2af79a7227e5f7cd"
+    },
+    {
+      "file": "brand-logo-compact.png",
+      "width": 568,
+      "height": 152,
+      "purpose": "compact-navigation-light-full-logo",
+      "sourceMarker": "ezyretire-light-horizontal-logo-supplied-v1",
+      "sha256": "cd5685b1121bf1e70eebd146758782d10b5d154f35db7114f507167c60f5b35c"
+    },
+    {
+      "file": "brand-logo-compact-dark.png",
+      "width": 568,
+      "height": 152,
+      "purpose": "compact-navigation-dark-full-logo",
+      "sourceMarker": "ezyretire-dark-horizontal-logo-supplied-v1",
+      "sha256": "ba091c4bde1fc5e837c9bff761e55648d5db02f521b4072e976e9bf0a73793da"
+    }
+  ]
+}

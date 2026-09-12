@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "ezyretire-static-";
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v5`;
 const PRECACHE_URLS = [
   "./offline.html",
   "./site.webmanifest",
@@ -51,6 +51,53 @@ self.addEventListener("message", (event) => {
           offlineStorageAvailable: Boolean(offlineDocument),
         });
       }),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data?.json() ?? {};
+  } catch {
+    payload = { title: "ezyRetire", message: "You have a new financial alert." };
+  }
+  const title = typeof payload.title === "string" ? payload.title : "ezyRetire";
+  const body = typeof payload.body === "string"
+    ? payload.body
+    : "Open ezyRetire to review your latest alert.";
+  event.waitUntil(
+    fetch(new URL("/api/auth/user", self.location.origin), {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((session) => {
+        const ownerUserId = typeof payload.ownerUserId === "string" ? payload.ownerUserId : "";
+        if (!ownerUserId || session?.user?.id !== ownerUserId) return undefined;
+        return self.registration.showNotification(title, {
+          body,
+          tag: typeof payload.tag === "string" ? payload.tag : undefined,
+          icon: "./icon-192.png",
+          badge: "./favicon.png",
+          data: { url: "./planner?tab=notifications" },
+        });
+      })
+      .catch(() => undefined),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url ?? "./planner?tab=notifications", self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => client.url.startsWith(self.registration.scope));
+      if (existing) {
+        existing.navigate(target);
+        return existing.focus();
+      }
+      return self.clients.openWindow(target);
+    }),
   );
 });
 

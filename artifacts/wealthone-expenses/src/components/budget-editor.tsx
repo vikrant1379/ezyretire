@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { format, parseISO } from "date-fns";
 import { Button } from "@workspace/wealthone-design-system/components/ui/button";
 import { Input } from "@workspace/wealthone-design-system/components/ui/input";
+import { MonthPickerInput } from "@workspace/wealthone-design-system/components/ui/month-picker-input";
 import { Label } from "@workspace/wealthone-design-system/components/ui/label";
 import {
   Select,
@@ -13,35 +14,27 @@ import {
 import { Plus, Copy, Trash2, CalendarIcon, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { getRetirementEndDate, type UIBudgetWindow } from "@/lib/budget-helpers";
 import { analyzeBudgetTimeline } from "@/lib/budget-timeline";
-import { type RetirementInputs } from "@/lib/storage";
+import { BUDGET_CADENCES, budgetMonthlyEquivalent, type BudgetCadence, type RetirementInputs } from "@/lib/storage";
 import { Alert, AlertDescription, AlertTitle } from "@workspace/wealthone-design-system/components/ui/alert";
 import { formatINR } from "@/lib/utils";
 
-function MonthPicker({
-  id,
-  value,
-  onChange,
-  placeholder,
-}: {
-  id: string;
-  value?: string;
-  onChange: (val: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <Input
-      id={id}
-      type="month"
-      value={value ? value.substring(0, 7) : ""}
-      onChange={(e) => {
-        if (!e.target.value) return onChange("");
-        onChange(`${e.target.value}-01`);
-      }}
-      placeholder={placeholder}
-      className="w-full"
-    />
-  );
-}
+const monthNames = Array.from({ length: 12 }, (_, month) =>
+  new Date(2000, month, 1).toLocaleString("default", { month: "long" })
+);
+
+const monthValue = (value?: string) => {
+  if (!value) return undefined;
+  const match = value.match(/^(\d{4})-(\d{2})/);
+  if (!match) return undefined;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
+  return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1
+    ? date
+    : undefined;
+};
+
+const storedMonth = (date?: Date) => date
+  ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`
+  : "";
 
 export function BudgetEditor({ 
   windows, 
@@ -126,7 +119,9 @@ export function BudgetEditor({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor={`budget-period-${window.id}-amount`}>Monthly Amount (₹)</Label>
+              <Label htmlFor={`budget-period-${window.id}-amount`}>
+                {window.cadence === "monthly" || !window.cadence ? "Monthly Amount (₹)" : "Amount per occurrence (₹)"}
+              </Label>
               <Input
                 id={`budget-period-${window.id}-amount`}
                 type="number"
@@ -135,24 +130,74 @@ export function BudgetEditor({
                 value={window.monthlyLimit || ""}
                 onChange={(e) => handleUpdate(index, { monthlyLimit: Number(e.target.value) })}
               />
+              {(window.cadence ?? "monthly") !== "monthly" && (
+                <p className="text-xs text-muted-foreground" aria-label={`Monthly equivalent ${formatINR(budgetMonthlyEquivalent(window))}`}>
+                  {window.cadence === "one-time"
+                    ? "One scheduled payment; not included as a recurring monthly cost."
+                    : `${formatINR(budgetMonthlyEquivalent(window))}/mo equivalent · ${formatINR(window.monthlyLimit * (12 / ((BUDGET_CADENCES.find((item) => item.value === window.cadence)?.months) ?? 12)))}/year`}
+                </p>
+              )}
             </div>
+            <div className="space-y-2">
+              <Label htmlFor={`budget-period-${window.id}-cadence`}>Budget Period</Label>
+              <Select
+                value={window.cadence ?? "monthly"}
+                onValueChange={(cadence: BudgetCadence) =>
+                  handleUpdate(index, {
+                    cadence,
+                    ...(cadence !== "yearly" ? { annualMonth: undefined } : {}),
+                  })
+                }
+              >
+                <SelectTrigger id={`budget-period-${window.id}-cadence`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BUDGET_CADENCES.map((cadence) => (
+                    <SelectItem key={cadence.value} value={cadence.value}>{cadence.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {window.cadence === "yearly" && (
+              <div className="space-y-2">
+                <Label htmlFor={`budget-period-${window.id}-annual-month`}>Due Month</Label>
+                <Select
+                  value={window.annualMonth === undefined ? "" : String(window.annualMonth)}
+                  onValueChange={(value) => handleUpdate(index, { annualMonth: Number(value) })}
+                >
+                  <SelectTrigger id={`budget-period-${window.id}-annual-month`} aria-label="Yearly expense due month">
+                    <SelectValue placeholder="Choose due month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthNames.map((month, monthIndex) => (
+                      <SelectItem key={month} value={String(monthIndex)}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">The full amount is counted once each year in this month.</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor={`budget-period-${window.id}-note`}>Note (Optional)</Label>
               <Input
                 id={`budget-period-${window.id}-note`}
                 value={window.note || ""}
                 onChange={(e) => handleUpdate(index, { note: e.target.value })}
-                placeholder="e.g. After kids go to college"
+                placeholder="e.g. Essential retirement expenses"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor={`budget-period-${window.id}-start`}>Start Month</Label>
-              <MonthPicker
+              <Label htmlFor={`budget-period-${window.id}-start`}>
+                {window.cadence === "one-time" ? "Due Month" : "Start Month"}
+              </Label>
+              <MonthPickerInput
                 id={`budget-period-${window.id}-start`}
-                value={window.startDate}
-                onChange={(val) => handleUpdate(index, { startDate: val })}
+                value={monthValue(window.startDate)}
+                onChange={(date) => handleUpdate(index, { startDate: storedMonth(date) || undefined })}
                 placeholder="Currently Active"
+                optional
               />
             </div>
             
@@ -179,10 +224,10 @@ export function BudgetEditor({
             {window.endMode === "custom" && (
               <div className="space-y-2 md:col-start-2">
                 <Label htmlFor={`budget-period-${window.id}-end`}>End Month</Label>
-                <MonthPicker
+                <MonthPickerInput
                   id={`budget-period-${window.id}-end`}
-                  value={window.endDate}
-                  onChange={(val) => handleUpdate(index, { endDate: val })}
+                  value={monthValue(window.endDate)}
+                  onChange={(date) => handleUpdate(index, { endDate: storedMonth(date) || undefined })}
                 />
               </div>
             )}
@@ -200,8 +245,8 @@ export function BudgetEditor({
       {analysis.issues.length > 0 && (
         <div className="space-y-3">
           {analysis.issues.map((issue, idx) => (
-            <Alert key={idx} variant={issue.type === "invalid-date" ? "destructive" : "default"} className={issue.type === "overlap" ? "border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-400" : ""}>
-              {issue.type === "gap" && <AlertTriangle className="h-4 w-4 text-amber-500" />}
+            <Alert key={idx} variant={issue.type === "invalid-date" ? "destructive" : "default"} className={issue.type === "overlap" ? "border-warning/50 bg-warning-background text-warning" : ""}>
+              {issue.type === "gap" && <AlertTriangle className="h-4 w-4 text-warning" />}
               {issue.type === "overlap" && <Info className="h-4 w-4" />}
               {issue.type === "invalid-date" && <AlertCircle className="h-4 w-4" />}
               <AlertTitle>
@@ -220,7 +265,7 @@ export function BudgetEditor({
                   <span>
                     Multiple windows active concurrently from {format(issue.startDate, "MMM yyyy")}
                     {issue.endDate ? ` until ${format(issue.endDate, "MMM yyyy")}` : " onwards"}, 
-                    combining to {formatINR(issue.amount)}/mo. Valid, but ensure this is intentional.
+                    combining to <span className="text-foreground">{formatINR(issue.amount)}</span>/mo. Valid, but ensure this is intentional.
                   </span>
                 )}
                 {issue.type === "invalid-date" && issue.reason}
@@ -242,16 +287,24 @@ export function BudgetEditor({
                 <span className="absolute -left-[1.31rem] top-4 h-2.5 w-2.5 rounded-full bg-primary" />
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-sm font-medium">From {format(event.date, "MMM yyyy")}</span>
-                  <span className="text-sm font-semibold">{formatINR(event.newTotal)}/mo combined</span>
+                   <span className="text-sm font-semibold">{formatINR(event.newTotal)}/mo combined</span>
                 </div>
                 {event.activeWindows.length > 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {event.activeWindows.map((window) =>
-                      window.note || `${formatINR(window.monthlyLimit)}/mo period`
+                      window.note || (window.cadence === "yearly"
+                        ? `${formatINR(window.monthlyLimit)} every ${monthNames[window.annualMonth ?? 0]}`
+                        : window.cadence === "quarterly"
+                          ? `${formatINR(window.monthlyLimit)} every quarter`
+                          : window.cadence === "half-yearly"
+                            ? `${formatINR(window.monthlyLimit)} every six months`
+                            : window.cadence === "one-time"
+                              ? `${formatINR(window.monthlyLimit)} once`
+                              : `${formatINR(window.monthlyLimit)}/mo period`)
                     ).join(" + ")}
                   </p>
                 ) : (
-                  <p className="mt-1 text-xs text-amber-700">No planned budget from this month.</p>
+                  <p className="mt-1 text-xs text-warning">No planned budget from this month.</p>
                 )}
               </li>
             ))}
@@ -267,6 +320,7 @@ export function BudgetEditor({
           const nextWindows = [...windows, {
             id: crypto.randomUUID(),
             monthlyLimit: 0,
+            cadence: "monthly" as const,
             endMode: "lifelong" as const,
           }];
           onChange(nextWindows);

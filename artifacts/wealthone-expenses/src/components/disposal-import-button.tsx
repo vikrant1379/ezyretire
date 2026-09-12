@@ -206,7 +206,7 @@ export function DisposalImportButton({
         if (!val) setRows([]);
         setOpen(val);
       }}>
-        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-6">
+        <DialogContent className="max-w-5xl flex flex-col p-6">
           <DialogHeader className="mb-2">
             <DialogTitle className="font-serif text-2xl">Import broker sales</DialogTitle>
             <DialogDescription>
@@ -241,7 +241,7 @@ export function DisposalImportButton({
           {rows.length > 0 && (
             <div className="flex flex-col flex-1 min-h-0">
               <div className="flex flex-wrap gap-4 text-sm mb-4 bg-muted/40 p-4 rounded-lg border">
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                <div className="flex items-center gap-2 text-positive font-medium">
                   <CheckCircle2 className="h-4 w-4" />
                    {salesCount} {salesCount === 1 ? "sale" : "sales"} ready
                 </div>
@@ -258,7 +258,7 @@ export function DisposalImportButton({
                   </div>
                 )}
                 {unsupportedCount > 0 && (
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500">
+                  <div className="flex items-center gap-2 text-warning">
                     <AlertTriangle className="h-4 w-4" />
                      {unsupportedCount} unsupported
                   </div>
@@ -288,10 +288,10 @@ export function DisposalImportButton({
                             {row.status === "purchase" && "Purchase mapped for review only"}
                             {row.status === "unsupported" && `Unsupported: ${row.reason ?? "unknown reason"}`}
                           </span>
-                          {row.status === "sale" && <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />}
+                          {row.status === "sale" && <CheckCircle2 className="h-4 w-4 text-positive mx-auto" />}
                           {row.status === "duplicate" && <Info aria-hidden="true" className="h-4 w-4 text-muted-foreground mx-auto" />}
                           {row.status === "purchase" && <Info aria-hidden="true" className="h-4 w-4 text-muted-foreground mx-auto" />}
-                          {row.status === "unsupported" && <XCircle aria-hidden="true" className="h-4 w-4 text-amber-500 mx-auto" />}
+                          {row.status === "unsupported" && <XCircle aria-hidden="true" className="h-4 w-4 text-warning mx-auto" />}
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{row.parsed.name || "Unknown"}</div>

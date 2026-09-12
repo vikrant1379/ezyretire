@@ -23,21 +23,21 @@ function StepRow({ step }: { step: PlanSetupStep }) {
     <li
       className={cn(
         "flex items-start gap-3 rounded-xl border p-3.5 transition-colors",
-        step.done ? "border-emerald-200/70 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20" : "border-border bg-card hover:border-primary/30",
+        step.done ? "border-positive/70 bg-positive-background dark:border-positive/50 dark:bg-positive-background" : "border-border bg-card hover:border-primary/30",
       )}
     >
       {step.done ? (
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-positive" />
       ) : (
         <Circle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground/40" />
       )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className={cn("text-sm font-medium", step.done && "text-emerald-900 dark:text-emerald-300")}>
+          <p className={cn("text-sm font-medium", step.done && "text-positive")}>
             {step.title}
           </p>
           {step.optional && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-tiny font-medium uppercase tracking-wider text-muted-foreground">
               Only if you have one
             </span>
           )}
@@ -55,22 +55,21 @@ function StepRow({ step }: { step: PlanSetupStep }) {
     </li>
   );
 }
-
 /**
  * Shown wherever a projection would otherwise be invented from defaults. It
  * states plainly what is still missing and what each input unlocks.
  */
 export function PlanSetupPanel({ setup, targetAge }: { setup: PlanSetup; targetAge: number }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/[0.07] via-card to-emerald-500/[0.06] shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/[0.07] via-card to-card shadow-sm">
       <div className="p-6 md:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground">
             <Compass className="h-7 w-7" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="mb-1.5 text-sm font-semibold uppercase tracking-widest text-primary/80">
-              Build your plan
+              Complete your plan at your pace
             </p>
             <h2 className="font-serif text-3xl leading-tight text-foreground md:text-4xl">
               {headline(setup)}

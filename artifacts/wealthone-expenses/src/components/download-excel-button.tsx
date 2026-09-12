@@ -14,10 +14,14 @@ import {
   downloadExcelWorkbook,
   type ExcelSheet,
 } from "@/lib/excel-export";
+import { trackEvent } from "@/lib/analytics";
+
+type TrackedExportType = "transaction_report";
 
 type DownloadExcelButtonProps = {
   sheets: readonly ExcelSheet<any>[];
   reportSlug: string;
+  trackedExportType?: TrackedExportType;
   className?: string;
   size?: "default" | "sm" | "lg" | "icon";
   mobileOverflow?: boolean;
@@ -29,6 +33,7 @@ type DownloadExcelButtonProps = {
 export function DownloadExcelButton({
   sheets,
   reportSlug,
+  trackedExportType,
   className,
   size = "default",
   mobileOverflow = true,
@@ -43,6 +48,9 @@ export function DownloadExcelButton({
   const handleDownload = () => {
     try {
       downloadExcelWorkbook(sheets, reportSlug);
+      if (trackedExportType) {
+        trackEvent("export_downloaded", { export_type: trackedExportType });
+      }
     } catch {
       toast({
         title: "Excel download failed",
@@ -93,7 +101,7 @@ export function DownloadExcelButton({
         type="button"
         variant="outline"
         size="icon"
-        className={cn("h-9 w-9 shrink-0 rounded-full sm:hidden", mobileTriggerClassName)}
+        className={cn("h-11 w-11 shrink-0 rounded-full sm:hidden", mobileTriggerClassName)}
         disabled={!hasRows}
         aria-label={label}
         title={label}
@@ -140,7 +148,7 @@ export function DownloadExcelButton({
             type="button"
             variant="outline"
             size="icon"
-            className={cn("h-9 w-9 shrink-0 rounded-full sm:hidden", mobileTriggerClassName)}
+            className={cn("h-11 w-11 shrink-0 rounded-full sm:hidden", mobileTriggerClassName)}
             disabled={!hasRows}
             aria-label="More report actions"
             title={label}

@@ -27,6 +27,27 @@ import { useLoans } from "@/hooks/use-loans";
 import { findMatchingEmiLoan } from "@/lib/storage";
 import { Alert, AlertDescription, AlertTitle } from "@workspace/wealthone-design-system/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
+import { trackExpenseSaveSucceeded } from "@/lib/expense-analytics";
+
+type ExpenseEditMutationCallbacksDependencies = {
+  trackSuccess?: typeof trackExpenseSaveSucceeded;
+  showSuccess: () => void;
+  closeDialog: () => void;
+};
+
+export function createExpenseEditMutationCallbacks({
+  trackSuccess = trackExpenseSaveSucceeded,
+  showSuccess,
+  closeDialog,
+}: ExpenseEditMutationCallbacksDependencies) {
+  return {
+    onSuccess: () => {
+      trackSuccess("edit");
+      showSuccess();
+      closeDialog();
+    },
+  };
+}
 
 export function EditExpenseDialog({
   expense,
@@ -86,22 +107,22 @@ export function EditExpenseDialog({
         linkedLoanId: emiChoice === "loan-emi" ? matchingLoan?.id : undefined,
         date: date.toISOString(),
       },
-      {
-        onSuccess: () => {
+      createExpenseEditMutationCallbacks({
+        showSuccess: () => {
           toast({
             title: "Expense updated",
             description: "Your changes have been saved.",
           });
-          onOpenChange(false);
         },
-      }
+        closeDialog: () => onOpenChange(false),
+      }),
     );
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden border-0 shadow-2xl">
-        <div className="px-6 py-6 bg-muted/30 border-b border-border">
+      <DialogContent className="flex flex-col gap-0 overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[425px]">
+        <div className="shrink-0 border-b border-border bg-muted/30 px-6 py-6">
           <DialogHeader>
             <DialogTitle className="text-2xl font-serif">Edit Expense</DialogTitle>
             <DialogDescription>
@@ -109,7 +130,7 @@ export function EditExpenseDialog({
             </DialogDescription>
           </DialogHeader>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5 bg-card">
+        <form onSubmit={handleSubmit} className="min-h-0 space-y-5 overflow-y-auto overscroll-contain bg-card px-6 py-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 col-span-2">
               <Label className="text-muted-foreground font-medium text-xs uppercase tracking-wider">Date *</Label>

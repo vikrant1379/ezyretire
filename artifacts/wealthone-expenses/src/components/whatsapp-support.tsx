@@ -52,7 +52,7 @@ export function WhatsAppSupport({
             Your conversation will open and continue privately in WhatsApp.
           </p>
         </div>
-        <Button asChild className="w-full bg-[#25D366] text-white hover:bg-[#128C7E]">
+        <Button asChild className="w-full bg-support text-support-foreground hover:bg-support-hover">
             <a
               href={data.whatsappUrl!}
               target="_blank"

@@ -66,7 +66,7 @@ export function CardSortControls<By extends string>({
           type="button"
           variant="outline"
           size="icon"
-          className={cn("h-8 w-8", compactOnMobile && "border-0 bg-transparent shadow-none sm:border")}
+          className={cn("h-11 w-11", compactOnMobile && "border-0 bg-transparent shadow-none sm:border")}
           title={direction === "desc" ? "Highest first" : "Lowest first"}
           aria-label={direction === "desc" ? "Sorted highest first" : "Sorted lowest first"}
           onClick={() => onDirectionChange(direction === "desc" ? "asc" : "desc")}

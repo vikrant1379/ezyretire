@@ -8,11 +8,23 @@ export function BrandMark({
   decorative?: boolean;
 }) {
   return (
-    <img
-      src={`${import.meta.env.BASE_URL}app-mark.svg`}
-      className={cn("h-8 w-8 shrink-0", className)}
-      alt={decorative ? "" : "ezyRetire"}
-    />
+    <span
+      className={cn("inline-flex h-8 w-8 shrink-0 items-center justify-center", className)}
+      role={decorative ? undefined : "img"}
+      aria-label={decorative ? undefined : "ezyRetire"}
+      aria-hidden={decorative || undefined}
+    >
+      <img
+        src={`${import.meta.env.BASE_URL}loader-icon-lightmode.png`}
+        className="h-full w-full object-contain dark:hidden"
+        alt=""
+      />
+      <img
+        src={`${import.meta.env.BASE_URL}loader-icon-darkmode.png`}
+        className="hidden h-full w-full object-contain dark:block"
+        alt=""
+      />
+    </span>
   );
 }
 
@@ -33,14 +45,35 @@ export function BrandLoader({ className }: { className?: string }) {
   );
 }
 
-export function BrandLogo({ className, iconOnly = false, showText = true }: { className?: string, iconOnly?: boolean, showText?: boolean }) {
+export function BrandLogo({
+  className,
+  compact = false,
+  iconOnly = false,
+  showText = true,
+}: {
+  className?: string;
+  compact?: boolean;
+  iconOnly?: boolean;
+  showText?: boolean;
+}) {
   if (!iconOnly && showText) {
     return (
-      <img
-        src={`${import.meta.env.BASE_URL}brand-logo.png`}
-        className={cn("h-10 w-auto shrink-0 object-contain", className)}
-        alt="ezyRetire"
-      />
+      <span className={cn("inline-flex h-10 w-auto shrink-0", className)}>
+        <img
+          src={`${import.meta.env.BASE_URL}${compact ? "brand-logo-compact.png" : "brand-logo.png"}`}
+          className="h-full w-auto max-w-full object-contain dark:hidden"
+          alt="ezyRetire"
+          decoding="sync"
+          fetchPriority="high"
+        />
+        <img
+          src={`${import.meta.env.BASE_URL}${compact ? "brand-logo-compact-dark.png" : "brand-logo-dark.png"}`}
+          className="hidden h-full w-auto max-w-full object-contain dark:block"
+          alt="ezyRetire"
+          decoding="sync"
+          fetchPriority="high"
+        />
+      </span>
     );
   }
 

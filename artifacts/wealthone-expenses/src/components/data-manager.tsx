@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@workspace/wealthone-design-system/components/ui/button";
 import { Input } from "@workspace/wealthone-design-system/components/ui/input";
@@ -12,15 +12,23 @@ import {
   type Expense,
 } from "@/lib/storage";
 import { DownloadExcelButton } from "@/components/download-excel-button";
-import { buildTransactionReportSheets } from "@/lib/excel-report-builders";
+import {
+  buildCompleteFinancialPlanSheets,
+  buildTransactionReportSheets,
+} from "@/lib/excel-report-builders";
+import { downloadExcelWorkbook } from "@/lib/excel-export";
 import {
   parseImportedExpenseDate,
   type ImportedExpense,
 } from "@/lib/expense-import";
-import { fetchFinancialData, type FinancialData } from "@/lib/financial-api";
+import { fetchFinancialData, restoreFinancialData } from "@/lib/financial-api";
 import { parseFinancialBackup, serializeFinancialBackup } from "@/lib/financial-backup";
-import { useReplaceFinancialData } from "@/hooks/use-financial-write";
+import { useFinancialOperation } from "@/hooks/use-financial-write";
 import { isFinancialAccountSwitchError } from "@/lib/financial-api";
+import type { FinancialData } from "@/lib/financial-api";
+import { trackEvent } from "@/lib/analytics";
+import { trackExpenseSaveSucceeded } from "@/lib/expense-analytics";
+import { BankStatementImport } from "@/components/bank-statement-import";
 import {
   Dialog,
   DialogContent,
@@ -42,12 +50,181 @@ type DataManagerProps = {
   expenses: Expense[];
 };
 
+type ExpenseImportResult = {
+  added: unknown[];
+  duplicateCount: number;
+};
+
+type ExpenseImportMutationCallbacksDependencies = {
+  trackSuccess?: typeof trackExpenseSaveSucceeded;
+  onSuccess: (result: ExpenseImportResult) => void;
+  onError: () => void;
+};
+
+export function createExpenseImportMutationCallbacks({
+  trackSuccess = trackExpenseSaveSucceeded,
+  onSuccess,
+  onError,
+}: ExpenseImportMutationCallbacksDependencies) {
+  return {
+    onSuccess: (result: ExpenseImportResult) => {
+      if (result.added.length > 0) {
+        trackSuccess("import");
+      }
+      onSuccess(result);
+    },
+    onError,
+  };
+}
+
+type CompletePlanDownloadButtonProps = {
+  exporting: boolean;
+  onDownload: () => void;
+  mobile?: boolean;
+};
+
+export function CompletePlanDownloadButton({
+  exporting,
+  onDownload,
+  mobile = false,
+}: CompletePlanDownloadButtonProps): ReactNode {
+  return (
+    <Button
+      type="button"
+      variant={mobile ? "ghost" : "outline"}
+      className={mobile ? "w-full justify-start" : undefined}
+      onClick={onDownload}
+      disabled={exporting}
+    >
+      <Download className="h-4 w-4 mr-2" />
+      {exporting ? "Preparing plan..." : "Download complete plan"}
+    </Button>
+  );
+}
+
+type BackupDownloadButtonProps = {
+  exporting: boolean;
+  onDownload: () => void;
+  mobile?: boolean;
+};
+
+export function BackupDownloadButton({
+  exporting,
+  onDownload,
+  mobile = false,
+}: BackupDownloadButtonProps): ReactNode {
+  return (
+    <Button
+      type="button"
+      variant={mobile ? "ghost" : "outline"}
+      className={mobile ? "w-full justify-start" : undefined}
+      onClick={onDownload}
+      disabled={exporting}
+    >
+      <Download className="h-4 w-4 mr-2" />
+      {exporting ? "Preparing backup..." : "Export backup"}
+    </Button>
+  );
+}
+
+type BackupDownloadDependencies = {
+  fetchData: () => Promise<FinancialData>;
+  serialize: typeof serializeFinancialBackup;
+  createObjectUrl: (blob: Blob) => string;
+  revokeObjectUrl: (url: string) => void;
+  createLink: () => Pick<HTMLAnchorElement, "href" | "download" | "click">;
+  getDate: () => Date;
+  showError: () => void;
+  onSuccess?: () => void;
+};
+
+export async function runBackupDownload(
+  inProgress: { current: boolean },
+  setExporting: (exporting: boolean) => void,
+  {
+    fetchData,
+    serialize,
+    createObjectUrl,
+    revokeObjectUrl,
+    createLink,
+    getDate,
+    showError,
+    onSuccess,
+  }: BackupDownloadDependencies,
+) {
+  if (inProgress.current) return;
+  inProgress.current = true;
+  setExporting(true);
+  let url: string | undefined;
+  try {
+    const financialData = await fetchData();
+    const blob = new Blob([serialize(financialData)], { type: "application/json" });
+    url = createObjectUrl(blob);
+    const link = createLink();
+    link.href = url;
+    link.download = `ezyRetire_Backup_${getDate().toISOString().split("T")[0]}.json`;
+    link.click();
+    onSuccess?.();
+  } catch {
+    showError();
+  } finally {
+    if (url) revokeObjectUrl(url);
+    inProgress.current = false;
+    setExporting(false);
+  }
+}
+
+export async function restoreBackupText(
+  contents: string,
+  restore: (data: FinancialData) => Promise<FinancialData> = restoreFinancialData,
+): Promise<FinancialData> {
+  return restore(parseFinancialBackup(contents));
+}
+
+type CompletePlanDownloadDependencies = {
+  fetchData: () => Promise<FinancialData>;
+  buildSheets: typeof buildCompleteFinancialPlanSheets;
+  downloadWorkbook: typeof downloadExcelWorkbook;
+  showError: () => void;
+  onSuccess?: () => void;
+};
+
+export async function runCompletePlanDownload(
+  inProgress: { current: boolean },
+  setExporting: (exporting: boolean) => void,
+  {
+    fetchData,
+    buildSheets,
+    downloadWorkbook,
+    showError,
+    onSuccess,
+  }: CompletePlanDownloadDependencies,
+) {
+  if (inProgress.current) return;
+  inProgress.current = true;
+  setExporting(true);
+  try {
+    const financialData = await fetchData();
+    downloadWorkbook(buildSheets(financialData), "complete_financial_plan");
+    onSuccess?.();
+  } catch {
+    showError();
+  } finally {
+    inProgress.current = false;
+    setExporting(false);
+  }
+}
+
 export function DataManager({ loans = [], expenses }: DataManagerProps) {
   const importExpenses = useImportExpenses();
   const { toast } = useToast();
-  const replaceFinancialData = useReplaceFinancialData();
+  const performFinancialOperation = useFinancialOperation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backupExportRef = useRef(false);
+  const completePlanExportRef = useRef(false);
   const [importing, setImporting] = useState(false);
+  const [exportingBackup, setExportingBackup] = useState(false);
+  const [exportingPlan, setExportingPlan] = useState(false);
   const [open, setOpen] = useState(false);
 
   const exportSheets = buildTransactionReportSheets(
@@ -56,19 +233,33 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
   );
 
   const handleBackupExport = async () => {
-    try {
-      const financialData = await fetchFinancialData();
-      const blob = new Blob([serializeFinancialBackup(financialData)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `ezyRetire_Backup_${new Date().toISOString().split("T")[0]}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast({ title: "Export failed", variant: "destructive" });
-    }
+    await runBackupDownload(backupExportRef, setExportingBackup, {
+      fetchData: fetchFinancialData,
+      serialize: serializeFinancialBackup,
+      createObjectUrl: (blob) => URL.createObjectURL(blob),
+      revokeObjectUrl: (url) => URL.revokeObjectURL(url),
+      createLink: () => document.createElement("a"),
+      getDate: () => new Date(),
+      showError: () => toast({ title: "Export failed", variant: "default" }),
+      onSuccess: () =>
+        trackEvent("export_downloaded", { export_type: "backup" }),
+    });
   };
+
+  const handleCompletePlanExport = () =>
+    runCompletePlanDownload(completePlanExportRef, setExportingPlan, {
+      fetchData: fetchFinancialData,
+      buildSheets: buildCompleteFinancialPlanSheets,
+      downloadWorkbook: downloadExcelWorkbook,
+      onSuccess: () =>
+        trackEvent("export_downloaded", { export_type: "complete_plan" }),
+      showError: () =>
+        toast({
+        title: "Excel download failed",
+        description: "We couldn't create the complete financial plan. Please try again.",
+        variant: "default",
+        }),
+    });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,8 +272,7 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
       try {
         const bstr = evt.target?.result;
         if (file.name.toLowerCase().endsWith(".json")) {
-          const backup = parseFinancialBackup(String(bstr));
-          await replaceFinancialData(backup);
+          await performFinancialOperation(() => restoreBackupText(String(bstr)));
           toast({
             title: "Backup restored",
             description: "Expenses, income, investments, fund allocations, loans, and retirement settings were imported.",
@@ -186,7 +376,7 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
           throw new Error("No valid records found to import.");
         }
 
-        importExpenses.mutate(newExpenses, {
+        importExpenses.mutate(newExpenses, createExpenseImportMutationCallbacks({
           onSuccess: ({ added, duplicateCount }) => {
             toast({
               title: "Import successful",
@@ -209,17 +399,17 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
             toast({
               title: "Import failed",
               description: "There was an error saving the imported data.",
-              variant: "destructive",
+              variant: "default",
             });
           }
-        });
+        }));
 
       } catch (err: unknown) {
         if (!isFinancialAccountSwitchError(err)) {
           toast({
             title: file.name.toLowerCase().endsWith(".json") ? "Restore failed" : "Import Error",
             description: err instanceof Error ? err.message : "Failed to process the file.",
-            variant: "destructive",
+            variant: "default",
           });
         }
       } finally {
@@ -232,7 +422,7 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
       toast({
         title: "File Error",
         description: "Could not read the uploaded file.",
-        variant: "destructive",
+        variant: "default",
       });
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -247,6 +437,9 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
 
   return (
     <div className="sm:flex sm:gap-3">
+      <div className="hidden sm:block">
+        <BankStatementImport expenses={expenses} />
+      </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button variant="outline" className="hidden sm:inline-flex">
@@ -307,14 +500,19 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
       </Dialog>
 
       <div className="hidden gap-3 sm:flex">
+        <CompletePlanDownloadButton
+          exporting={exportingPlan}
+          onDownload={handleCompletePlanExport}
+        />
         <DownloadExcelButton
           sheets={exportSheets}
           reportSlug="transactions_report"
+          trackedExportType="transaction_report"
         />
-        <Button variant="outline" onClick={handleBackupExport}>
-          <Download className="h-4 w-4 mr-2" />
-          Export backup
-        </Button>
+        <BackupDownloadButton
+          exporting={exportingBackup}
+          onDownload={handleBackupExport}
+        />
       </div>
 
       <DropdownMenu>
@@ -334,6 +532,12 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
             Data tools
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <BankStatementImport expenses={expenses} mobile />
+          <CompletePlanDownloadButton
+            mobile
+            exporting={exportingPlan}
+            onDownload={handleCompletePlanExport}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -346,18 +550,15 @@ export function DataManager({ loans = [], expenses }: DataManagerProps) {
           <DownloadExcelButton
             sheets={exportSheets}
             reportSlug="transactions_report"
+            trackedExportType="transaction_report"
             className="w-full justify-start border-0 shadow-none"
             mobileOverflow={false}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleBackupExport}
-            className="w-full justify-start"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export backup
-          </Button>
+          <BackupDownloadButton
+            mobile
+            exporting={exportingBackup}
+            onDownload={handleBackupExport}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

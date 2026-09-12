@@ -1,0 +1,1 @@
+{"version":3,"file":"netWorthSnapshot.d.ts","sourceRoot":"","sources":["../../../src/generated/types/netWorthSnapshot.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,gBAAgB;IAC/B,uCAAuC;IACvC,KAAK,EAAE,MAAM,CAAC;IACd,iBAAiB;IACjB,MAAM,EAAE,MAAM,CAAC;IACf,iBAAiB;IACjB,WAAW,EAAE,MAAM,CAAC;IACpB,QAAQ,EAAE,MAAM,CAAC;IACjB;;;SAGK;IACL,WAAW,CAAC,EAAE,MAAM,CAAC;CACtB"}

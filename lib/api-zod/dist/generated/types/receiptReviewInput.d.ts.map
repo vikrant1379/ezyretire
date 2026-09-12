@@ -1,0 +1,1 @@
+{"version":3,"file":"receiptReviewInput.d.ts","sourceRoot":"","sources":["../../../src/generated/types/receiptReviewInput.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,gCAAgC,EAAE,MAAM,oCAAoC,CAAC;AAE3F,MAAM,WAAW,kBAAkB;IACjC,UAAU,EAAE,MAAM,CAAC;IACnB,mBAAmB;IACnB,UAAU,EAAE,gCAAgC,EAAE,CAAC;CAChD"}

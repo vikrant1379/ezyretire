@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { RetryWhatsAppNotification200Status } from './retryWhatsAppNotification200Status.js';
+import type { RetryWhatsAppNotification200Status } from './retryWhatsAppNotification200Status';
 export type RetryWhatsAppNotification200 = {
     status: RetryWhatsAppNotification200Status;
     /** @nullable */

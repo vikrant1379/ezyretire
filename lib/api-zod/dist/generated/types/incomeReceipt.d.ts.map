@@ -1,0 +1,1 @@
+{"version":3,"file":"incomeReceipt.d.ts","sourceRoot":"","sources":["../../../src/generated/types/incomeReceipt.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,aAAa;IAC5B,EAAE,EAAE,MAAM,CAAC;IACX,cAAc,EAAE,MAAM,CAAC;IACvB,YAAY,EAAE,IAAI,CAAC;IACnB,iBAAiB;IACjB,MAAM,EAAE,MAAM,CAAC;IACf,IAAI,CAAC,EAAE,MAAM,CAAC;IACd,SAAS,EAAE,IAAI,CAAC;CACjB"}

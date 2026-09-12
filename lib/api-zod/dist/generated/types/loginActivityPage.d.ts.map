@@ -1,0 +1,1 @@
+{"version":3,"file":"loginActivityPage.d.ts","sourceRoot":"","sources":["../../../src/generated/types/loginActivityPage.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,aAAa,EAAE,MAAM,iBAAiB,CAAC;AAErD,MAAM,WAAW,iBAAiB;IAChC,KAAK,EAAE,aAAa,EAAE,CAAC;IACvB,IAAI,EAAE,MAAM,CAAC;IACb,QAAQ,EAAE,MAAM,CAAC;IACjB,KAAK,EAAE,MAAM,CAAC;IACd,UAAU,EAAE,MAAM,CAAC;CACpB"}

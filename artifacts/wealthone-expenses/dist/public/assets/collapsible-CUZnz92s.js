@@ -1,0 +1,1 @@
+import{c as o}from"./index-n9VYVx6N.js";import{R as s,a,b as e}from"./index-CQ-7rF8z.js";const l=[["path",{d:"m6 9 6 6 6-6",key:"qrunsl"}]],r=o("chevron-down",l),c=s,i=a,p=e;export{c as C,i as a,r as b,p as c};

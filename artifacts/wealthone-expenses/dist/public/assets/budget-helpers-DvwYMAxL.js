@@ -1,0 +1,1 @@
+import{e as g}from"./index-n9VYVx6N.js";function i(t){return t?g(t):void 0}function h(t){const e=i(t);if(!e)return;const n=new Date(e.getFullYear(),e.getMonth(),0),r=n.getFullYear(),a=String(n.getMonth()+1).padStart(2,"0"),o=String(n.getDate()).padStart(2,"0");return`${r}-${a}-${o}`}export{i as a,h as g};

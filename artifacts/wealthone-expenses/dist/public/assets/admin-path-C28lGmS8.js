@@ -1,0 +1,1 @@
+function t(){return"/".replace(/\/$/,"")}function r(n="/admin"){const a=n.startsWith("/")?n:`/${n}`;return`${t()}${a}`||"/"}function i(n="/admin"){const a=r(n);return`/api/admin/login?returnTo=${encodeURIComponent(a)}`}export{r as a,i as b};

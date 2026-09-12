@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#312e81" />
+    <title>ezyRetire — Offline</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        display: grid;
+        min-height: 100vh;
+        min-height: 100dvh;
+        margin: 0;
+        padding: max(1.5rem, env(safe-area-inset-top))
+          max(1.5rem, env(safe-area-inset-right))
+          max(1.5rem, env(safe-area-inset-bottom))
+          max(1.5rem, env(safe-area-inset-left));
+        place-items: center;
+        background: #fffaf2;
+        color: #111c3f;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(100%, 28rem);
+        padding: 2rem;
+        border: 1px solid #e6e1d8;
+        border-radius: 1rem;
+        background: #fff;
+        text-align: center;
+        box-shadow: 0 1rem 3rem rgb(17 28 63 / 10%);
+      }
+      img { width: 5rem; height: 5rem; border-radius: 1rem; }
+      h1 { margin: 1.25rem 0 0.5rem; font-size: 1.5rem; }
+      p { margin: 0; color: #606575; line-height: 1.6; }
+      .status { margin-top: 0.75rem; font-weight: 600; }
+      button {
+        margin-top: 1.5rem;
+        padding: 0.75rem 1.25rem;
+        border: 0;
+        border-radius: 0.6rem;
+        background: #312e81;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+      }
+      button:focus-visible { outline: 3px solid #d7ad3f; outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="./icon-192.png" alt="" />
+      <h1 id="connection-heading">You’re offline</h1>
+      <p id="connection-guidance">Reconnect to the internet, then try loading ezyRetire again.</p>
+      <p id="connection-status" class="status" role="status" aria-live="polite" aria-atomic="true">
+        Waiting for a connection.
+      </p>
+      <button id="retry-button" type="button">Try again</button>
+    </main>
+    <script>
+      (() => {
+        const RETRY_DELAY_MS = 1000;
+        const RETRY_COOLDOWN_MS = 15000;
+        const AVAILABILITY_CHECK_TIMEOUT_MS = 5000;
+        const RETRY_STORAGE_KEY = "ezyretire-offline-auto-retry";
+        const heading = document.getElementById("connection-heading");
+        const guidance = document.getElementById("connection-guidance");
+        const status = document.getElementById("connection-status");
+        const retryButton = document.getElementById("retry-button");
+        let retryTimer;
+        let recoveryCheck;
+        let recoveryAttempt = 0;
+
+        const setRecoveryState = (state) => {
+          document.documentElement.dataset.recoveryState = state;
+          window.dispatchEvent(
+            new CustomEvent("ezyretire:offline-recovery-state", { detail: { state } }),
+          );
+        };
+
+        const reload = () => {
+          setRecoveryState("navigating");
+          window.location.reload();
+        };
+
+        const canAutoRetry = () => {
+          try {
+            const previousAttempt = Number(sessionStorage.getItem(RETRY_STORAGE_KEY));
+            return !Number.isFinite(previousAttempt) || Date.now() - previousAttempt >= RETRY_COOLDOWN_MS;
+          } catch {
+            return true;
+          }
+        };
+
+        const recordAutoRetry = () => {
+          try {
+            sessionStorage.setItem(RETRY_STORAGE_KEY, String(Date.now()));
+          } catch {
+            // Recovery still works when session storage is unavailable.
+          }
+        };
+
+        const canReachEzyRetire = async () => {
+          recoveryCheck?.abort();
+          const check = new AbortController();
+          recoveryCheck = check;
+          const timeout = window.setTimeout(() => check.abort(), AVAILABILITY_CHECK_TIMEOUT_MS);
+
+          try {
+            const response = await fetch(window.location.href, {
+              method: "HEAD",
+              cache: "no-store",
+              signal: check.signal,
+            });
+            return response.ok;
+          } catch {
+            return false;
+          } finally {
+            window.clearTimeout(timeout);
+            if (recoveryCheck === check) {
+              recoveryCheck = undefined;
+            }
+          }
+        };
+
+        const showOffline = () => {
+          recoveryAttempt += 1;
+          recoveryCheck?.abort();
+          recoveryCheck = undefined;
+          window.clearTimeout(retryTimer);
+          retryTimer = undefined;
+          setRecoveryState("cancelled");
+          heading.textContent = "You’re offline";
+          guidance.textContent = "Reconnect to the internet, then try loading ezyRetire again.";
+          status.textContent = "Connection lost. Waiting for a connection.";
+          retryButton.textContent = "Try again";
+        };
+
+        const showServiceUnavailable = () => {
+          setRecoveryState("idle");
+          heading.textContent = "ezyRetire is still unavailable";
+          guidance.textContent =
+            "Your internet connection is back, but ezyRetire cannot be reached yet. The service may be temporarily unavailable.";
+          status.textContent = "Internet restored. ezyRetire is still unavailable. Try again in a moment.";
+          retryButton.textContent = "Try ezyRetire again";
+        };
+
+        const showOnline = async ({ retry = true } = {}) => {
+          const attempt = ++recoveryAttempt;
+          window.clearTimeout(retryTimer);
+          retryTimer = undefined;
+          heading.textContent = "You’re back online";
+          guidance.textContent = "Your connection is back. Checking whether ezyRetire is available.";
+          status.textContent = "Internet restored. Checking ezyRetire availability.";
+          retryButton.textContent = "Open ezyRetire now";
+
+          if (!retry || !canAutoRetry()) {
+            showServiceUnavailable();
+            return;
+          }
+
+          const isAvailable = await canReachEzyRetire();
+          if (attempt !== recoveryAttempt) return;
+
+          if (isAvailable) {
+            status.textContent = "ezyRetire is available. Reopening now.";
+            retryTimer = window.setTimeout(() => {
+              recordAutoRetry();
+              reload();
+            }, RETRY_DELAY_MS);
+            setRecoveryState("scheduled");
+          } else {
+            showServiceUnavailable();
+          }
+        };
+
+        retryButton.addEventListener("click", reload);
+        window.addEventListener("offline", showOffline);
+        window.addEventListener("online", () => showOnline());
+
+        if (navigator.onLine && !canAutoRetry()) {
+          showOnline({ retry: false });
+        } else {
+          setRecoveryState("idle");
+        }
+      })();
+    </script>
+  </body>
+</html>

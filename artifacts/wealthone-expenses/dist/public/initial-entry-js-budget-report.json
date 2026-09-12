@@ -1,0 +1,726 @@
+{
+  "schemaVersion": 2,
+  "scope": "initial-entry-and-static-dependencies",
+  "excludes": [
+    "lazy JavaScript chunks",
+    "CSS referenced only by lazy chunks",
+    "images, fonts, and other non-JS/CSS assets"
+  ],
+  "budgetBytes": 460800,
+  "initialEntryJavaScript": {
+    "fileName": "assets/index-n9VYVx6N.js",
+    "sizeBytes": 425787,
+    "kind": "initial-entry-javascript"
+  },
+  "initialJavaScript": [
+    {
+      "fileName": "assets/index-n9VYVx6N.js",
+      "rawBytes": 425787,
+      "gzipBytes": 135999,
+      "brotliBytes": 117784
+    }
+  ],
+  "initialCss": [
+    {
+      "fileName": "assets/index-gPcibioW.css",
+      "rawBytes": 200737,
+      "gzipBytes": 29073,
+      "brotliBytes": 22653
+    }
+  ],
+  "totals": {
+    "javascriptGzipBytes": 135999,
+    "cssGzipBytes": 29073,
+    "javascriptBrotliBytes": 117784,
+    "cssBrotliBytes": 22653,
+    "assetRequests": 2
+  },
+  "budgets": {
+    "gzipJsBudgetBytes": 194560,
+    "gzipCssBudgetBytes": 46080,
+    "requestBudget": 12
+  },
+  "withinBudget": true,
+  "chunks": [
+    {
+      "fileName": "assets/about-CVpFndHo.js",
+      "sizeBytes": 15577,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/addMonths-BEvST61r.js",
+      "sizeBytes": 297,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/admin-advice-CHmPEC3_.js",
+      "sizeBytes": 1060,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/admin-advice-panel-CEYkNksA.js",
+      "sizeBytes": 22435,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/admin-DF48PW5h.js",
+      "sizeBytes": 1060,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/admin-guard-BrUcUlQ7.js",
+      "sizeBytes": 8277,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/admin-login-activity-BybLiwVI.js",
+      "sizeBytes": 4697,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/admin-login-vOd8C9Sg.js",
+      "sizeBytes": 555,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/admin-path-C28lGmS8.js",
+      "sizeBytes": 242,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/advice-DU5eYvP7.js",
+      "sizeBytes": 2497,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/advisor-BhCyd7rR.js",
+      "sizeBytes": 5542,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/alert-BJsBuvsO.js",
+      "sizeBytes": 922,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/alert-dialog-BaMMnzbJ.js",
+      "sizeBytes": 3754,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/api-BVzfjvbZ.js",
+      "sizeBytes": 6595,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/arrow-left-DQiiK9Dl.js",
+      "sizeBytes": 166,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/arrow-right-BXxaY887.js",
+      "sizeBytes": 166,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/avatar-DlBJTosv.js",
+      "sizeBytes": 2432,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/badge-DYnNa1F-.js",
+      "sizeBytes": 778,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/BarChart-HQIjy642.js",
+      "sizeBytes": 351,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/briefcase-BcX_TXwe.js",
+      "sizeBytes": 221,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/budget-helpers-DvwYMAxL.js",
+      "sizeBytes": 307,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/budgets-B9uVWN1q.js",
+      "sizeBytes": 49339,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/calculator-fi25Ds1m.js",
+      "sizeBytes": 531,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/calendar-days-uV8jaij6.js",
+      "sizeBytes": 737,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/calendar-dZH2-zz0.js",
+      "sizeBytes": 258,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/card-sort-controls-xAVXgeJ5.js",
+      "sizeBytes": 25327,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/card-ZTiSabt4.js",
+      "sizeBytes": 1088,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/CartesianGrid-BrLZYMQF.js",
+      "sizeBytes": 6822,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/categories-B4CrmzVg.js",
+      "sizeBytes": 990,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/category-visuals-BDryhUq6.js",
+      "sizeBytes": 2872,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/chart-column-CBjCLHC5.js",
+      "sizeBytes": 252,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/chart-pie-BgLNqJbn.js",
+      "sizeBytes": 274,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/check-AOJTnpm-.js",
+      "sizeBytes": 120,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/checkbox-DzfXJHVG.js",
+      "sizeBytes": 4335,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/chevron-down-gptGd69D.js",
+      "sizeBytes": 130,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/chevron-right-D2di5Psw.js",
+      "sizeBytes": 418,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/chevron-right-DGJPl6pj.js",
+      "sizeBytes": 213,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/circle-alert-DKZzokhi.js",
+      "sizeBytes": 251,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/circle-check-D-nqSsJ4.js",
+      "sizeBytes": 174,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/circle-question-mark-DJ-KVbwE.js",
+      "sizeBytes": 244,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/clock-CAKN9TYt.js",
+      "sizeBytes": 165,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/collapsible-CUZnz92s.js",
+      "sizeBytes": 211,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/compass-BNdY9j8E.js",
+      "sizeBytes": 247,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/constructFrom-rJN6zrQ_.js",
+      "sizeBytes": 352,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/dashboard-xAPY223Y.js",
+      "sizeBytes": 36984,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/date-picker-input-Rv3ItI8O.js",
+      "sizeBytes": 123011,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/decision-tools-e6ha-uUn.js",
+      "sizeBytes": 39047,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/dialog-D8qKWxCX.js",
+      "sizeBytes": 1938,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/ellipsis-DqDkvGZT.js",
+      "sizeBytes": 222,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/excel-report-builders-COHTGE96.js",
+      "sizeBytes": 436816,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/expense-mode-switch-DzEmHIHX.js",
+      "sizeBytes": 1195,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/feature-api-RTd1NGt6.js",
+      "sizeBytes": 5077,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/file-lock-2-BcoZlEUF.js",
+      "sizeBytes": 333,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/financial-calendar-XHU1EJI3.js",
+      "sizeBytes": 5235,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/financial-health-analytics-Bwrym0Wz.js",
+      "sizeBytes": 200,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/financial-health-BIF4kRAG.js",
+      "sizeBytes": 17709,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/financial-health-summary-DG14tgby.js",
+      "sizeBytes": 13529,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/form-submission-Dt0azf89.js",
+      "sizeBytes": 1593,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/format-SH-5eOax.js",
+      "sizeBytes": 19235,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/generateCategoricalChart-Bf4JaSGR.js",
+      "sizeBytes": 360007,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/goals-Cr1yjzt6.js",
+      "sizeBytes": 10912,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/graduation-cap-DNjqFKYy.js",
+      "sizeBytes": 333,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/heart-pulse-DBkpRaQz.js",
+      "sizeBytes": 334,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/house-BMTb2aNm.js",
+      "sizeBytes": 282,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/income-Cda4J8r4.js",
+      "sizeBytes": 45060,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/income-tax-kN_6LzfZ.js",
+      "sizeBytes": 4886,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/index-B7mJtw72.js",
+      "sizeBytes": 4701,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/index-CQ-7rF8z.js",
+      "sizeBytes": 2363,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/index-CteBcM7Y.js",
+      "sizeBytes": 17554,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/index-DnBlrR2U.js",
+      "sizeBytes": 4221,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/index-n9VYVx6N.js",
+      "sizeBytes": 425787,
+      "kind": "initial-entry-javascript"
+    },
+    {
+      "fileName": "assets/info-BKU5ODOh.js",
+      "sizeBytes": 200,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/input-iSMXdpgO.js",
+      "sizeBytes": 2602,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/investments-CAo_3cRM.js",
+      "sizeBytes": 77852,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/isWithinInterval-TaYc0l2x.js",
+      "sizeBytes": 355,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/label-DRh5T7Ks.js",
+      "sizeBytes": 644,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/landmark-CDsyKxbw.js",
+      "sizeBytes": 401,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/layout-BPxY0zx0.js",
+      "sizeBytes": 14326,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/layout-dashboard-BCmVBUdo.js",
+      "sizeBytes": 352,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/Line-C0J9NkBb.js",
+      "sizeBytes": 10977,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/loader-circle-I7viCOIM.js",
+      "sizeBytes": 140,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/loans-BIOmM2W9.js",
+      "sizeBytes": 26227,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/log-in-DjA1c87j.js",
+      "sizeBytes": 232,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/log-out-DPZvctI6.js",
+      "sizeBytes": 231,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/login-DdILh_RL.js",
+      "sizeBytes": 18184,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/mail-DMObsyAi.js",
+      "sizeBytes": 214,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/message-circle-DQXyzyW8.js",
+      "sizeBytes": 242,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/message-square-heart-DV5iUMex.js",
+      "sizeBytes": 464,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/not-found-m_x7nPm1.js",
+      "sizeBytes": 698,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/onboarding-CYexAwNW.js",
+      "sizeBytes": 16598,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/parseISO-8Vhw7c_4.js",
+      "sizeBytes": 2669,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/pencil-oGeCw1jl.js",
+      "sizeBytes": 277,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/PieChart-Dfxi7LUR.js",
+      "sizeBytes": 26069,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/piggy-bank-BEejv-Cj.js",
+      "sizeBytes": 410,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/plan-setup-panel-DCnqgJNU.js",
+      "sizeBytes": 5978,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/planner-CoepmPM_.js",
+      "sizeBytes": 39332,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/plus-DT_DpHYv.js",
+      "sizeBytes": 154,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/popover-IAlK4EZJ.js",
+      "sizeBytes": 4925,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/profile-raonOdah.js",
+      "sizeBytes": 32545,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/progress-EwWHChdB.js",
+      "sizeBytes": 2160,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/protection-B9eYJuOz.js",
+      "sizeBytes": 18616,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/quick-add-expense-CvMy3iPa.js",
+      "sizeBytes": 14676,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/receipt-JxCpQRvB.js",
+      "sizeBytes": 293,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/receipt-text-D45My7en.js",
+      "sizeBytes": 298,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/retirement-CQaKfiI4.js",
+      "sizeBytes": 78092,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/save-BmB3thGv.js",
+      "sizeBytes": 328,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/select-BevaaXnB.js",
+      "sizeBytes": 22284,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/shield-check-DR72xRF1.js",
+      "sizeBytes": 316,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/sortable-card-list-CBKCDUqT.js",
+      "sizeBytes": 53110,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/sparkles-CrZW8VAr.js",
+      "sizeBytes": 495,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/switch-BKcjCOwS.js",
+      "sizeBytes": 4169,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/tabs-mXfSse7E.js",
+      "sizeBytes": 3440,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/target-C68Sbz36.js",
+      "sizeBytes": 222,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/tax-9xGXPoxy.js",
+      "sizeBytes": 25919,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/textarea-Dx8vnFtQ.js",
+      "sizeBytes": 455,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/transactions-BuVghgSZ.js",
+      "sizeBytes": 30872,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/trash-2-BZ-FaQIM.js",
+      "sizeBytes": 329,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/trending-down-C0PaHl50.js",
+      "sizeBytes": 179,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/trending-up-CzPRNv_u.js",
+      "sizeBytes": 176,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/trends-mJgf_RQZ.js",
+      "sizeBytes": 7676,
+      "kind": "lazy-entry-javascript"
+    },
+    {
+      "fileName": "assets/types-DH65zabD.js",
+      "sizeBytes": 62389,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/upload-BeerAc1n.js",
+      "sizeBytes": 231,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-budgets-D8D18Ydx.js",
+      "sizeBytes": 619,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-expenses-DpD1qhYh.js",
+      "sizeBytes": 2131,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-financial-health-JT2EH6pr.js",
+      "sizeBytes": 407,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-income-dy1NwLFY.js",
+      "sizeBytes": 1151,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-investments-CqnBGGwb.js",
+      "sizeBytes": 916,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-loans-sNIat3qF.js",
+      "sizeBytes": 844,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-planned-expenses-BnRd8t1V.js",
+      "sizeBytes": 699,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/use-ui-preferences-DGJfvrBX.js",
+      "sizeBytes": 1186,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/user-Bi9PGIdL.js",
+      "sizeBytes": 192,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/utils-CdlwbwUc.js",
+      "sizeBytes": 27883,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/wallet-BEMc1sWS.js",
+      "sizeBytes": 287,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/webauthn-BtXIdB-2.js",
+      "sizeBytes": 2425,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/YAxis-ag5gLNZ5.js",
+      "sizeBytes": 17776,
+      "kind": "shared-javascript"
+    },
+    {
+      "fileName": "assets/zod-Cekzowsb.js",
+      "sizeBytes": 34107,
+      "kind": "shared-javascript"
+    }
+  ]
+}

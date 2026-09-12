@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "approvedSources": {
+    "r-growth-bars-v1": {
+      "file": "brand/mark.svg",
+      "sha256": "21820cde14838a22cdc9f69ccbeeb980ef9abfbbb6bd0c6e42eb14903596928b"
+    },
+    "r-growth-arc-glossy-supplied-v1": {
+      "file": "attached_assets/fevicon_1788696519503.png",
+      "sha256": "897c84cff87bc00b9f1a381ed9b16847af77ec7baebcbeeee700b20eddb260fa"
+    },
+    "ezyretire-mobile-launcher-supplied-v1": {
+      "file": "attached_assets/mobile-app-icon_1788696774067.png",
+      "sha256": "45d286062ad8a42e71a2962fdfc1a8cd8af1fff4ae64e8218b9d243874920d38"
+    },
+    "ezyretire-light-full-logo-supplied-v1": {
+      "file": "attached_assets/light-mode-app-logo_1788920769469.png",
+      "sha256": "5800137908708a7c80a65d2ab7f01b6527ac5559bee24150284704e86ebd8c04"
+    },
+    "ezyretire-dark-full-logo-supplied-v1": {
+      "file": "attached_assets/dark-mode-app-icon_1788920659714.png",
+      "sha256": "793ed93a92d572b571c7591c8ea26c1ebdef0462334185fcc7df202269737f81"
+    },
+    "ezyretire-light-horizontal-full-logo-supplied-v1": {
+      "file": "attached_assets/1_light-mode-hz_1788922590136.png",
+      "sha256": "e43ffa7466a947610b9823e4de5440b1ea09d8269388c94a3f09b322279daef6"
+    },
+    "ezyretire-dark-horizontal-full-logo-supplied-v1": {
+      "file": "attached_assets/0_dark-mode-hz_1788922590135.png",
+      "sha256": "5d61a02309ff5b93d16ebffbf96f0a5c1d1ba6cdaf5610e691d9255e9c4fefad"
+    }
+  },
+  "launcherCropChecks": [
+    {
+      "shape": "circle",
+      "preservesCriticalArtwork": true
+    },
+    {
+      "shape": "squircle",
+      "preservesCriticalArtwork": true
+    },
+    {
+      "shape": "rounded-square",
+      "preservesCriticalArtwork": true
+    }
+  ],
+  "assets": [
+    {
+      "file": "favicon.svg",
+      "width": 180,
+      "height": 180,
+      "purpose": "browser",
+      "sourceMarker": "r-growth-arc-glossy-supplied-v1",
+      "sha256": "f2fae116e85fff6d803770aaefdf1b5d83b6af62c4e34094ff5964f2d379bb2e"
+    },
+    {
+      "file": "favicon-32x32.png",
+      "width": 32,
+      "height": 32,
+      "purpose": "browser",
+      "sourceMarker": "r-growth-arc-glossy-supplied-v1",
+      "sha256": "51b532cec4f839367defd68a21f109727cd72ac4c94ea259615e3b277451e85b"
+    },
+    {
+      "file": "favicon.png",
+      "width": 180,
+      "height": 180,
+      "purpose": "browser",
+      "sourceMarker": "r-growth-arc-glossy-supplied-v1",
+      "sha256": "3e56891017365d890bfc4320e358839ac175e496caabfdbca8bb814c82de6714"
+    },
+    {
+      "file": "apple-touch-icon.png",
+      "width": 180,
+      "height": 180,
+      "purpose": "apple-touch-and-splash",
+      "sourceMarker": "ezyretire-mobile-launcher-supplied-v1",
+      "sha256": "23aee434491d3bd4812e9c66d8e08a7b8e0f9bbdd81d5e208d755b9a854d44bd"
+    },
+    {
+      "file": "icon-192.png",
+      "width": 192,
+      "height": 192,
+      "purpose": "any",
+      "sourceMarker": "ezyretire-mobile-launcher-supplied-v1",
+      "sha256": "51325218815723ff074af2b5a40eb02df573e73651e9b35e9187eb186361d832"
+    },
+    {
+      "file": "icon-512.png",
+      "width": 512,
+      "height": 512,
+      "purpose": "any",
+      "sourceMarker": "ezyretire-mobile-launcher-supplied-v1",
+      "sha256": "568ec93f4911795a1061b2128a479bcf7dc4a26c1d94ca7b305ada404b91421c"
+    },
+    {
+      "file": "icon-maskable-512.png",
+      "width": 512,
+      "height": 512,
+      "purpose": "maskable",
+      "sourceMarker": "ezyretire-mobile-launcher-supplied-v1",
+      "sha256": "8da30223b1e0df916b695254ea7d195803019443f0b386a9b405df66f1427eae"
+    },
+    {
+      "file": "brand-logo.png",
+      "width": 864,
+      "height": 613,
+      "purpose": "in-app-light-full-logo",
+      "sourceMarker": "ezyretire-light-full-logo-supplied-v1",
+      "sha256": "642a8206017f24b81fcd4b2226f29e09d0b762d69f0c71f46fbe053eb1e2297b"
+    },
+    {
+      "file": "brand-logo-dark.png",
+      "width": 740,
+      "height": 748,
+      "purpose": "in-app-dark-full-logo",
+      "sourceMarker": "ezyretire-dark-full-logo-supplied-v1",
+      "sha256": "3548043b118572d98a781c888a027edf922f316d6cfa00817ffd0dbd245a06fb"
+    },
+    {
+      "file": "brand-logo-compact.png",
+      "width": 1024,
+      "height": 257,
+      "purpose": "compact-navigation-light-full-logo",
+      "sourceMarker": "ezyretire-light-horizontal-full-logo-supplied-v1",
+      "sha256": "3eb8e2cee22c3133ff3d9599abf972d7f6616fd82d5637ddde1ba1e6469d0cec"
+    },
+    {
+      "file": "brand-logo-compact-dark.png",
+      "width": 1024,
+      "height": 273,
+      "purpose": "compact-navigation-dark-full-logo",
+      "sourceMarker": "ezyretire-dark-horizontal-full-logo-supplied-v1",
+      "sha256": "a80b4780eb73c4229e44b1c1cd8e8224af4a0b552ce4f78f88811982b2fa31f7"
+    }
+  ]
+}

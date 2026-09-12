@@ -1,0 +1,24 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>ezyRetire — Track, plan, retire</title>
+  <defs>
+    <linearGradient id="background" x1="92" y1="38" x2="1108" y2="592" gradientUnits="userSpaceOnUse"><stop stop-color="#312E81"/><stop offset="1" stop-color="#1E1B4B"/></linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(1010 80) rotate(135) scale(480)"><stop stop-color="#F59E0B" stop-opacity=".36"/><stop offset="1" stop-color="#F59E0B" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1200" height="630" rx="36" fill="url(#background)"/><rect width="1200" height="630" rx="36" fill="url(#glow)"/>
+  <g transform="translate(88 72) scale(.733333)">
+  <defs>
+    <linearGradient id="ezyretire-gold" x1="20" y1="26" x2="153" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B8871B"/>
+      <stop offset=".55" stop-color="#E4B940"/>
+      <stop offset="1" stop-color="#F0CD69"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="38" fill="#FFFEFC"/>
+  <path data-brand-mark="r-growth-bars-v1" d="M20 129C20 65 72 18 132 19C145 19 156 21 164 25C147 9 122 3 96 7C47 14 12 56 14 105C14 114 16 122 20 129Z" fill="url(#ezyretire-gold)"/>
+  <path d="M35 118H52V91H35V118ZM59 118H76V71H59V118ZM83 118H100V51H83V118Z" fill="#031B45"/>
+  <path d="M96 42H125C147 42 159 52 159 68C159 82 150 91 136 94L163 129H143L117 95H113V118H96V42ZM113 56V82H124C136 82 142 78 142 69C142 60 136 56 124 56H113Z" fill="#031B45"/></g>
+  <text x="252" y="184" fill="#FFF7ED" font-family="Georgia, serif" font-size="82" font-weight="700">ezyRetire</text>
+  <text x="92" y="355" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="700">Your whole financial picture.</text>
+  <text x="92" y="427" fill="#FDE68A" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="700">One clearer retirement plan.</text>
+  <text x="92" y="527" fill="#C7D2FE" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="500" letter-spacing="5">TRACK  •  PLAN  •  RETIRE</text>
+</svg>
